@@ -1,8 +1,10 @@
+// app/(events)/UserDetails.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { databases, databases_id, collection_user_id } from '@/lib/appwrite';
+import { db } from '@/config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 const UserDetails = () => {
   const { userId, cv_url } = useLocalSearchParams<{ userId: string; cv_url: string }>();
@@ -17,16 +19,19 @@ const UserDetails = () => {
       }
 
       try {
-        const userDoc = await databases.getDocument(
-          databases_id,
-          collection_user_id,
-          userId
-        );
-        setUserDetails(userDoc);
-        setLoading(false);
+        // 🔥 Lấy document trong collection "users"
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          setUserDetails(userSnap.data());
+        } else {
+          setUserDetails(null);
+        }
       } catch (err) {
-        console.error('Lỗi khi lấy thông tin user:', err);
+        console.error("Lỗi khi lấy thông tin user:", err);
         setUserDetails(null);
+      } finally {
         setLoading(false);
       }
     };
@@ -50,15 +55,17 @@ const UserDetails = () => {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết ứng viên</Text>
       </View>
+
       {userDetails ? (
         <View style={styles.details}>
           <Text style={styles.label}>Tên: {userDetails.name || 'Không có'}</Text>
           <Text style={styles.label}>Email: {userDetails.email || 'Không có'}</Text>
-          {/* Thêm các trường khác nếu cần */}
+          {/* Thêm field khác nếu cần */}
         </View>
       ) : (
         <Text style={styles.label}>Không tìm thấy thông tin user</Text>
       )}
+
       {cv_url ? (
         <TouchableOpacity
           style={styles.cvButton}
@@ -76,21 +83,9 @@ const UserDetails = () => {
 export default UserDetails;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#f2f2f2',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginLeft: 10,
-  },
+  container: { flex: 1, padding: 16, backgroundColor: '#f2f2f2' },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  headerTitle: { fontSize: 20, fontWeight: '700', marginLeft: 10 },
   details: {
     backgroundColor: '#fff',
     padding: 16,
@@ -102,20 +97,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
-  },
+  label: { fontSize: 16, marginBottom: 8, color: '#333' },
   cvButton: {
     backgroundColor: '#28A745',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  cvButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  cvButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

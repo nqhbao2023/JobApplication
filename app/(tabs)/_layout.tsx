@@ -1,6 +1,8 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { SavedJobsProvider } from '@/app/saveJobsContext';
+import { SavedJobsProvider } from "../../src/contexts/saveJobsContext";
+
+
 
 const Layout = () => {
   return (

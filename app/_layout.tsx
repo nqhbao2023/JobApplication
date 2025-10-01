@@ -1,5 +1,5 @@
 import { Stack } from "expo-router";
-import { SavedJobsProvider } from '@/app/saveJobsContext';
+import { SavedJobsProvider } from '../src/contexts/saveJobsContext';
 
 const Layout = () => {
   return (

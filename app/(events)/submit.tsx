@@ -10,8 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { storage, databases, databases_id, collection_applied_jobs_id, ID, collection_job_id, sendNotification } from '@/lib/appwrite';
-
+import { db, storage } from '../../src/config/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 const Submit = () => {
   const { jobId, userId, applyDocId } = useLocalSearchParams<{
     jobId: string;
@@ -82,72 +84,43 @@ const Submit = () => {
     setPortfolioPhotos([...portfolioPhotos, 'photo1.jpg']);
   };
 
-  const uploadToAppwrite = async () => {
-    if (!cvFile || !jobId || !userId || !applyDocId) {
-      Alert.alert('Lỗi', 'Vui lòng chọn CV và đảm bảo thông tin công việc hợp lệ');
-      return;
-    }
+const uploadToFirebase = async () => {
+  if (!cvFile || !jobId || !userId) {
+    Alert.alert('Lỗi', 'Vui lòng chọn CV và đảm bảo thông tin công việc hợp lệ');
+    return;
+  }
+  try {
+    setUploading(true);
 
-    try {
-      setUploading(true);
-      const fileInfo = await FileSystem.getInfoAsync(cvFile.uri);
-      if (!fileInfo.exists) {
-        throw new Error('File không tồn tại');
-      }
+    // upload CV lên storage...
+    const storageRef = ref(storage, `cvs/${userId}_${Date.now()}_${cvFile.name}`);
+    const fileContent = await FileSystem.readAsStringAsync(cvFile.uri, { encoding: FileSystem.EncodingType.Base64 });
+    const fileBlob = new Blob(
+      [Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))],
+      { type: 'application/pdf' }
+    );
 
-      const file = await storage.createFile(
-        '681f22880030984d2260',
-        ID.unique(),
-        {
-          name: cvFile.name,
-          uri: cvFile.uri,
-          type: cvFile.name.endsWith('.pdf') ? 'application/pdf' : 'application/msword',
-          size: fileInfo.size,
-        }
-      );
+    await uploadBytes(storageRef, fileBlob);
+    const fileUrl = await getDownloadURL(storageRef);
 
-      const fileUrl = `https://cloud.appwrite.io/v1/storage/buckets/681f22880030984d2260/files/${file.$id}/view?project=67e8c1960007568848e9`;
+    // 👉 Chỉ khi user bấm "Nộp đơn" mới tạo doc
+    await addDoc(collection(db, 'applied_jobs'), {
+      userId,
+      jobId,
+      cv_url: fileUrl,
+      status: 'pending',
+      applied_at: serverTimestamp(),
+    });
 
-      await databases.updateDocument(
-        databases_id,
-        collection_applied_jobs_id,
-        applyDocId,
-        {
-          cv_url: fileUrl,
-          updated_at: new Date().toISOString(),
-        }
-      );
-
-      // Lấy thông tin công việc để lấy tiêu đề
-      const job = await databases.getDocument(databases_id, collection_job_id, jobId);
-
-      // Gửi thông báo cho người xin việc
-      await sendNotification(
-        userId,
-        `Bạn đã nộp đơn thành công cho công việc ${job.title}`,
-        'applied',
-        jobId
-      );
-
-      // Gửi thông báo cho nhà tuyển dụng
-      if (job.users?.$id) {
-        await sendNotification(
-          job.users.$id,
-          `Có người đã nộp đơn cho công việc ${job.title}`,
-          'applied',
-          jobId
-        );
-      }
-
-      Alert.alert('Thành công', 'CV đã được tải lên và đơn ứng tuyển đã được cập nhật!');
-      router.push('/');
-    } catch (error) {
-      console.error('❌ Upload failed:', error);
-      Alert.alert('Lỗi', 'Không thể tải CV lên, vui lòng thử lại');
-    } finally {
-      setUploading(false);
-    }
-  };
+    Alert.alert('Thành công', 'Bạn đã nộp CV!');
+    router.back(); // quay lại JobDescription
+  } catch (error) {
+    console.error("❌ Upload failed:", error);
+    Alert.alert("Lỗi", "Không thể tải CV lên, vui lòng thử lại");
+  } finally {
+    setUploading(false);
+  }
+};
 
   return (
     <View style={styles.container}>
@@ -168,7 +141,7 @@ const Submit = () => {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.applyButton, uploading && styles.disabledButton]}
-          onPress={uploadToAppwrite}
+          onPress={uploadToFirebase}
           disabled={uploading}
         >
           <Text style={styles.applyButtonText}>

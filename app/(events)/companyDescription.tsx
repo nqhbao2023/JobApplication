@@ -1,16 +1,16 @@
 import { StyleSheet, Text, TouchableOpacity, View, Image, FlatList } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { databases, databases_id, collection_company_id, collection_job_id } from '@/lib/appwrite';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { db } from '@/config/firebase';
+import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 
 const CompanyDescription = () => {
   const [selected, setSelected] = useState(0);
   const { companyId } = useLocalSearchParams();
   const [dataCompany, setDataCompany] = useState<any>(null);
   const [companyJobs, setCompanyJobs] = useState<any[]>([]);
-  const [selectedJob, setSelectedJob] = useState<any>(null); // State để lưu công việc được chọn
+  const [selectedJob, setSelectedJob] = useState<any>(null);
 
   const Switch_Selected = async (index: number) => {
     setSelected(index);
@@ -20,36 +20,39 @@ const CompanyDescription = () => {
     if (companyId) {
       load_company_data(companyId as string);
       load_company_jobs(companyId as string);
-
     }
-    
   }, [companyId]);
-  
+
+  // Lấy thông tin công ty từ Firestore
   const load_company_data = async (id: string) => {
     try {
-      const result = await databases.getDocument(databases_id, collection_company_id, id);
-     
-     
-      setDataCompany(result);
-      console.log(result);
-
+      const docRef = doc(db, 'companies', id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setDataCompany({ $id: docSnap.id, ...docSnap.data() });
+      }
     } catch (error) {
       console.log(error);
     }
   };
 
+  // Lấy danh sách jobs của công ty từ Firestore
   const load_company_jobs = async (id: string) => {
     try {
-      const result = await databases.listDocuments(databases_id, collection_job_id);
-      const filteredJobs = result.documents.filter((job: any) => job.company?.$id === id);
-      setCompanyJobs(filteredJobs);
+      const q = query(collection(db, 'jobs'), where('company', '==', id));
+      const querySnapshot = await getDocs(q);
+      const jobs = querySnapshot.docs.map((doc) => ({
+        $id: doc.id,
+        ...doc.data(),
+      }));
+      setCompanyJobs(jobs);
     } catch (error) {
       console.log(error);
     }
   };
 
   const handleJobSelect = (job: any) => {
-    setSelectedJob(job); // Cập nhật công việc được chọn
+    setSelectedJob(job);
   };
 
   const handleApply = () => {

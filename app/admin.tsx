@@ -2,10 +2,19 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Alert, StyleSheet, ScrollView, Modal, Dimensions
 } from 'react-native';
-import { databases, ID, databases_id } from '../lib/appwrite';
+//import { databases, ID, databases_id } from '../src/lib/appwrite';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-
+import { db } from '../src/config/firebase';
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  getDoc,
+} from 'firebase/firestore';
 // Định nghĩa các collection ID từ appwrite.ts
 const collection_user_id = '67eb6f55003bab0d48d7';
 const collection_job_id = '67e8c50d003e2f3390e9';
@@ -41,37 +50,21 @@ const AdminScreen = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      let collectionId = '';
+      let collectionName = '';
       switch (activeTab) {
-        case 'users':
-          collectionId = collection_user_id;
-          break;
-        case 'jobs':
-          collectionId = collection_job_id;
-          break;
-        case 'companies':
-          collectionId = collection_company_id;
-          break;
-        case 'job_types':
-          collectionId = collection_jobtype_id;
-          break;
-        case 'job_categories':
-          collectionId = collection_jobcategory_id;
-          break;
-        case 'applied_jobs':
-          collectionId = collection_applied_jobs_id;
-          break;
-        case 'notifications':
-          collectionId = collection_notifications_id;
-          break;
-        case 'saved_jobs':
-          collectionId = collection_saved_jobs_id;
-          break;
-        default:
-          return;
+        case 'users': collectionName = 'users'; break;
+        case 'jobs': collectionName = 'jobs'; break;
+        case 'companies': collectionName = 'companies'; break;
+        case 'job_types': collectionName = 'job_types'; break;
+        case 'job_categories': collectionName = 'job_categories'; break;
+        case 'applied_jobs': collectionName = 'applied_jobs'; break;
+        case 'notifications': collectionName = 'notifications'; break;
+        case 'saved_jobs': collectionName = 'saved_jobs'; break;
+        default: return;
       }
-      const response = await databases.listDocuments(databases_id, collectionId);
-      setData(response.documents);
+      const querySnapshot = await getDocs(collection(db, collectionName));
+      const docs = querySnapshot.docs.map(doc => ({ $id: doc.id, ...doc.data() }));
+      setData(docs);
     } catch (error) {
       console.error('Lỗi khi lấy dữ liệu:', error);
       Alert.alert('Lỗi', 'Không thể tải dữ liệu');
@@ -130,54 +123,31 @@ const AdminScreen = () => {
       Alert.alert('Lỗi', 'Vui lòng nhập dữ liệu');
       return;
     }
-
     try {
       setLoading(true);
-      let collectionId = '';
+      let collectionName = '';
       switch (activeTab) {
-        case 'users':
-          collectionId = collection_user_id;
-          break;
-        case 'jobs':
-          collectionId = collection_job_id;
-          break;
-        case 'companies':
-          collectionId = collection_company_id;
-          break;
-        case 'job_types':
-          collectionId = collection_jobtype_id;
-          break;
-        case 'job_categories':
-          collectionId = collection_jobcategory_id;
-          break;
-        case 'applied_jobs':
-          collectionId = collection_applied_jobs_id;
-          break;
-        case 'notifications':
-          collectionId = collection_notifications_id;
-          break;
-        case 'saved_jobs':
-          collectionId = collection_saved_jobs_id;
-          break;
-        default:
-          return;
+        case 'users': collectionName = 'users'; break;
+        case 'jobs': collectionName = 'jobs'; break;
+        case 'companies': collectionName = 'companies'; break;
+        case 'job_types': collectionName = 'job_types'; break;
+        case 'job_categories': collectionName = 'job_categories'; break;
+        case 'applied_jobs': collectionName = 'applied_jobs'; break;
+        case 'notifications': collectionName = 'notifications'; break;
+        case 'saved_jobs': collectionName = 'saved_jobs'; break;
+        default: return;
       }
-
-      // Chuẩn hóa và lọc dữ liệu trước khi gửi
       const normalizedData = normalizeAndFilterFormData(formData, activeTab);
-
-      console.log('Dữ liệu gửi lên (thêm mới):', normalizedData); // Log dữ liệu để kiểm tra
-
-      await databases.createDocument(databases_id, collectionId, ID.unique(), {
-        ...normalizedData, // Chỉ gửi các thuộc tính tùy chỉnh
-        created_at: new Date().toISOString(), // Gửi created_at nhưng sẽ bị Appwrite bỏ qua nếu không hợp lệ
+      await addDoc(collection(db, collectionName), {
+        ...normalizedData,
+        created_at: new Date().toISOString(),
       });
       Alert.alert('Thành công', 'Đã thêm mới thành công');
       setFormData({});
       setIsAdding(false);
       fetchData();
     } catch (error: any) {
-      console.error('Lỗi khi thêm mới:', error.message, error.response);
+      console.error('Lỗi khi thêm mới:', error.message);
       Alert.alert('Lỗi', `Không thể thêm mới: ${error.message}`);
     } finally {
       setLoading(false);
@@ -188,50 +158,27 @@ const AdminScreen = () => {
   const handleEdit = async (id: string) => {
     try {
       setLoading(true);
-      let collectionId = '';
+      let collectionName = '';
       switch (activeTab) {
-        case 'users':
-          collectionId = collection_user_id;
-          break;
-        case 'jobs':
-          collectionId = collection_job_id;
-          break;
-        case 'companies':
-          collectionId = collection_company_id;
-          break;
-        case 'job_types':
-          collectionId = collection_jobtype_id;
-          break;
-        case 'job_categories':
-          collectionId = collection_jobcategory_id;
-          break;
-        case 'applied_jobs':
-          collectionId = collection_applied_jobs_id;
-          break;
-        case 'notifications':
-          collectionId = collection_notifications_id;
-          break;
-        case 'saved_jobs':
-          collectionId = collection_saved_jobs_id;
-          break;
-        default:
-          return;
+        case 'users': collectionName = 'users'; break;
+        case 'jobs': collectionName = 'jobs'; break;
+        case 'companies': collectionName = 'companies'; break;
+        case 'job_types': collectionName = 'job_types'; break;
+        case 'job_categories': collectionName = 'job_categories'; break;
+        case 'applied_jobs': collectionName = 'applied_jobs'; break;
+        case 'notifications': collectionName = 'notifications'; break;
+        case 'saved_jobs': collectionName = 'saved_jobs'; break;
+        default: return;
       }
-
-      // Chuẩn hóa và lọc dữ liệu trước khi gửi
       const normalizedData = normalizeAndFilterFormData(formData, activeTab);
-
-      console.log('Dữ liệu gửi lên (chỉnh sửa):', normalizedData); // Log dữ liệu để kiểm tra
-
-      await databases.updateDocument(databases_id, collectionId, id, {
-        ...normalizedData, // Chỉ gửi các thuộc tính tùy chỉnh
-      });
+      const docRef = doc(db, collectionName, id);
+      await updateDoc(docRef, normalizedData);
       Alert.alert('Thành công', 'Đã cập nhật thành công');
       setFormData({});
       setIsEditing(null);
       fetchData();
     } catch (error: any) {
-      console.error('Lỗi khi cập nhật:', error.message, error.response);
+      console.error('Lỗi khi cập nhật:', error.message);
       Alert.alert('Lỗi', `Không thể cập nhật: ${error.message}`);
     } finally {
       setLoading(false);
@@ -247,41 +194,24 @@ const AdminScreen = () => {
         onPress: async () => {
           try {
             setLoading(true);
-            let collectionId = '';
+            let collectionName = '';
             switch (activeTab) {
-              case 'users':
-                collectionId = collection_user_id;
-                break;
-              case 'jobs':
-                collectionId = collection_job_id;
-                break;
-              case 'companies':
-                collectionId = collection_company_id;
-                break;
-              case 'job_types':
-                collectionId = collection_jobtype_id;
-                break;
-              case 'job_categories':
-                collectionId = collection_jobcategory_id;
-                break;
-              case 'applied_jobs':
-                collectionId = collection_applied_jobs_id;
-                break;
-              case 'notifications':
-                collectionId = collection_notifications_id;
-                break;
-              case 'saved_jobs':
-                collectionId = collection_saved_jobs_id;
-                break;
-              default:
-                return;
+              case 'users': collectionName = 'users'; break;
+              case 'jobs': collectionName = 'jobs'; break;
+              case 'companies': collectionName = 'companies'; break;
+              case 'job_types': collectionName = 'job_types'; break;
+              case 'job_categories': collectionName = 'job_categories'; break;
+              case 'applied_jobs': collectionName = 'applied_jobs'; break;
+              case 'notifications': collectionName = 'notifications'; break;
+              case 'saved_jobs': collectionName = 'saved_jobs'; break;
+              default: return;
             }
-
-            await databases.deleteDocument(databases_id, collectionId, id);
+            const docRef = doc(db, collectionName, id);
+            await deleteDoc(docRef);
             Alert.alert('Thành công', 'Đã xóa thành công');
             fetchData();
           } catch (error: any) {
-            console.error('Lỗi khi xóa:', error.message, error.response);
+            console.error('Lỗi khi xóa:', error.message);
             Alert.alert('Lỗi', 'Không thể xóa');
           } finally {
             setLoading(false);

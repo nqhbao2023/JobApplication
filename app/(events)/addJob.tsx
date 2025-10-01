@@ -14,8 +14,16 @@ import DropDownPicker from 'react-native-dropdown-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { databases, ID, account, storage, storage_id } from '@/lib/appwrite';
-import { databases_id } from '@/lib/appwrite';
+import { db, auth, storage } from '@/config/firebase';
+import {
+  collection,
+  getDocs,
+  addDoc,
+  doc,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 type JobOption = {
   label: string;
@@ -59,15 +67,24 @@ const AddJob = () => {
 
   const fetchOptions = async () => {
     try {
-      const [types, categories, companies] = await Promise.all([
-        databases.listDocuments(databases_id, '67eb67ac002af299cf8b'),
-        databases.listDocuments(databases_id, '67eb6bfc00221765d9e4'),
-        databases.listDocuments(databases_id, '67f61f400009809453a2'),
+      const [typesSnap, categoriesSnap, companiesSnap] = await Promise.all([
+        getDocs(collection(db, 'job_types')),
+        getDocs(collection(db, 'job_categories')),
+        getDocs(collection(db, 'companies')),
       ]);
 
-      setJobTypeItems(types.documents.map(d => ({ label: d.type_name, value: d.$id })));
-      setJobCategoryItems(categories.documents.map(d => ({ label: d.category_name, value: d.$id })));
-      setCompanyItems(companies.documents.map(d => ({ label: d.corp_name, value: d.$id })));
+      setJobTypeItems(typesSnap.docs.map((d) => ({
+        label: d.data().type_name,
+        value: d.id,
+      })));
+      setJobCategoryItems(categoriesSnap.docs.map((d) => ({
+        label: d.data().category_name,
+        value: d.id,
+      })));
+      setCompanyItems(companiesSnap.docs.map((d) => ({
+        label: d.data().corp_name,
+        value: d.id,
+      })));
     } catch (error) {
       Alert.alert('Lỗi', 'Không thể tải dữ liệu lựa chọn');
     }
@@ -78,15 +95,14 @@ const AddJob = () => {
     load_user_id();
   }, []);
 
-  const load_user_id = async () => {
-    try {
-      const result = await account.get();
-      setUserId(result.$id);
-      console.log(result.$id);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+const load_user_id = async () => {
+  try {
+    const user = auth.currentUser;
+    if (user) setUserId(user.uid);
+  } catch (error) {
+    console.log(error);
+  }
+};
 
   // Chọn ảnh từ thiết bị cho công việc
   const pickImageForJob = async () => {
@@ -130,33 +146,21 @@ const AddJob = () => {
     }
   };
 
-  // Tải ảnh lên Appwrite Storage và trả về URL
-  const uploadImageToAppwrite = async (uri: string) => {
-    try {
-      const fileName = `image_${Date.now()}.jpg`;
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      const file = {
-        name: fileName,
-        type: 'image/jpeg',
-        size: blob.size || 0,
-        uri: uri,
-      };
-
-      const uploadedFile = await storage.createFile(
-        storage_id,
-        ID.unique(),
-        file
-      );
-
-      const fileUrl = storage.getFileView(storage_id, uploadedFile.$id).href;
-      return fileUrl;
-    } catch (error) {
-      console.error('Failed to upload image:', error);
-      throw new Error('Không thể tải ảnh lên Appwrite Storage');
-    }
-  };
+  // Tải ảnh lên firebase Storage và trả về URL
+const uploadImageToFirebase = async (uri: string, folder: string) => {
+  try {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const fileName = `${folder}/${Date.now()}.jpg`;
+    const storageRef = ref(storage, fileName);
+    await uploadBytes(storageRef, blob);
+    const url = await getDownloadURL(storageRef);
+    return url;
+  } catch (error) {
+    console.error('Failed to upload image:', error);
+    throw new Error('Không thể tải ảnh lên Firebase Storage');
+  }
+};
 
   const handleAddJob = async () => {
     if (!title || !salary || !selectedJobType || !selectedJobCategory || (!selectedCompany && !isAddingNewCompany)) {
@@ -170,7 +174,7 @@ const AddJob = () => {
 
       // Tải ảnh công việc lên nếu có
       if (imageUri) {
-        jobImageUrl = await uploadImageToAppwrite(imageUri);
+        jobImageUrl = await uploadImageToFirebase(imageUri, 'jobs');
       } else if (!jobImageUrl) {
         Alert.alert('Thiếu ảnh', 'Vui lòng cung cấp ảnh cho công việc (bằng link hoặc từ thiết bị).');
         setLoading(false);
@@ -180,47 +184,35 @@ const AddJob = () => {
       // Thêm công ty mới nếu đang thêm công ty
       if (isAddingNewCompany) {
         let companyImageUrl = newCompany.image;
-
         if (newCompanyImageUri) {
-          companyImageUrl = await uploadImageToAppwrite(newCompanyImageUri);
+          companyImageUrl = await uploadImageToFirebase(newCompanyImageUri, 'companies');
         } else if (!companyImageUrl) {
           Alert.alert('Thiếu ảnh', 'Vui lòng cung cấp ảnh cho công ty (bằng link hoặc từ thiết bị).');
           setLoading(false);
           return;
         }
-
-        const newComp = await databases.createDocument(
-          databases_id,
-          '67f61f400009809453a2',
-          ID.unique(),
-          {
-            ...newCompany,
-            image: companyImageUrl,
-          }
-        );
-        companyId = newComp.$id;
+        const companyDoc = await addDoc(collection(db, 'companies'), {
+          ...newCompany,
+          image: companyImageUrl,
+        });
+        companyId = companyDoc.id;
       }
 
       // Thêm công việc
-      await databases.createDocument(
-        databases_id,
-        '67e8c50d003e2f3390e9',
-        ID.unique(),
-        {
-          title,
-          image: jobImageUrl,
-          skills_required: skillsRequired,
-          responsibilities,
-          salary: parseFloat(salary),
-          jobTypes: selectedJobType,
-          jobCategories: selectedJobCategory,
-          company: companyId,
-          users: userId,
-          job_Description: jobDescription,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }
-      );
+      await addDoc(collection(db, 'jobs'), {
+        title,
+        image: jobImageUrl,
+        skills_required: skillsRequired,
+        responsibilities,
+        salary: parseFloat(salary),
+        jobTypes: selectedJobType,
+        jobCategories: selectedJobCategory,
+        company: companyId,
+        users: userId,
+        job_Description: jobDescription,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
 
       Alert.alert('Thành công', 'Đã thêm công việc mới');
       router.back();

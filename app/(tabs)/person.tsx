@@ -1,11 +1,12 @@
+import { updatePassword, updateEmail } from 'firebase/auth';
 import { StyleSheet, Text, View, TouchableOpacity, Image, Alert, Modal, TextInput } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { RelativePathString, Stack } from 'expo-router'
 import { Feather, Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { account } from '@/lib/appwrite';
-import { collection_user_id, databases, databases_id } from '@/lib/appwrite'
+import { db, auth } from '../../src/config/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const Person = () => {
   const [editField, setEditField] = useState<null | 'phone' | 'email' | 'password' | 'name'>(null);
@@ -18,47 +19,28 @@ const Person = () => {
 
   const handleSave = async () => {
     try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('No user logged in');
       if (editField === 'password') {
         if (passwords.new !== passwords.confirm) {
           Alert.alert('Error', 'Password does not match');
           return;
         }
-
-        await account.updatePassword(passwords.new, passwords.current);
+  await updatePassword(user, passwords.new);
         Alert.alert('Success', 'Password updated successfully');
         setPasswords({ current: '', new: '', confirm: '' });
       }
-
       if (editField === 'phone') {
-        await databases.updateDocument(
-          databases_id,
-          collection_user_id,
-          userId,
-          { phone: phone }
-        );
+        await updateDoc(doc(db, 'users', user.uid), { phone });
         Alert.alert('Success', 'Phone number updated successfully');
       }
-
       if (editField === 'email') {
-        await account.updateEmail(email, passwords.current);
+  await updateEmail(user, email);
         Alert.alert('Success', 'Email updated successfully');
-        await databases.updateDocument(
-          databases_id,
-          collection_user_id,
-          userId,
-          { email: email }
-        );
-
+        await updateDoc(doc(db, 'users', user.uid), { email });
       }
-
       if (editField === 'name') {
-
-        await databases.updateDocument(
-          databases_id,
-          collection_user_id,
-          userId,
-          { name: userName }
-        );
+        await updateDoc(doc(db, 'users', user.uid), { name: userName });
         Alert.alert('Success', 'Name updated successfully');
         load_data_user();
       }
@@ -66,13 +48,12 @@ const Person = () => {
       console.log('Update failed:', error);
       Alert.alert('Error', error.message || 'Something went wrong');
     }
-
     setEditField(null);
   };
 
   const handleLogout = async () => {
     try {
-      await account.deleteSession('current');
+      await auth.signOut();
       router.push('/login');
     } catch (error) {
       console.log('Logout Error:', error);
@@ -80,25 +61,20 @@ const Person = () => {
   };
 
   const load_user_id = async () => {
-    try {
-      const result = await account.get();
-      setUserId(result.$id);
-    } catch (error) {
-      console.log(error);
-    }
+    const user = auth.currentUser;
+    if (user) setUserId(user.uid);
   };
 
   const load_data_user = async () => {
     if (userId) {
       try {
-        const result = await databases.getDocument(
-          databases_id,
-          collection_user_id,
-          userId
-        );
-        setDataUser(result);
-        setUserName(result.name || '');
-        setPhone(result.phone || '');
+        const userSnap = await getDoc(doc(db, 'users', userId));
+        if (userSnap.exists()) {
+          const result = userSnap.data();
+          setDataUser(result);
+          setUserName(result.name || '');
+          setPhone(result.phone || '');
+        }
       } catch (error) {
         console.log(error);
       }
@@ -109,17 +85,8 @@ const Person = () => {
 
 
   useEffect(() => {
-    const getAuthUser = async () => {
-      try {
-        const user = await account.get();
-       
-        setUserName(user.name);
-      } catch (error) {
-        console.error("Không lấy được thông tin user:", error);
-      }
-    };
-
-    getAuthUser();
+    const user = auth.currentUser;
+    if (user) setUserName(user.displayName || '');
   }, []);
 
   useEffect(() => {
@@ -167,7 +134,7 @@ const Person = () => {
         <View style={styles.infoBox}>
           <Text style={styles.label}> Email </Text>
           <View style={styles.inputRow}>
-            <Text style={styles.input}>*******</Text>
+            <Text style={styles.input}>{dataUser?.email || auth.currentUser?.email || "No email"}</Text>
             <TouchableOpacity onPress={() => setEditField('email')}>
               <Feather name="edit-2" size={16} color="#333" />
             </TouchableOpacity>

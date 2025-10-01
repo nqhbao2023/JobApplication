@@ -12,62 +12,49 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSavedJobs } from '@/app/saveJobsContext';
-import { databases, databases_id, collection_job_id, collection_saved_jobs_id, collection_jobcategory_id, Query } from '@/lib/appwrite';
-import { account } from '@/lib/appwrite';
+import { db, auth } from '../../src/config/firebase';
+import { collection, doc, getDocs, getDoc, query, where, addDoc, deleteDoc } from 'firebase/firestore';
 
 const Job = () => {
   const [selectedTab, setSelectedTab] = useState(0);
-  const [savedJobs, setSavedJobs] = useState<any[]>([])
+  const [savedJobs, setSavedJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string>('')
+  const [userId, setUserId] = useState<string>('');
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
     if (userId) {
-      fetchSavedJobs()
+      fetchSavedJobs();
       fetchCategories();
     }
-  }, [userId])
+  }, [userId]);
   useEffect(() => {
-    
-    loadUser()
-  }, [])
-  const loadUser = async () => {
-    try {
-      const user = await account.get()
-      setUserId(user.$id)
-    } catch (error) {
-      console.log('Không lấy được user:', error)
-    }
-  }
+    const user = auth.currentUser;
+    if (user) setUserId(user.uid);
+  }, []);
 
   const fetchSavedJobs = async () => {
     try {
-      setLoading(true)
-      const saved = await databases.listDocuments(
-        databases_id,
-        collection_saved_jobs_id,
-        [Query.equal('userId', userId)]
-      )
-
-      const jobIds = saved.documents.map(doc => doc.jobId)
-      const jobPromises = jobIds.map((jobId: string) =>
-        databases.getDocument(databases_id, collection_job_id, jobId)
-      )
-
-      const jobDetails = await Promise.all(jobPromises)
-      setSavedJobs(jobDetails)
+      setLoading(true);
+      const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId));
+      const savedSnap = await getDocs(q);
+      const jobIds = savedSnap.docs.map(doc => doc.data().jobId);
+      const jobPromises = jobIds.map(async (jobId: string) => {
+        const jobSnap = await getDoc(doc(db, 'jobs', jobId));
+        return { $id: jobId, ...jobSnap.data() };
+      });
+      const jobDetails = await Promise.all(jobPromises);
+      setSavedJobs(jobDetails);
     } catch (error) {
-      console.log('Lỗi khi load saved jobs:', error)
+      console.log('Lỗi khi load saved jobs:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   const fetchCategories = async () => {
     try {
-      const response = await databases.listDocuments(databases_id, collection_jobcategory_id);
-      setCategories(response.documents);
+      const catSnap = await getDocs(collection(db, 'job_categories'));
+      setCategories(catSnap.docs.map(doc => ({ $id: doc.id, ...doc.data() })));
     } catch (err) {
       console.error('Lỗi khi load category:', err);
     }
@@ -86,7 +73,7 @@ const Job = () => {
       );
 
   const renderJobItem = ({ item }: { item: any }) => {
-    const isSaved = savedJobs.includes(item.$id);
+    const isSaved = savedJobs.some(job => job.$id === item.$id);
 
     return (
       <TouchableOpacity
@@ -116,42 +103,19 @@ const Job = () => {
   };
   const handleSaveJob = async (jobId: string) => {
     if (!userId) return;
-  
     const isJobSaved = savedJobs.some(job => job.$id === jobId);
-  
     try {
       if (isJobSaved) {
-   
-        const savedJobDoc = await databases.listDocuments(
-          databases_id,
-          collection_saved_jobs_id,
-          [
-            Query.equal('userId', userId),
-            Query.equal('jobId', jobId)
-          ]
-        );
-  
-        if (savedJobDoc.documents.length > 0) {
-          await databases.deleteDocument(
-            databases_id,
-            collection_saved_jobs_id,
-            savedJobDoc.documents[0].$id
-          );
+        // Find the saved job document
+        const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId), where('jobId', '==', jobId));
+        const res = await getDocs(q);
+        if (!res.empty) {
+          await deleteDoc(doc(db, 'saved_jobs', res.docs[0].id));
         }
       } else {
-        // Lưu job vào saved list
-        await databases.createDocument(
-          databases_id,
-          collection_saved_jobs_id,
-          'unique()', 
-          {
-            userId,
-            jobId
-          }
-        );
+        await addDoc(collection(db, 'saved_jobs'), { userId, jobId, created_at: new Date().toISOString() });
       }
-  
-      fetchSavedJobs(); 
+      fetchSavedJobs();
     } catch (err) {
       console.error('Lỗi xử lý trái tim:', err);
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,37 +7,49 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
-import { useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useRouter } from 'expo-router';
-import { collection_applied_jobs_id, collection_user_id, collection_job_id,account, databases, databases_id, Query} from '@/lib/appwrite';
-const appliedJob = () => {
+import { useRouter } from 'expo-router';
+import { db, auth } from '@/config/firebase';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 
+const AppliedJob = () => {
   const router = useRouter();
   const [appliedJobs, setAppliedJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [userId, setUserId] = useState<string>('')
+  const [userId, setUserId] = useState<string>('');
+
+  // Lấy userId từ Firebase Auth
+  const load_userId = async () => {
+    const user = auth.currentUser;
+    if (user) setUserId(user.uid);
+  };
+
+  // Lấy danh sách công việc đã ứng tuyển từ Firestore
   const fetchAppliedJobs = async () => {
     try {
       setLoading(true);
-      const res = await databases.listDocuments(
-        databases_id,
-        collection_applied_jobs_id,
-        [Query.equal('userId', userId || '')]
-      );
+      const q = query(collection(db, 'applied_jobs'), where('userId', '==', userId));
+      const res = await getDocs(q);
 
       const jobs = await Promise.all(
-        res.documents.map(async (doc) => {
-          const jobRes = await databases.getDocument(
-            databases_id,
-            collection_job_id,
-            doc.jobId,
-          );
+        res.docs.map(async (docSnap: any) => {
+          const jobRes = await getDoc(doc(db, 'jobs', docSnap.data().jobId));
+          const jobData = jobRes.exists() ? jobRes.data() : {};
+          // Lấy thông tin công ty nếu cần
+          let companyData = {};
+          if (jobData && jobData.company) {
+            const companySnap = await getDoc(doc(db, 'companies', jobData.company));
+            companyData = companySnap.exists() ? companySnap.data() : {};
+          }
           return {
-            ...jobRes,
-            status: doc.status,
-            applied_at: doc.applied_at,
+            $id: docSnap.id,
+            ...jobData,
+            company: companyData,
+            status: docSnap.data().status,
+            applied_at: docSnap.data().applied_at,
+            type: jobData?.type || '',
+            salary: jobData?.salary || '',
           };
         })
       );
@@ -49,49 +61,57 @@ const appliedJob = () => {
       setLoading(false);
     }
   };
-  const renderItem = ({ item }: { item: any }) => {
-    return (
-      console.log(item),
-      <TouchableOpacity style={styles.jobItem} onPress={() => router.push({ pathname: '/(events)/jobDescription', params: { jobId: item.$id } })}>
-        <Image source={{ uri: item.image }} style={styles.jobImage} />
-        <View style={styles.jobInfo}>
-          <Text style={styles.jobTitle}>{item.title}</Text>
-          <Text style={styles.jobCompany}>{item.company?.corp_name}</Text>  
-          <Text style={styles.jobLocation}>{item.company?.location}</Text>
-          <Text style={styles.jobStatus}>
-            Trạng thái: 
-            <Text style={{ fontWeight: 'bold', color: item.status === 'Đã duyệt' ? '#34C759' : '#FF9500' }} >
-              {' '}{item.status}
-            </Text>
+
+  useEffect(() => {
+    load_userId();
+  }, []);
+
+  useEffect(() => {
+    if (userId) fetchAppliedJobs();
+  }, [userId]);
+
+  const renderItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.jobItem}
+      onPress={() =>
+        router.push({
+          pathname: '/(events)/jobDescription',
+          params: { jobId: item.$id },
+        })
+      }
+    >
+      <Image source={{ uri: item.image }} style={styles.jobImage} />
+      <View style={styles.jobInfo}>
+        <Text style={styles.jobTitle}>{item.title}</Text>
+        <Text style={styles.jobCompany}>{item.company?.corp_name}</Text>
+        <Text style={styles.jobLocation}>{item.company?.location}</Text>
+        <Text style={styles.jobStatus}>
+          Trạng thái:
+          <Text
+            style={{
+              fontWeight: 'bold',
+              color: item.status === 'Đã duyệt' ? '#34C759' : '#FF9500',
+            }}
+          >
+            {' '}
+            {item.status}
           </Text>
-        </View>
-        <View style={styles.jobRight}>
-          <Text style={styles.jobSalary}>{item.salary} $</Text>
-          <Text style={styles.jobType}>{item.type}</Text>
-          <Ionicons name="checkmark-done" size={24} color="#34C759" />
-        </View>
-      
-      </TouchableOpacity>
-    );
-  };
-  const load_userId = async () => {
-      const user = await account.get()
-      setUserId(user.$id)
-    }
-    useEffect(() => {
-      if (userId) fetchAppliedJobs();
-    }, [userId]);
-    useEffect(() => {
-      load_userId();
-    }, []);
-    
+        </Text>
+      </View>
+      <View style={styles.jobRight}>
+        <Text style={styles.jobSalary}>{item.salary} $</Text>
+        <Text style={styles.jobType}>{item.type}</Text>
+        <Ionicons name="checkmark-done" size={24} color="#34C759" />
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.back_btn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
-
         <Text style={styles.headerText}>Applied Job List</Text>
       </View>
 
@@ -109,7 +129,7 @@ const appliedJob = () => {
         <FlatList
           data={appliedJobs}
           renderItem={renderItem}
-          keyExtractor={(item) => item.$id.toString()} // Assuming $id is unique
+          keyExtractor={(item) => item.$id.toString()}
           contentContainerStyle={{ paddingHorizontal: 16 }}
         />
       )}
@@ -117,7 +137,7 @@ const appliedJob = () => {
   );
 };
 
-export default appliedJob;
+export default AppliedJob;
 
 const styles = StyleSheet.create({
   container: {

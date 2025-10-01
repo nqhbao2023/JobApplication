@@ -2,7 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { databases, databases_id, collection_notifications_id, account, Query } from '@/lib/appwrite';
+import { auth, db } from '@/config/firebase';
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  updateDoc,
+  doc,
+  deleteDoc,
+} from 'firebase/firestore';
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -12,27 +22,28 @@ const Notifications = () => {
   useEffect(() => {
     const fetchUserAndNotifications = async () => {
       try {
-        const user = await account.get();
-        setUserId(user.$id);
+        const user = auth.currentUser;
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+        setUserId(user.uid);
 
-        const res = await databases.listDocuments(
-          databases_id,
-          collection_notifications_id,
-          [Query.equal('userId', user.$id), Query.orderDesc('created_at')]
+        const q = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid),
+          orderBy('created_at', 'desc')
         );
-        setNotifications(res.documents);
+        const querySnapshot = await getDocs(q);
+        const docs = querySnapshot.docs.map(doc => ({ $id: doc.id, ...doc.data() }));
+        setNotifications(docs);
 
         // Đánh dấu tất cả thông báo là đã đọc
-        const unreadNotifications = res.documents.filter((notif: any) => !notif.read);
+        const unreadNotifications = docs.filter((notif: any) => !notif.read);
         if (unreadNotifications.length > 0) {
           await Promise.all(
             unreadNotifications.map((notif: any) =>
-              databases.updateDocument(
-                databases_id,
-                collection_notifications_id,
-                notif.$id,
-                { read: true }
-              )
+              updateDoc(doc(db, 'notifications', notif.$id), { read: true })
             )
           );
           setNotifications((prev) =>
@@ -52,12 +63,7 @@ const Notifications = () => {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await databases.updateDocument(
-        databases_id,
-        collection_notifications_id,
-        notificationId,
-        { read: true }
-      );
+      await updateDoc(doc(db, 'notifications', notificationId), { read: true });
       setNotifications((prev) =>
         prev.map((notif) =>
           notif.$id === notificationId ? { ...notif, read: true } : notif
@@ -70,18 +76,14 @@ const Notifications = () => {
 
   const deleteAllNotifications = async () => {
     try {
-      const res = await databases.listDocuments(
-        databases_id,
-        collection_notifications_id,
-        [Query.equal('userId', userId)]
+      const q = query(
+        collection(db, 'notifications'),
+        where('userId', '==', userId)
       );
+      const querySnapshot = await getDocs(q);
       await Promise.all(
-        res.documents.map((notif: any) =>
-          databases.deleteDocument(
-            databases_id,
-            collection_notifications_id,
-            notif.$id
-          )
+        querySnapshot.docs.map((notif) =>
+          deleteDoc(doc(db, 'notifications', notif.id))
         )
       );
       setNotifications([]);
@@ -113,7 +115,9 @@ const Notifications = () => {
     >
       <Text style={styles.notificationText}>{item.message}</Text>
       <Text style={styles.notificationTime}>
-        {new Date(item.created_at).toLocaleString()}
+        {item.created_at
+          ? new Date(item.created_at).toLocaleString()
+          : ''}
       </Text>
     </TouchableOpacity>
   );

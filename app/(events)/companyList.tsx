@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,66 +6,72 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Company, Job } from '@/types/type';
-import { getAllDocuments } from "@/lib/appwrite";
-import { databases, databases_id, collection_company_id, collection_job_id } from '@/lib/appwrite';
-import { useEffect } from 'react';
-import { Image } from 'react-native';
-
+import { db } from '@/config/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 const { width } = Dimensions.get('window');
 const cardSize = width / 2 - 32;
 
-const companyList = () => {
+// Định nghĩa type nếu không import được
+type Company = {
+  $id: string;
+  corp_name: string;
+  nation?: string;
+  corp_description?: string;
+  city?: string;
+  image?: string;
+  color?: string;
+};
 
+type Job = {
+  $id: string;
+  title: string;
+  image?: string;
+  salary?: number;
+  skills_required?: string;
+  responsibilities?: string;
+  created_at?: string;
+  updated_at?: string;
+  jobTypes?: any;
+  jobCategories?: any;
+  users?: any;
+  job_Description?: string;
+  company?: string;
+};
+
+const CompanyList = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]); // Sử dụng kiểu dữ liệu Company
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchCompanyData = async () => {
-    // Lấy dữ liệu từ Appwrite
-    const companiesResult = await getAllDocuments(databases_id, collection_company_id);
-    const jobsResult = await getAllDocuments(databases_id, collection_job_id);
-    if (companiesResult) {
-      // Chuyển đổi Document thành Company
-      const companies: Company[] = companiesResult.map((company: any) => ({
-        $id: company.$id,
-        corp_name: company.corp_name,
-        nation: company.nation,
-        corp_description: company.corp_description,
-        city: company.city,
-        image: company.image,
-        color: company.color,
-      }));
+    try {
+      // Lấy dữ liệu từ Firestore
+      const companiesSnap = await getDocs(collection(db, 'companies'));
+      const jobsSnap = await getDocs(collection(db, 'jobs'));
 
-      setCompanies(companies); // Cập nhật state với danh sách công ty
-      console.log(companies); // Kiểm tra dữ liệu công ty
-    }
-    if (jobsResult) {
-      const fetchedJobs: Job[] = jobsResult.map((job: any) => ({
-        $id: job.$id,
-        title: job.title,
-        image: job.image,
-        salary: job.salary,
-        skills_required: job.skills_required,
-        responsibilities: job.responsibilities,
-        created_at: job.created_at,
-        updated_at: job.updated_at,
-        jobTypes: job.jobTypes,
-        jobCategories: job.jobCategories,
-        users: job.users,
-        job_Description: job.job_Description,
-        company: job.company
-      }));
-      setJobs(fetchedJobs); // Lưu công việc vào state
+      const companies: Company[] = companiesSnap.docs.map((doc) => ({
+        $id: doc.id,
+        ...doc.data(),
+      })) as Company[];
+
+      const fetchedJobs: Job[] = jobsSnap.docs.map((doc) => ({
+        $id: doc.id,
+        ...doc.data(),
+      })) as Job[];
+
+      setCompanies(companies);
+      setJobs(fetchedJobs);
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+      console.error('Lỗi khi lấy dữ liệu công ty hoặc công việc:', error);
     }
   };
-
 
   useEffect(() => {
     fetchCompanyData();
@@ -76,11 +82,9 @@ const companyList = () => {
   };
 
   const renderItem = ({ item }: { item: Company }) => {
-    const jobCount = jobs.filter((job: Job) => job.company?.$id === item.$id).length;
-    
-    // Determine text color based on background color
+    const jobCount = jobs.filter((job: Job) => job.company === item.$id).length;
     const textColor = item.color ? getContrastColor(item.color) : '#1e293b';
-  
+
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: item.color || '#e2e8f0' }]}
@@ -95,10 +99,10 @@ const companyList = () => {
                 style={styles.companyImage}
               />
             ) : (
-              <MaterialCommunityIcons 
-                name="office-building" 
-                size={24} 
-                color={textColor} 
+              <MaterialCommunityIcons
+                name="office-building"
+                size={24}
+                color={textColor}
               />
             )}
           </View>
@@ -112,22 +116,15 @@ const companyList = () => {
       </TouchableOpacity>
     );
   };
-  
+
   // Helper function to determine contrasting text color
   const getContrastColor = (hexColor: string) => {
-    // Convert hex to RGB
     const r = parseInt(hexColor.slice(1, 3), 16);
     const g = parseInt(hexColor.slice(3, 5), 16);
     const b = parseInt(hexColor.slice(5, 7), 16);
-    
-    // Calculate luminance
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    
-    // Return black or white depending on luminance
     return luminance > 0.5 ? '#000000' : '#FFFFFF';
   };
-
-
 
   return (
     <View style={styles.container}>
@@ -150,7 +147,9 @@ const companyList = () => {
     </View>
   );
 };
-export default companyList;
+
+export default CompanyList;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -180,26 +179,17 @@ const styles = StyleSheet.create({
   list: {
     paddingBottom: 80,
   },
-
-
-
-
-
-
-
   contentContainer: {
-    backgroundColor: '#ffffff', // Màu nền trắng cho phần nội dung
+    backgroundColor: '#ffffff',
     width: '100%',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
   },
-
-
   card: {
     width: cardSize,
     borderRadius: 16,
-    padding: 16, // Tăng padding để màu nền tràn đều
+    padding: 16,
     margin: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -219,7 +209,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Nền trong suốt cho logo
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   companyImage: {
     width: 50,

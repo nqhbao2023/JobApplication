@@ -1,30 +1,21 @@
 import { useLocalSearchParams } from 'expo-router';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { useEffect, useState } from 'react';
-import {
-  databases,
-  databases_id,
-  collection_job_id,
-  collection_jobtype_id,
-  collection_jobcategory_id,
-  collection_company_id,
-  Query
-} from '@/lib/appwrite';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { Provider as PaperProvider } from 'react-native-paper';
-import { router } from 'expo-router'
+import { router } from 'expo-router';
+import { db } from '@/config/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+
 interface Job {
   $id: string;
   title: string;
-  
   image: string;
-  
   skills_required: string;
   responsibilities: string;
   created_at: string;
   updated_at: string;
   salary: number;
- 
   jobTypes: any;
   jobCategories: any;
   company: any;
@@ -64,17 +55,27 @@ export default function SearchScreen() {
 
   const fetchJobs = async () => {
     try {
-      const queries = [];
+      let qJobs: any = collection(db, 'jobs');
+      let qArr: any[] = [];
 
-      if (q) queries.push(Query.search('title', q as string));
-      if (selectedTypeId) queries.push(Query.equal('jobTypes', selectedTypeId));
-      if (selectedCategoryId) queries.push(Query.equal('jobCategories', selectedCategoryId));
-      if (selectedCompanyId) queries.push(Query.equal('company', selectedCompanyId));
-      const response = await databases.listDocuments(databases_id, collection_job_id, queries);
+      if (q) qArr.push(where('title', '>=', q), where('title', '<=', q + '\uf8ff'));
+      if (selectedTypeId) qArr.push(where('jobTypes', '==', selectedTypeId));
+      if (selectedCategoryId) qArr.push(where('jobCategories', '==', selectedCategoryId));
+      if (selectedCompanyId) qArr.push(where('company', '==', selectedCompanyId));
 
-      const formattedJobs: Job[] = response.documents.map((doc: any) => ({
-        ...doc
-      }));
+      let jobsQuery = qArr.length ? query(qJobs, ...qArr) : qJobs;
+      const snapshot = await getDocs(jobsQuery);
+
+      const formattedJobs: Job[] = snapshot.docs
+        .map((docSnap) => {
+          const data = docSnap.data();
+          if (!data || typeof data !== 'object') return null;
+          return {
+            $id: docSnap.id,
+            ...data,
+          } as Job;
+        })
+        .filter((job): job is Job => job !== null);
 
       setJobs(formattedJobs);
     } catch (error) {
@@ -84,29 +85,30 @@ export default function SearchScreen() {
 
   const fetchFilters = async () => {
     try {
-      const typesRes = await databases.listDocuments(databases_id, collection_jobtype_id);
-      const categoriesRes = await databases.listDocuments(databases_id, collection_jobcategory_id);
-      const companyRes = await databases.listDocuments(databases_id, collection_company_id);
+      const typesSnap = await getDocs(collection(db, 'job_types'));
+      const categoriesSnap = await getDocs(collection(db, 'job_categories'));
+      const companySnap = await getDocs(collection(db, 'companies'));
+
       setJobTypes(
-        typesRes.documents.map((doc: any) => ({
-          $id: doc.$id,
-          type_name: doc.type_name,
+        typesSnap.docs.map((doc) => ({
+          $id: doc.id,
+          type_name: doc.data().type_name,
         }))
       );
-      
+
       setJobCategories(
-        categoriesRes.documents.map((doc: any) => ({
-          $id: doc.$id,
-          category_name: doc.category_name,
+        categoriesSnap.docs.map((doc) => ({
+          $id: doc.id,
+          category_name: doc.data().category_name,
         }))
       );
       setCompany(
-        companyRes.documents.map((doc: any) => ({
-          $id: doc.$id,
-          corp_name: doc.corp_name,
-          nation: doc.nation,
-          corp_description: doc.corp_description,
-          city: doc.corp_description,
+        companySnap.docs.map((doc) => ({
+          $id: doc.id,
+          corp_name: doc.data().corp_name,
+          nation: doc.data().nation,
+          corp_description: doc.data().corp_description,
+          city: doc.data().city,
         }))
       );
     } catch (err) {

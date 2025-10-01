@@ -2,8 +2,11 @@ import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Alert
 } from 'react-native';
-import { account, collection_user_id, databases, databases_id, ID } from '../../lib/appwrite';
+
 import { useRouter } from 'expo-router';
+import { auth, db } from '@/config/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp  } from 'firebase/firestore';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
@@ -15,43 +18,71 @@ export default function RegisterScreen() {
   const [showRoleModal, setShowRoleModal] = useState(true);
   const [name, setName] = useState('');
 
-  const handleRegister = async () => {
-    if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin.');
+// UPDATE handleRegister: thêm timeout Firestore + đảm bảo stop loading và điều hướng
+const handleRegister = async () => {
+  if (!name || !email || !password || !confirmPassword) {
+    Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin.');
+    return;
+  }
+  if (password !== confirmPassword) {
+    Alert.alert('Thông báo', 'Mật khẩu xác nhận không khớp.');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+    const user = userCredential.user;
+
+    // Tạo promise ghi Firestore
+    const writeUserDoc = setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      email: user.email,
+      displayName: name,
+      photoURL: user.photoURL || null,
+      provider: user.providerData[0]?.providerId || 'password',
+      role: isRecruiter ? 'employer' : 'student',
+      skills: [],
+      savedJobIds: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    // Timeout Firestore nếu >15s
+    const timeout = new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 15000)
+    );
+
+    await Promise.race([writeUserDoc, timeout]);
+
+    // Nếu không timeout → ghi Firestore thành công
+    setLoading(false);
+    Alert.alert('Thành công', 'Đăng ký thành công.');
+    router.replace('/(auth)/login');
+  } catch (err: any) {
+    console.log('Register error:', err?.code || err?.message || err);
+    setLoading(false);
+
+    if (err.message === 'timeout') {
+      Alert.alert('Thông báo', 'Ghi Firestore quá lâu (timeout 15s). Vui lòng kiểm tra kết nối mạng hoặc thử lại.');
       return;
     }
-    
 
-    if (password !== confirmPassword) {
-      Alert.alert('Thông báo', 'Mật khẩu xác nhận không khớp.');
+    if (err?.code === 'auth/email-already-in-use') {
+      Alert.alert('Lỗi đăng ký', 'Email đã được sử dụng.');
       return;
     }
 
-    setLoading(true);
-    const user_id = ID.unique();
-    try {
-     
-      await account.create(user_id, email, password);
-      await databases.createDocument(
-        databases_id,
-        collection_user_id,
-        user_id,
-        {
-          isAdmin: false,
-          id_image: null,
-          isRecruiter: isRecruiter,
-          name: name,
-        }
-      );
-      Alert.alert('Thành công', 'Đăng ký thành công, vui lòng đăng nhập.');
-      router.replace('/(auth)/login');
-    } catch (error: any) {
-      await account.deleteSession('current');
-      Alert.alert('Lỗi đăng ký', error.message);
-    } finally {
-      setLoading(false);
+    if (err?.code === 'permission-denied') {
+      Alert.alert('Cảnh báo', 'Không có quyền ghi Firestore.');
+      return;
     }
-  };
+
+    Alert.alert('Lỗi đăng ký', err?.message || 'Đã xảy ra lỗi không xác định.');
+  }
+};
+
+
 
   return (
     <View style={styles.container}>
@@ -60,7 +91,7 @@ export default function RegisterScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Bạn là ai?</Text>
-  
+
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
@@ -70,7 +101,7 @@ export default function RegisterScreen() {
             >
               <Text style={styles.modalButtonText}>Người tìm việc</Text>
             </TouchableOpacity>
-  
+
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
@@ -83,15 +114,15 @@ export default function RegisterScreen() {
           </View>
         </View>
       )}
-  
+
       {/* Giao diện chính đăng ký */}
       <Text style={styles.title}>Đăng ký</Text>
       <TextInput
-  placeholder="Họ và tên"
-  value={name}
-  onChangeText={setName}
-  style={styles.input}
-/>
+        placeholder="Họ và tên"
+        value={name}
+        onChangeText={setName}
+        style={styles.input}
+      />
 
       <TextInput
         placeholder="Email"
@@ -115,7 +146,7 @@ export default function RegisterScreen() {
         secureTextEntry
         style={styles.input}
       />
-  
+
       <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -123,13 +154,12 @@ export default function RegisterScreen() {
           <Text style={styles.buttonText}>Đăng ký</Text>
         )}
       </TouchableOpacity>
-  
+
       <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
         <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>
       </TouchableOpacity>
     </View>
   );
-  
 }
 
 const styles = StyleSheet.create({
@@ -179,5 +209,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  
+
 });

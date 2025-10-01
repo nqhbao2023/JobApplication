@@ -3,8 +3,10 @@ import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet
 } from 'react-native';
 import { router } from 'expo-router';
-import { account } from '../../lib/appwrite';
-import { databases_id, collection_user_id, databases } from '../../lib/appwrite';
+import { auth, db } from '@/config/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -12,51 +14,35 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) return;
-  
+
     setLoading(true);
     try {
-      // Xóa session cũ nếu có
-      try {
-        await account.deleteSession('current');
-      } catch (e) {
-        console.log("Không có session để xóa");
+      // Đăng nhập bằng Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Kiểm tra user đã có trong Firestore chưa
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        // Nếu chưa có thì tạo mới
+        await setDoc(userDocRef, {
+          name: user.displayName || '',
+          email: user.email,
+          isAdmin: false,
+          isRecruiter: false,
+        });
       }
-  
-      // Tạo session mới
-      const session = await account.createEmailPasswordSession(email, password);
-      
-      // Lấy thông tin user từ session hiện tại
-      const user = await account.get();
-      let userDoc;
-      // Kiểm tra xem user đã tồn tại trong database chưa
-      try {
-      userDoc = await databases.getDocument(
-          databases_id,
-          collection_user_id,
-          user.$id
-        );
-        
-        // Nếu không bị lỗi nghĩa là document đã tồn tại
-        console.log("User đã tồn tại trong database");
-      } catch (error) {
-        // Nếu chưa tồn tại thì tạo mới
-        userDoc =await databases.createDocument(
-          databases_id,
-          collection_user_id,
-          user.$id, // Sử dụng user ID làm document ID
-          {
-            name: user.name,
-            email: user.email,
-            isAdmin: false,
-            isRecruiter: false
-          }
-        );
-      }
-  
-     if (userDoc.isAdmin) {
-        router.replace('/admin'); // Chuyển hướng đến trang admin
+
+      // Lấy lại thông tin user từ Firestore
+      const userDataSnap = await getDoc(userDocRef);
+      const userData = userDataSnap.data();
+
+      if (userData?.isAdmin) {
+        router.replace('/admin');
       } else {
-        router.replace('/(tabs)'); // Chuyển hướng đến trang tabs
+        router.replace('/(tabs)');
       }
     } catch (error: any) {
       alert('Login failed: ' + error.message);
@@ -65,13 +51,10 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
-  
-  
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Đăng nhập</Text>
-
       <TextInput
         placeholder="Email"
         value={email}
@@ -87,7 +70,6 @@ export default function LoginScreen() {
         style={styles.input}
         secureTextEntry
       />
-
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -95,7 +77,6 @@ export default function LoginScreen() {
           <Text style={styles.buttonText}>Đăng nhập</Text>
         )}
       </TouchableOpacity>
-
       <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
         <Text style={styles.link}>Chưa có tài khoản? Đăng ký ngay</Text>
       </TouchableOpacity>

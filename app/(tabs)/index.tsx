@@ -3,7 +3,17 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import Search from '@/components/Search';
 import { router } from 'expo-router';
-import { account, collection_company_id, collection_job_id, collection_user_id, collection_jobcategory_id, collection_notifications_id, databases, databases_id, Query } from '@/lib/appwrite';
+import {
+  collection,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  doc, // thêm dòng này
+} from 'firebase/firestore';
+import { db, auth } from '@/config/firebase'; // Đúng đường dẫn alias
+// Nếu chưa cấu hình alias @, dùng:
+//// import { db, auth } from '../../src/config/firebase';
 
 const Index = () => {
   const [userId, setUserId] = useState<string>('');
@@ -12,20 +22,24 @@ const Index = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [dataCategories, setDataCategories] = useState<any[]>([]);
   const [dataCompany, setDataCompany] = useState<any[]>([]);
- const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
   useEffect(() => {
-    load_data_job();
     load_user_id();
-    load_data_user();
-    load_data_company();
-    load_data_categories();
-     loadUnreadNotifications(); 
-    
+  }, []);
+
+  useEffect(() => {
+    if (userId) {
+      load_data_job();
+      load_data_user();
+      load_data_company();
+      load_data_categories();
+      loadUnreadNotifications();
+    }
   }, [userId]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-
     Promise.all([
       load_data_company(),
       load_user_id(),
@@ -36,77 +50,80 @@ const Index = () => {
     });
   }, []);
 
+  // Lấy userId từ Firebase Auth
   const load_user_id = async () => {
     try {
-      const result = await account.get();
-      setUserId(result.$id);
+      const user = auth.currentUser;
+      if (user) {
+        setUserId(user.uid);
+      }
     } catch (error) {
       console.log(error);
     }
   };
 
+  // Lấy thông tin user từ Firestore
   const load_data_user = async () => {
     if (userId) {
       try {
-        const result = await databases.getDocument(
-          databases_id,
-          collection_user_id,
-          userId
-        );
-        setDataUser(result);
+        const docRef = doc(db, 'users', userId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setDataUser({ $id: docSnap.id, ...docSnap.data() });
+        }
       } catch (error) {
         console.log(error);
       }
     }
   };
 
+  // Lấy danh sách jobs
   const load_data_job = async () => {
     try {
-      const result = await databases.listDocuments(
-        databases_id,
-        collection_job_id
-      );
-      setDataJob(result.documents);
+      const q = query(collection(db, 'jobs'));
+      const querySnapshot = await getDocs(q);
+      const jobs = querySnapshot.docs.map(doc => ({ $id: doc.id, ...doc.data() }));
+      setDataJob(jobs);
     } catch (error) {
       console.log(error);
     }
   };
 
+  // Lấy danh sách company
   const load_data_company = async () => {
     try {
-      const result = await databases.listDocuments(
-        databases_id,
-        collection_company_id
-      );
-      setDataCompany(result.documents);
+      const q = query(collection(db, 'companies'));
+      const querySnapshot = await getDocs(q);
+      const companies = querySnapshot.docs.map(doc => ({ $id: doc.id, ...doc.data() }));
+      setDataCompany(companies);
     } catch (error) {
       console.log(error);
     }
   };
 
+  // Lấy danh sách categories
   const load_data_categories = async () => {
     try {
-      const result = await databases.listDocuments(
-        databases_id,
-        collection_jobcategory_id
-      );
-      setDataCategories(result.documents);
+      const q = query(collection(db, 'categories'));
+      const querySnapshot = await getDocs(q);
+      const categories = querySnapshot.docs.map(doc => ({ $id: doc.id, ...doc.data() }));
+      setDataCategories(categories);
     } catch (error) {
       console.log(error);
     }
   };
-const loadUnreadNotifications = async () => {
+
+  // Lấy số lượng thông báo chưa đọc
+  const loadUnreadNotifications = async () => {
     if (!userId) return;
     try {
-      const res = await databases.listDocuments(
-        databases_id,
-        collection_notifications_id,
-        [
-          Query.equal('userId', userId),
-          Query.equal('read', false), // Chỉ lấy thông báo chưa đọc
-        ]
+      const q = query(
+        collection(db, 'notifications'),
+        where('userId', '==', userId),
+        where('read', '==', false)
       );
-      setUnreadCount(res.documents.length);
+      const querySnapshot = await getDocs(q);
+      setUnreadCount(querySnapshot.size);
     } catch (error) {
       console.error('Failed to load unread notifications:', error);
     }
@@ -115,7 +132,6 @@ const loadUnreadNotifications = async () => {
   const getJobCountByCategory = (categoryId: string) => {
     return dataJob.filter((job: any) => {
       if (!job.jobCategories) return false;
-
       if (Array.isArray(job.jobCategories)) {
         return job.jobCategories.some((cat: any) => cat.$id === categoryId);
       } else {
@@ -126,13 +142,10 @@ const loadUnreadNotifications = async () => {
 
   const getContrastColor = (hexColor: string) => {
     if (!hexColor) return '#1e293b';
-
     const r = parseInt(hexColor.slice(1, 3), 16);
     const g = parseInt(hexColor.slice(3, 5), 16);
     const b = parseInt(hexColor.slice(5, 7), 16);
-
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
     return luminance > 0.5 ? '#000000' : '#FFFFFF';
   };
 
@@ -161,7 +174,7 @@ const loadUnreadNotifications = async () => {
                 )}
               </View>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/person')}>
               <Image
                 style={styles.avatar}
                 source={{

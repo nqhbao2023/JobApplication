@@ -41,7 +41,7 @@ const handleRegister = async () => {
       displayName: name,
       photoURL: user.photoURL || null,
       provider: user.providerData[0]?.providerId || 'password',
-      role: isRecruiter ? 'employer' : 'student',
+      role: isRecruiter ? 'employer' : 'candidate',
       skills: [],
       savedJobIds: [],
       createdAt: serverTimestamp(),

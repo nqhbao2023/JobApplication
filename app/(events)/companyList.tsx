@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -126,26 +127,27 @@ const CompanyList = () => {
     return luminance > 0.5 ? '#000000' : '#FFFFFF';
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Back button */}
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <MaterialCommunityIcons name="arrow-left" size={24} color="#1e293b" />
-        <Text style={styles.backText}>Back to home</Text>
-      </TouchableOpacity>
+return (
+  <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    {/* Back button */}
+    <TouchableOpacity onPress={() => router.push("/")} style={styles.backButton}>
+      <MaterialCommunityIcons name="arrow-left" size={24} color="#1e293b" />
+      <Text style={styles.backText}>Back to home</Text>
+    </TouchableOpacity>
 
-      <Text style={styles.title}>Company List</Text>
+    <Text style={styles.title}>Company List</Text>
 
-      <FlatList
-        data={companies}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.$id}
-        numColumns={2}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
-  );
+    <FlatList
+      data={companies}
+      renderItem={renderItem}
+      keyExtractor={(item) => item.$id}
+      numColumns={2}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+    />
+  </SafeAreaView>
+);
+
 };
 
 export default CompanyList;
@@ -155,27 +157,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f1f5f9',
     paddingHorizontal: 16,
-    paddingTop: 20,
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  backText: {
-    marginLeft: 6,
-    fontSize: 16,
-    color: '#1e293b',
-    fontWeight: '500',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 20,
-    textAlign: 'center',
-    marginTop: 10,
-  },
+backButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  alignSelf: 'flex-start',   // không chiếm hết chiều ngang
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 12,
+  backgroundColor: '#e2e8f0', // nền xám nhạt cho giống button
+  marginBottom: 16,
+},
+backText: {
+  marginLeft: 6,
+  fontSize: 15,
+  color: '#1e293b',
+  fontWeight: '600',
+},
+
+title: {
+  fontSize: 26,
+  fontWeight: '700',
+  color: '#0f172a',
+  marginBottom: 20,
+  textAlign: 'center',
+  letterSpacing: 0.8,
+  textTransform: 'uppercase', // tiêu đề in hoa cho mạnh mẽ
+},
+
   list: {
     paddingBottom: 80,
   },

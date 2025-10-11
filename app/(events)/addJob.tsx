@@ -252,7 +252,7 @@ const pickImage = async (cb: (uri: string) => void) => {
         deadline: deadline || null,
 
         jobTypes: jobTypeValue,          // ID hoặc text
-        jobCategories: jobCategoryValue,  // ID hoặc text
+  jobCategories: selectedJobCategory, // ✅ Lưu ID thay vì tên
         isCustomType: selectedJobType === 'other',
         isCustomCategory: selectedJobCategory === 'other',
 

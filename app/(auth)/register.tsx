@@ -13,10 +13,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { auth, db } from '@/config/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+const isValidPhone = (v: string) => /^[0-9]{9,11}$/.test(v.trim()); // 9–11 số
 
 const mapAuthError = (code?: string) => {
   switch (code) {
@@ -40,22 +41,23 @@ export default function RegisterScreen() {
 
   // form states
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [secure, setSecure] = useState(true);
   const [password, setPassword] = useState('');
-  const [secure2, setSecure2] = useState(true);
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [secure, setSecure] = useState(true);
+  const [secure2, setSecure2] = useState(true);
   const [isRecruiter, setIsRecruiter] = useState(false);
 
   // ui states
   const [loading, setLoading] = useState(false);
   const [emailErr, setEmailErr] = useState('');
   const [nameErr, setNameErr] = useState('');
+  const [phoneErr, setPhoneErr] = useState('');
   const [passErr, setPassErr] = useState('');
   const [confirmErr, setConfirmErr] = useState('');
   const [formErr, setFormErr] = useState('');
 
-  // simple strength hint
   const passStrength = useMemo(() => {
     if (!password) return '';
     if (password.length < 6) return 'Yếu';
@@ -68,11 +70,19 @@ export default function RegisterScreen() {
     setFormErr('');
     setEmailErr('');
     setNameErr('');
+    setPhoneErr('');
     setPassErr('');
     setConfirmErr('');
 
     if (!name.trim()) {
       setNameErr('Vui lòng nhập họ và tên.');
+      ok = false;
+    }
+    if (!phone.trim()) {
+      setPhoneErr('Vui lòng nhập số điện thoại.');
+      ok = false;
+    } else if (!isValidPhone(phone)) {
+      setPhoneErr('Số điện thoại không hợp lệ (9–11 số).');
       ok = false;
     }
     if (!email.trim()) {
@@ -96,11 +106,9 @@ export default function RegisterScreen() {
       setConfirmErr('Mật khẩu xác nhận không khớp.');
       ok = false;
     }
-
     return ok;
   };
 
-  // Giữ nguyên logic Firestore timeout 15s
   const writeUserDocWithTimeout = async (uid: string, payload: any) => {
     const writeUserDoc = setDoc(doc(db, 'users', uid), payload);
     const timeout = new Promise<void>((_, reject) =>
@@ -114,6 +122,7 @@ export default function RegisterScreen() {
 
     setLoading(true);
     setFormErr('');
+
     try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -122,13 +131,15 @@ export default function RegisterScreen() {
       );
       const user = userCredential.user;
 
-      // payload giống logic cũ, đầy đủ field
+      // ✅ Cập nhật displayName vào Auth profile
+      await updateProfile(user, { displayName: name.trim() });
+
+      // ✅ Dữ liệu lưu Firestore
       const payload = {
         uid: user.uid,
         email: user.email,
-        displayName: name.trim(),
-        photoURL: user.photoURL || null,
-        provider: user.providerData[0]?.providerId || 'password',
+        name: name.trim(),
+        phone: phone.trim(),
         role: isRecruiter ? 'employer' : 'candidate',
         skills: [],
         savedJobIds: [],
@@ -139,25 +150,20 @@ export default function RegisterScreen() {
       await writeUserDocWithTimeout(user.uid, payload);
 
       setLoading(false);
-      Alert.alert('Thành công', 'Đăng ký thành công.');
+      Alert.alert('🎉 Thành công', 'Tạo tài khoản thành công!');
       router.replace('/(auth)/login');
     } catch (err: any) {
-      __DEV__ && console.log('Register error:', err?.code || err?.message || err);
+      console.log('Register error:', err?.code || err?.message || err);
       setLoading(false);
 
       if (err?.message === 'timeout') {
-        setFormErr(
-          'Ghi dữ liệu quá lâu (timeout 15s). Vui lòng kiểm tra mạng và thử lại.'
-        );
+        setFormErr('Ghi dữ liệu quá lâu (timeout 15s). Kiểm tra mạng và thử lại.');
         return;
       }
-
-      // map một số lỗi Firestore thường gặp
       if (err?.code === 'permission-denied') {
         setFormErr('Không có quyền ghi dữ liệu. Vui lòng liên hệ hỗ trợ.');
         return;
       }
-
       setFormErr(mapAuthError(err?.code));
     }
   };
@@ -167,7 +173,6 @@ export default function RegisterScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Tạo tài khoản ✨</Text>
         <Text style={styles.subtitle}>
@@ -234,6 +239,30 @@ export default function RegisterScreen() {
         </View>
         {!!nameErr && <Text style={styles.fieldError}>{nameErr}</Text>}
 
+        {/* Phone */}
+        <View style={[styles.inputContainer, !!phoneErr && styles.inputError]}>
+          <Ionicons
+            name="call-outline"
+            size={22}
+            color={phoneErr ? '#ef4444' : '#64748b'}
+            style={styles.icon}
+          />
+          <TextInput
+            placeholder="Số điện thoại"
+            placeholderTextColor="#94a3b8"
+            value={phone}
+            onChangeText={(t) => {
+              setPhone(t);
+              if (phoneErr) setPhoneErr('');
+              if (formErr) setFormErr('');
+            }}
+            keyboardType="phone-pad"
+            style={styles.input}
+            returnKeyType="next"
+          />
+        </View>
+        {!!phoneErr && <Text style={styles.fieldError}>{phoneErr}</Text>}
+
         {/* Email */}
         <View style={[styles.inputContainer, !!emailErr && styles.inputError]}>
           <Ionicons
@@ -289,23 +318,9 @@ export default function RegisterScreen() {
             />
           </TouchableOpacity>
         </View>
-        <View style={styles.hintRow}>
-          {!!passStrength && (
-            <Text
-              style={[
-                styles.strengthText,
-                passStrength === 'Yếu' && { color: '#ef4444' },
-                passStrength === 'Khá' && { color: '#f59e0b' },
-                passStrength === 'Mạnh' && { color: '#10b981' },
-              ]}
-            >
-              Độ mạnh: {passStrength}
-            </Text>
-          )}
-        </View>
         {!!passErr && <Text style={styles.fieldError}>{passErr}</Text>}
 
-        {/* Confirm Password */}
+        {/* Confirm password */}
         <View style={[styles.inputContainer, !!confirmErr && styles.inputError]}>
           <Ionicons
             name="shield-checkmark-outline"
@@ -337,7 +352,6 @@ export default function RegisterScreen() {
         </View>
         {!!confirmErr && <Text style={styles.fieldError}>{confirmErr}</Text>}
 
-        {/* Form error */}
         {!!formErr && <Text style={styles.formError}>{formErr}</Text>}
 
         {/* Button */}
@@ -350,7 +364,9 @@ export default function RegisterScreen() {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.buttonText}>
-              {isRecruiter ? 'Tạo tài khoản nhà tuyển dụng' : 'Tạo tài khoản ứng viên'}
+              {isRecruiter
+                ? 'Tạo tài khoản nhà tuyển dụng'
+                : 'Tạo tài khoản ứng viên'}
             </Text>
           )}
         </TouchableOpacity>
@@ -403,9 +419,6 @@ const styles = StyleSheet.create({
   inputError: { borderColor: '#ef4444' },
   icon: { marginRight: 10 },
   input: { flex: 1, fontSize: 16, color: '#0f172a' },
-
-  hintRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 },
-  strengthText: { fontSize: 12 },
 
   fieldError: { color: '#ef4444', fontSize: 12, marginTop: -6, marginBottom: 4, marginLeft: 6 },
   formError: {

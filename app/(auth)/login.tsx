@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { auth, db } from '@/config/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 const isValidEmail = (v: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -41,7 +41,6 @@ export default function LoginScreen() {
   const [secure, setSecure] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // error states
   const [emailErr, setEmailErr] = useState('');
   const [passErr, setPassErr] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -78,6 +77,7 @@ export default function LoginScreen() {
     setErrorMsg('');
 
     try {
+      // ✅ Đăng nhập qua Firebase Auth
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email.trim(),
@@ -85,23 +85,40 @@ export default function LoginScreen() {
       );
       const user = userCredential.user;
 
-      // đảm bảo có bản ghi user trong Firestore
+      // 🔍 Kiểm tra user trong Firestore
       const userDocRef = doc(db, 'users', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
-        await setDoc(userDocRef, {
-          name: user.displayName || '',
-          email: user.email,
-          isAdmin: false,
-          isRecruiter: false,
-        });
+        throw new Error('deleted-user');
       }
 
-      const userData = (await getDoc(userDocRef)).data();
-      if (userData?.isAdmin) router.replace('/admin');
-      else router.replace('/(tabs)');
+      // ✅ Lấy thông tin user
+      const userData = userDocSnap.data();
+      console.log('🔥 User data from Firestore:', userData);
+
+      // ✅ Điều hướng theo role duy nhất
+      switch (userData?.role) {
+        case 'admin':
+          router.replace('/admin');
+          break;
+        case 'recruiter':
+          router.replace('/(employer)');
+          break;
+        default:
+          router.replace('/(tabs)');
+          break;
+      }
     } catch (error: any) {
+      if (error.message === 'deleted-user') {
+        setErrorMsg(
+          'Tài khoản của bạn đã bị xóa khỏi hệ thống. Vui lòng liên hệ quản trị viên.'
+        );
+        await auth.signOut();
+        setLoading(false);
+        return;
+      }
+
       __DEV__ && console.log('Auth error:', error?.code, error?.message);
       setErrorMsg(mapAuthError(error?.code));
     } finally {
@@ -190,10 +207,8 @@ export default function LoginScreen() {
         </View>
         {!!passErr && <Text style={styles.fieldError}>{passErr}</Text>}
 
-        {/* Error chung */}
         {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-        {/* Button */}
         <TouchableOpacity
           style={[styles.button, loading && { opacity: 0.8 }]}
           onPress={handleLogin}

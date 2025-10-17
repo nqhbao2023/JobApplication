@@ -8,131 +8,135 @@ import { db, auth, storage } from '../../src/config/firebase';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { collection, addDoc, deleteDoc, doc, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { useFocusEffect } from '@react-navigation/native';
-
-type Job = {
-  $id: string;
-  title: string;
-  image?: string;
-  salary?: number;
-  skills_required?: string;
-  responsibilities?: string;
-  created_at?: string;
-  updated_at?: string;
-  jobTypes?: any;
-  jobCategories?: any;
-  users?: any;
-  job_Description?: string;
-  company?: any;
-};
+import { useRole } from '@/contexts/RoleContext';
+import { smartBack } from "@/utils/navigation";
+import { ActivityIndicator } from 'react-native-paper';
+import { useRef } from "react";
+import { useJobStatus } from "@/hooks/useJobStatus";
 
 const JobDescription = () => {
   const [selected, setSelected] = useState(0);
   const { jobId, success }: { jobId: string; success?: string } = useLocalSearchParams();
 
   const [userId, setUserId] = useState<string>('');
-  const [checkSaveJob, setCheckSaveJob] = useState<boolean>(false);
   const [loadding, setLoadding] = useState<boolean>(false);
-  const [jobIdOfUser, setJobIdOfUser] = useState<string>('');
   const [dataJob, setDataJob] = useState<any>(null);
   const [posterInfo, setPosterInfo] = useState<{ name?: string; email?: string }>({});
   const [isApplied, setIsApplied] = useState(false);
   const [applyDocId, setApplyDocId] = useState<string | null>(null);
+  const [appliedLoading, setAppliedLoading] = useState(true);
+  const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
 
+const { role: userRole, loading: roleLoading } = useRole();
+// ✅ gom các khả năng đặt field owner trong job
+const resolveOwnerId = (job: any): string | null => {
+  const v =
+    job?.ownerId ??
+    job?.userId ??
+    job?.createdBy ??
+    job?.created_by ??
+    job?.uid ??
+    job?.posterId ??
+    job?.users ?? null; // có nơi lưu thẳng 'users' = string/object
+
+  if (!v) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') {
+    if (typeof v.id === 'string') return v.id;
+    if (typeof v.uid === 'string') return v.uid;
+  }
+  return null;
+};
+
+const jobOwnerId = resolveOwnerId(dataJob);
+const isOwner = !!userId && !!jobOwnerId && jobOwnerId === userId;
+
+// 🔐 Candidate chỉ khi không phải chủ job
+const showCandidateUI = userRole === 'candidate' && !isOwner;
+// 🛠 Employer chỉ khi là chủ job
+const showEmployerUI = userRole === 'employer' && isOwner;
   // ✅ Load user & saved jobs
-  useEffect(() => {
-    load_userId();
-    load_data_save_jobs();
-  }, [userId]);
+useEffect(() => {
+  load_userId();
+}, []);
 
-  // ✅ Load job detail
-  useEffect(() => {
-    if (jobId) load_data(jobId as string);
-  }, [jobId]);
+useEffect(() => {
+  if (userId && jobId) {
+    checkIfApplied();
+  }
+}, [userId, jobId]);
 
-  // ✅ Khi quay lại focus trang
-  useFocusEffect(
-    useCallback(() => {
-      if (userId && jobId) {
-        console.log('🔁 Refreshing applied status...');
-        checkIfApplied();
-      }
-    }, [userId, jobId])
-  );
 
-  // ✅ Khi success=true (upload CV thành công)
-  useEffect(() => {
-    if (success === 'true') {
-      console.log('✅ CV upload success, refreshing applied status...');
-      setTimeout(() => {
-        checkIfApplied();
-        Alert.alert('🎉 Thành công', 'Bạn đã nộp CV thành công!');
-      }, 800);
-    }
-  }, [success]);
+//useEffect(() => {
+//if (userId) load_data_save_jobs();
+//}, [userId]);
+useEffect(() => {
+  if (jobId) load_data(jobId as string);
+}, [jobId]);
+
 
   // ✅ Check nếu user đã apply
-  const checkIfApplied = async () => {
-    try {
-      const q = query(
-        collection(db, 'applied_jobs'),
-        where('userId', '==', userId),
-        where('jobId', '==', jobId)
-      );
-      const res = await getDocs(q);
-      console.log('📦 Applied job query result:', res.size);
+const checkIfApplied = async () => {
+  if (!userId || !jobId) return;
+  setAppliedLoading(true); // ✅ bắt đầu check
+  try {
+    const q = query(
+      collection(db, "applied_jobs"),
+      where("userId", "==", userId),
+      where("jobId", "==", jobId)
+    );
+    const res = await getDocs(q);
+    console.log(`📦 Applied job found: ${res.size > 0 ? "YES" : "NO"}`);
 
-      if (!res.empty) {
-        const docData = res.docs[0].data();
-        console.log('🔥 Applied job data:', docData);
-        setApplyDocId(res.docs[0].id);
 
-        if (docData.cv_url || docData.cv_uploaded) {
-          console.log('✅ Found CV uploaded -> applied = true');
-          setIsApplied(true);
-        } else {
-          console.log('⚠️ No cv_url yet -> applied = false');
-          setIsApplied(false);
-        }
-      } else {
-        console.log('❌ No applied job found for user/job');
-        setIsApplied(false);
-        setApplyDocId(null);
-      }
-    } catch (err) {
-      console.error('Check applied error:', err);
+    if (!res.empty) {
+      const docData = res.docs[0].data();
+      setApplyDocId(res.docs[0].id);
+      setIsApplied(!!(docData.cv_url || docData.cv_uploaded));
+    } else {
+      setIsApplied(false);
+      setApplyDocId(null);
     }
-  };
+  } catch (err) {
+    console.error("Check applied error:", err);
+  } finally {
+    setAppliedLoading(false); // ✅ kết thúc check
+  }
+};
+  // ✅ Khi quay lại focus trang
+useFocusEffect(
+  useCallback(() => {
+    if (!userId || !jobId) return;
+    console.log('🔁 Refreshing applied status...');
+    // ✅ Gọi trễ 300ms để tránh nháy UI
+    const timer = setTimeout(() => {
+      checkIfApplied();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userId, jobId])
+);
 
-  // ✅ Delay nhẹ khi mount
-  useEffect(() => {
-    if (userId && jobId) {
-      console.log('🔁 Running initial applied check...');
-      setTimeout(() => checkIfApplied(), 800);
-    }
-  }, [userId, jobId]);
+useEffect(() => {
+  console.log('🔎 role:', userRole,
+              'loading:', roleLoading,
+              'userId:', userId,
+              'jobOwnerId:', jobOwnerId,
+              'isOwner:', isOwner,
+              'showCandidateUI:', showCandidateUI,
+              'showEmployerUI:', showEmployerUI);
+}, [userRole, roleLoading, userId, jobOwnerId, isOwner, showCandidateUI, showEmployerUI]);
+
+
+  // ✅ Khi success=true (upload CV thành công)
+useEffect(() => {
+  if (success === 'true') {
+    Alert.alert('🎉 Thành công', 'Bạn đã nộp CV thành công!');
+  }
+}, [success]);
 
   const load_userId = async () => {
     const user = auth.currentUser;
     if (user) setUserId(user.uid);
-  };
-
-  const load_data_save_jobs = async () => {
-    try {
-      if (userId && jobId) {
-        setLoadding(true);
-        const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId), where('jobId', '==', jobId));
-        const res = await getDocs(q);
-        if (!res.empty) {
-          setCheckSaveJob(true);
-          setJobIdOfUser(res.docs[0].id);
-        } else {
-          setCheckSaveJob(false);
-        }
-        setLoadding(false);
-      }
-    } catch {
-      setLoadding(false);
-    }
   };
 
   const load_data = async (id: string) => {
@@ -163,29 +167,7 @@ const JobDescription = () => {
     }
   };
 
-  const add_jobs = async () => {
-    try {
-      if (userId) {
-        setLoadding(true);
-        await addDoc(collection(db, 'saved_jobs'), { userId, jobId, created_at: new Date().toISOString() });
-        await load_data_save_jobs();
-      }
-    } catch {
-      setLoadding(false);
-    }
-  };
 
-  const delete_jobs = async () => {
-    try {
-      if (userId) {
-        setLoadding(true);
-        await deleteDoc(doc(db, 'saved_jobs', jobIdOfUser));
-        await load_data_save_jobs();
-      }
-    } catch {
-      setLoadding(false);
-    }
-  };
 
   const handleApply = async () => {
     if (!userId) {
@@ -198,6 +180,7 @@ const JobDescription = () => {
     }
 
     try {
+      
       console.log("🚀 Apply with:", { userId, jobId });
 
       // 🔥 Xóa các applied_jobs cũ trùng userId + jobId (nếu có)
@@ -216,7 +199,9 @@ const JobDescription = () => {
       });
 
       // ✅ Chuyển sang màn submit để upload CV
-      router.push(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${docRef.id}`);
+
+      router.replace(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${docRef.id}` as any);
+
     } catch (err) {
       console.error("❌ Apply failed:", err);
     }
@@ -248,13 +233,34 @@ const JobDescription = () => {
       setLoadding(false);
     }
   };
+const handleDeleteJob = async () => {
+  Alert.alert(
+    "Xóa công việc?",
+    "Bạn có chắc muốn xóa bài đăng này không?",
+    [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          try {
+
+          } catch (err) {
+            console.error("Lỗi khi xóa job:", err);
+            Alert.alert("Lỗi", "Không thể xóa công việc. Vui lòng thử lại.");
+          }
+        },
+      },
+    ]
+  );
+};
 
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Header */}
         <View style={styles.topView}>
-          <TouchableOpacity style={styles.buttons} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.buttons} onPress={smartBack}>
             <Ionicons name="arrow-back" size={24} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.buttons} onPress={() => router.push('/')}>
@@ -319,33 +325,76 @@ const JobDescription = () => {
         </View>
       </ScrollView>
 
-      {/* Bottom Buttons */}
-      <View style={styles.bottomContainer}>
-        {checkSaveJob ? (
-          <TouchableOpacity style={styles.heartContainer} onPress={delete_jobs}>
-            <Ionicons name="heart" size={24} color="red" />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.heartContainer} onPress={add_jobs}>
-            <Ionicons name="heart-outline" size={24} color="red" />
-          </TouchableOpacity>
-        )}
-        {isApplied ? (
-          <TouchableOpacity style={styles.applyContainer} onPress={handleCancelApply}>
-            <Text style={styles.applyText}>Cancel Apply</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.applyContainer} onPress={handleApply}>
-            <Text style={styles.applyText}>Apply Now</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+{/* Bottom Buttons */}
+<View style={styles.bottomContainer}>
+{/* ❤️ Save/Unsave */}
+{showCandidateUI && (
+  <TouchableOpacity
+    style={styles.heartContainer}
+    onPress={toggleSave}
+    disabled={saveLoading}
+  >
+    <Ionicons
+      name={isSaved ? "heart" : "heart-outline"}
+      size={24}
+      color="red"
+    />
+  </TouchableOpacity>
+)}
+
+
+{/* 🚀 Apply / Cancel */}
+{showCandidateUI && (
+  appliedLoading ? (
+    <TouchableOpacity style={[styles.applyContainer, { backgroundColor: '#eee' }]} disabled>
+     <ActivityIndicator size="small" color="#F97459" />
+    </TouchableOpacity>
+  ) : isApplied ? (
+    <TouchableOpacity
+      style={[styles.applyContainer, { backgroundColor: '#ccc' }]}
+      onPress={handleCancelApply}
+    >
+      <Text style={styles.applyText}>Cancel Apply</Text>
+    </TouchableOpacity>
+  ) : (
+    <TouchableOpacity
+      style={styles.applyContainer}
+      onPress={handleApply}
+    >
+      <Text style={styles.applyText}>Apply Now</Text>
+    </TouchableOpacity>
+  )
+)}
+
+
+{/* ✏️ Employer actions */}
+{showEmployerUI && (
+  <View style={styles.employerButtons}>
+    <TouchableOpacity
+      style={[styles.editButton, { backgroundColor: '#4A80F0' }]}
+      onPress={() =>
+        router.push({ pathname: '/employer/editJob', params: { id: jobId as string } } as any)
+      }
+    >
+      <Ionicons name="create-outline" size={20} color="#fff" />
+      <Text style={styles.employerText}>Edit Job</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={[styles.editButton, { backgroundColor: '#EF4444' }]}
+      onPress={handleDeleteJob}
+    >
+      <Ionicons name="trash-outline" size={20} color="#fff" />
+      <Text style={styles.employerText}>Delete</Text>
+    </TouchableOpacity>
+  </View>
+)}
+</View>
     </View>
   );
 };
 
 export default JobDescription;
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   scrollContent: { flex: 1 },
@@ -389,7 +438,7 @@ const styles = StyleSheet.create({
   tabActiveText: { color: 'white', fontWeight: 'bold' },
   contentTab: { backgroundColor: '#EEEEEE', borderRadius: 10, padding: 14, marginHorizontal: 20, marginBottom: 20 },
   descriptionContent: { fontSize: 15, color: 'black', textAlign: 'justify', marginBottom: 8 },
-  bottomContainer: { flexDirection: 'row', alignItems: 'center', gap: 15, padding: 15, borderTopWidth: 1, borderTopColor: '#eee', backgroundColor: '#fff' },
+  bottomContainer: { flexDirection: 'row', alignItems: 'center', gap: 15, padding: 15, borderTopWidth: 1, borderTopColor: '#eee', backgroundColor: '#fff', elevation: 8, zIndex: 2,},
   heartContainer: { width: 55, height: 55, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 5 },
   applyContainer: { flex: 1, height: 55, backgroundColor: '#F97459', borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
   applyText: { fontSize: 18, color: 'white', fontWeight: 'bold' },
@@ -398,4 +447,25 @@ const styles = StyleSheet.create({
   jobInfoBox: { backgroundColor: '#2F80ED', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15 },
   jobInfoText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
   companyLocation: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  employerButtons: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 10,
+},
+editButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 12,
+  paddingHorizontal: 18,
+  borderRadius: 14,
+  flex: 1,
+},
+employerText: {
+  color: '#fff',
+  fontWeight: '600',
+  marginLeft: 6,
+},
+
 });

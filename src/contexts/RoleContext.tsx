@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { auth, db } from '@/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-
+import { onAuthStateChanged } from "firebase/auth";
 export type AppRole = 'candidate' | 'employer' | 'admin' | null;
 
 type RoleContextType = {
@@ -56,6 +56,12 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
     // Gọi 1 lần khi app mount hoặc khi user thay đổi ở Layout
     loadRole();
   }, []);
+  useEffect(() => {
+  const unsub = onAuthStateChanged(auth, () => {
+    loadRole(); // 🔁 user đổi → reload role
+  });
+  return unsub;
+}, []);
 
   const value = useMemo(() => ({ role, loading, refresh: loadRole }), [role, loading]);
 

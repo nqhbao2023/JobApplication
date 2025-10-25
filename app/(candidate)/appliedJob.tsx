@@ -75,7 +75,7 @@ const AppliedJob = () => {
       style={styles.jobItem}
       onPress={() =>
         router.push({
-          pathname: '/(events)/jobDescription',
+          pathname: '/(shared)/jobDescription',
           params: { jobId: item.$id },
         })
       }

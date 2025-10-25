@@ -1,19 +1,18 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, ActivityIndicator } from "react-native";
-import { Stack, router, useSegments } from "expo-router";
+import { Slot, router, useSegments } from "expo-router";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth, db } from "../src/config/firebase";
+import { auth, db } from "@/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { SavedJobsProvider } from "../src/contexts/saveJobsContext";
+import { SavedJobsProvider } from "@/contexts/saveJobsContext";
 import { RoleProvider } from "@/contexts/RoleContext";
 
-const Layout = () => {
+export default function RootLayout() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const segments = useSegments();
-  const listenerAttached = useRef(false); // ✅ ngăn đăng ký lại listener
+  const listenerAttached = useRef(false);
 
   useEffect(() => {
-    // 🔒 Nếu listener đã gắn thì không làm gì nữa
     if (listenerAttached.current) return;
     listenerAttached.current = true;
 
@@ -28,11 +27,7 @@ const Layout = () => {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
           console.log("🔥 User data from Firestore:", snap.data());
-
-          if (inAuth) {
-            console.log("✅ Logged in → chuyển vào tabs");
-            router.replace("/(tabs)");
-          }
+          if (inAuth) router.replace("/(tabs)");
         } else {
           console.log("⚠️ User không có doc → signOut");
           await signOut(auth);
@@ -67,18 +62,12 @@ const Layout = () => {
   }
 
   return (
+    // ✅ Providers bọc quanh Slot
     <SavedJobsProvider>
       <RoleProvider>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="chat" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" options={{ headerShown: false }} />
-          <Stack.Screen name="(events)" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        </Stack>
+        {/* Slot render tất cả group con như (candidate), (employer), (auth)... */}
+        <Slot />
       </RoleProvider>
     </SavedJobsProvider>
   );
-};
-
-export default Layout;
+}

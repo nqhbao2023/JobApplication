@@ -53,8 +53,9 @@ const Person = () => {
 
   const handleLogout = async () => {
     try {
-      await auth.signOut();
-      router.push('/login');
+        await auth.signOut();
+        router.replace('/(auth)/login');
+
     } catch (error) {
       console.log('Logout Error:', error);
     }
@@ -153,7 +154,7 @@ const Person = () => {
 
         <View style={styles.buttonContainer}>
 
-          <TouchableOpacity style={styles.appliedJobsButton} onPress={() => router.push('/(events)/appliedJob')}>
+          <TouchableOpacity style={styles.appliedJobsButton} onPress={() => router.push('/(shared)/appliedJob' as any)}>
             <Text style={styles.buttonText}>Applied Jobs</Text>
             <Ionicons name="checkmark-done" size={18} color="#fff" />
           </TouchableOpacity>
@@ -164,7 +165,7 @@ const Person = () => {
                   styles.appliedJobsButton
 
                 }
-                onPress={() => router.push('/(events)/addJob')}
+                onPress={() => router.push('/(shared)/addJob' as any)}
               >
                 
                 <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
@@ -177,7 +178,7 @@ const Person = () => {
                   styles.appliedJobsButton
 
                 }
-                onPress={() => router.push('/(events)/appliedList')}
+                onPress={() => router.push('/(shared)/appliedList')}
               >
                
                 <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>

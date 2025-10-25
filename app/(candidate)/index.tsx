@@ -219,7 +219,7 @@ const CandidateHome = () => {
         style={[styles.companyCard, { backgroundColor: item.color || '#e2e8f0' }]}
         onPress={() =>
           router.push({
-            pathname: '/(events)/companyDescription',
+            pathname: '/(shared)/companyDescription',
             params: { companyId: item.$id },
           })
         }
@@ -261,7 +261,7 @@ const CandidateHome = () => {
         style={[styles.categoryCard, { backgroundColor: item.color || '#f0f0f0' }]}
         onPress={() =>
           router.push({
-            pathname: '/(events)/categoryJobs',
+            pathname: '/(shared)/categoryJobs',
             params: { id: item.$id, name: item.category_name },
           })
         }
@@ -294,7 +294,7 @@ const CandidateHome = () => {
             <TouchableOpacity
               onPress={() => {
                 setUnreadCount(0);
-                router.push('/(events)/Notifications');
+                router.push('/(shared)/Notifications');
               }}
             >
               <View style={styles.notificationIconContainer}>
@@ -338,7 +338,7 @@ const CandidateHome = () => {
             />
 
             {/* Recommend Jobs */}
-            <SectionHeader title="Recommend Jobs" onPressShowAll={() => router.push('/(events)/jobList')} />
+            <SectionHeader title="Recommend Jobs" onPressShowAll={() => router.push('/(shared)/jobList')} />
             <FlatList
               horizontal
               data={jobsSorted.slice(0, 8)}

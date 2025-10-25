@@ -1,4 +1,4 @@
-// app/(events)/UserDetails.tsx
+// app/(shared)/UserDetails.tsx
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';

@@ -9,7 +9,7 @@ const Search = () => {
 
   const handleSearch = () => {
     if (!keyword) return;
-    router.push(`/(events)/search?q=${keyword}` as any);
+    router.push(`/(shared)/search?q=${keyword}` as any);
 
 
   };

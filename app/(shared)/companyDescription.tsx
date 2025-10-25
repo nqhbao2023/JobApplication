@@ -57,7 +57,7 @@ const CompanyDescription = () => {
 
   const handleApply = () => {
     if (selectedJob) {
-      router.push({ pathname: '/(events)/submit', params: { companyId, jobId: selectedJob.$id } });
+      router.push({ pathname: '/(shared)/submit', params: { companyId, jobId: selectedJob.$id } });
     } else {
       alert('Please select a job to apply for.');
     }

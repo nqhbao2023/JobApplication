@@ -70,7 +70,7 @@ export default function MyJobs() {
   const renderJob = ({ item }: any) => (
     <TouchableOpacity 
       style={styles.card} 
-      onPress={() => router.push({ pathname: '/(events)/jobDescription', params: { id: item.id } })}
+      onPress={() => router.push({ pathname: '/(shared)/jobDescription', params: { id: item.id } })}
       activeOpacity={0.8}
     >
       {item.image ? (
@@ -96,7 +96,7 @@ export default function MyJobs() {
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Công việc của tôi</Text>
-        <TouchableOpacity onPress={() => router.push('/(events)/addJob')}>
+        <TouchableOpacity onPress={() => router.push('/(shared)/addJob' as any)}>
           <Ionicons name="add-circle-outline" size={28} color="#4CAF50" />
         </TouchableOpacity>
       </View>

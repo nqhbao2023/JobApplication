@@ -1,10 +1,13 @@
 // src/contexts/RoleContext.tsx
-// NEW: Provider role toàn cục (load 1 lần + migrate student->candidate)
+// ✅ Provider role toàn cục (Firestore + cache local + auto redirect)
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { auth, db } from '@/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from "firebase/auth";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from "expo-router";
+
 export type AppRole = 'candidate' | 'employer' | 'admin' | null;
 
 type RoleContextType = {
@@ -13,7 +16,11 @@ type RoleContextType = {
   refresh: () => Promise<void>;
 };
 
-const RoleContext = createContext<RoleContextType>({ role: null, loading: true, refresh: async () => {} });
+const RoleContext = createContext<RoleContextType>({
+  role: null,
+  loading: true,
+  refresh: async () => {},
+});
 
 export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRole>(null);
@@ -25,43 +32,70 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
       const user = auth.currentUser;
       if (!user) {
         setRole(null);
+        await AsyncStorage.removeItem('userRole');
         return;
       }
+
+      // ✅ B1: đọc cache trước
+      if (!role) {
+        const cached = await AsyncStorage.getItem('userRole');
+        if (cached) setRole(cached as AppRole);
+      }
+
+      // ✅ B2: fetch Firestore
       const snap = await getDoc(doc(db, 'users', user.uid));
       if (!snap.exists()) {
         setRole(null);
+        await AsyncStorage.removeItem('userRole');
         return;
       }
-      let r = (snap.data()?.role as string) || null;
 
-      // Migrate: student -> candidate
+      let r = (snap.data()?.role as string) || null;
       if (r === 'student') {
         await updateDoc(doc(db, 'users', user.uid), { role: 'candidate' });
         r = 'candidate';
       }
-      // Chuẩn hóa nhầm chữ hoa/thường
+
       if (r && ['candidate', 'employer', 'admin'].includes(r.toLowerCase())) {
-        setRole(r.toLowerCase() as AppRole);
+        const normalized = r.toLowerCase() as AppRole;
+        setRole(normalized);
+        await AsyncStorage.setItem('userRole', normalized ?? '');
+
       } else {
         setRole(null);
+        await AsyncStorage.removeItem('userRole');
       }
     } catch (e) {
-      setRole(null);
+      console.warn('⚠️ loadRole error:', e);
+      const cached = await AsyncStorage.getItem('userRole');
+      if (cached) setRole(cached as AppRole);
     } finally {
       setLoading(false);
     }
   };
 
+  // 🔁 mount
   useEffect(() => {
-    // Gọi 1 lần khi app mount hoặc khi user thay đổi ở Layout
     loadRole();
   }, []);
+
+  // 🔁 khi login/logout
   useEffect(() => {
-  const unsub = onAuthStateChanged(auth, () => {
-    loadRole(); // 🔁 user đổi → reload role
-  });
-  return unsub;
-}, []);
+    const unsub = onAuthStateChanged(auth, () => {
+      loadRole();
+    });
+    return unsub;
+  }, []);
+
+  // ✅ Auto redirect khi role thay đổi
+  useEffect(() => {
+    if (!loading) {
+        if (!role) router.replace("/(auth)/login" as any);
+        else if (role === "candidate") router.replace("/(candidate)" as any);
+        else if (role === "employer") router.replace("/(employer)" as any);
+        else if (role === "admin") router.replace("/admin" as any);
+            }
+  }, [role, loading]);
 
   const value = useMemo(() => ({ role, loading, refresh: loadRole }), [role, loading]);
 

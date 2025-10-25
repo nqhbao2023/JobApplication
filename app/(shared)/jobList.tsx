@@ -226,7 +226,7 @@ const AllJobs = () => {
         {filteredJobs.map((job) => (
           <TouchableOpacity
             key={job.$id}
-            onPress={() => router.push({ pathname: '/(events)/jobDescription', params: { jobId: job.$id } })}
+            onPress={() => router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.$id } })}
             style={styles.jobItem}
           >
             <Image source={{ uri: job.image }} style={styles.jobImage} />

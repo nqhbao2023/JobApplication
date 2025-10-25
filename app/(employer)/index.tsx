@@ -1,21 +1,54 @@
-import { View, Text, StyleSheet } from "react-native";
+// app/(employer)/index.tsx
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 export default function EmployerHome() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>👔 Trang Nhà Tuyển Dụng</Text>
-      <Text style={styles.sub}>Đây là màn hình chính dành cho Recruiter.</Text>
+      <Text style={styles.title}>Recruiter Dashboard</Text>
+      <View style={styles.grid}>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push('/(shared)/addJob' as any)}
+        >
+          <Ionicons name="add-circle-outline" size={32} color="#4A80F0" />
+          <Text style={styles.cardText}>Post a Job</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push('/(shared)/myJobs' as any)}
+        >
+          <Ionicons name="briefcase-outline" size={32} color="#4A80F0" />
+          <Text style={styles.cardText}>My Jobs</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push('/(shared)/applications' as any)}
+        >
+          <Ionicons name="people-outline" size={32} color="#4A80F0" />
+          <Text style={styles.cardText}>Applications</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
+  container: { flex: 1, backgroundColor: '#F9F9FB', padding: 20 },
+  title: { fontSize: 24, fontWeight: '700', marginBottom: 20 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  card: {
+    width: '47%',
+    backgroundColor: '#fff',
+    padding: 20,
+    marginBottom: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    elevation: 2,
   },
-  text: { fontSize: 22, fontWeight: "700", color: "#1e293b" },
-  sub: { fontSize: 14, color: "#64748b", marginTop: 8 },
+  cardText: { marginTop: 10, fontSize: 16, fontWeight: '600' },
 });

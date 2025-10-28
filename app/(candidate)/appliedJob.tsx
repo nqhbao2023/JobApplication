@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,105 +6,117 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { db, auth } from '@/config/firebase';
-import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
+  ActivityIndicator,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { db, auth } from "@/config/firebase";
+import { collection, getDocs, doc, getDoc, query, where } from "firebase/firestore";
 
-const AppliedJob = () => {
+export default function AppliedJob() {
   const router = useRouter();
   const [appliedJobs, setAppliedJobs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [userId, setUserId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string>("");
 
-  // Lấy userId từ Firebase Auth
-  const load_userId = async () => {
+  // ✅ Lấy userId từ Firebase Auth
+  useEffect(() => {
     const user = auth.currentUser;
     if (user) setUserId(user.uid);
-  };
-
-  // Lấy danh sách công việc đã ứng tuyển từ Firestore
-  const fetchAppliedJobs = async () => {
-    try {
-      setLoading(true);
-      const q = query(collection(db, 'applied_jobs'), where('userId', '==', userId));
-      const res = await getDocs(q);
-
-      const jobs = await Promise.all(
-        res.docs.map(async (docSnap: any) => {
-          const jobRes = await getDoc(doc(db, 'jobs', docSnap.data().jobId));
-          const jobData = jobRes.exists() ? jobRes.data() : {};
-          // Lấy thông tin công ty nếu cần
-          let companyData = {};
-          if (jobData && jobData.company) {
-            const companySnap = await getDoc(doc(db, 'companies', jobData.company));
-            companyData = companySnap.exists() ? companySnap.data() : {};
-          }
-          return {
-            $id: docSnap.id,
-            ...jobData,
-            company: companyData,
-            status: docSnap.data().status,
-            applied_at: docSnap.data().applied_at,
-            type: jobData?.type || '',
-            salary: jobData?.salary || '',
-          };
-        })
-      );
-
-      setAppliedJobs(jobs);
-    } catch (err) {
-      console.error('Failed to fetch applied jobs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load_userId();
   }, []);
 
+  // ✅ Lấy danh sách công việc đã ứng tuyển
   useEffect(() => {
-    if (userId) fetchAppliedJobs();
+    if (!userId) return;
+    const fetchAppliedJobs = async () => {
+      setLoading(true);
+      try {
+        const q = query(collection(db, "applied_jobs"), where("userId", "==", userId));
+        const res = await getDocs(q);
+
+        const jobs = await Promise.all(
+          res.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            const jobRef = doc(db, "jobs", data.jobId);
+            const jobSnap = await getDoc(jobRef);
+            const jobData = jobSnap.exists() ? jobSnap.data() : {};
+
+            let companyData = {};
+            if (jobData?.company) {
+              const companySnap = await getDoc(doc(db, "companies", jobData.company));
+              if (companySnap.exists()) companyData = companySnap.data();
+            }
+
+            return {
+              $id: docSnap.id,
+              jobId: data.jobId,
+              status: data.status,
+              applied_at: data.applied_at,
+              ...jobData,
+              company: companyData,
+            };
+          })
+        );
+
+        setAppliedJobs(jobs);
+      } catch (err) {
+        console.error("Failed to fetch applied jobs:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAppliedJobs();
   }, [userId]);
 
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={styles.jobItem}
-      onPress={() =>
-        router.push({
-          pathname: '/(shared)/jobDescription',
-          params: { jobId: item.$id },
-        })
-      }
-    >
-      <Image source={{ uri: item.image }} style={styles.jobImage} />
-      <View style={styles.jobInfo}>
-        <Text style={styles.jobTitle}>{item.title}</Text>
-        <Text style={styles.jobCompany}>{item.company?.corp_name}</Text>
-        <Text style={styles.jobLocation}>{item.company?.location}</Text>
-        <Text style={styles.jobStatus}>
-          Trạng thái:
-          <Text
-            style={{
-              fontWeight: 'bold',
-              color: item.status === 'Đã duyệt' ? '#34C759' : '#FF9500',
-            }}
-          >
-            {' '}
-            {item.status}
+  const renderItem = ({ item }: { item: any }) => {
+    if (!item) return null;
+    return (
+      <TouchableOpacity
+        style={styles.jobItem}
+        onPress={() =>
+          router.navigate({
+            pathname: "/(shared)/jobDescription",
+            params: {
+              jobId: item.jobId,
+              fromApplied: "true",
+              status: item.status || "",
+              appliedAt: item.applied_at || "",
+            },
+          })
+        }
+      >
+        <Image
+          source={{ uri: item.image || "https://via.placeholder.com/50" }}
+          style={styles.jobImage}
+        />
+        <View style={styles.jobInfo}>
+          <Text style={styles.jobTitle}>{item.title || "Không có tiêu đề"}</Text>
+          <Text style={styles.jobCompany}>{item.company?.corp_name || "Ẩn danh"}</Text>
+          <Text style={styles.jobLocation}>{item.company?.location || "Không rõ địa điểm"}</Text>
+          <Text style={styles.jobStatus}>
+            Trạng thái:
+            <Text
+              style={{
+                fontWeight: "bold",
+                color:
+                  item.status === "Đã duyệt"
+                    ? "#34C759"
+                    : item.status === "Từ chối"
+                    ? "#FF3B30"
+                    : "#FF9500",
+              }}
+            >
+              {" "}
+              {item.status || "Đang chờ"}
+            </Text>
           </Text>
-        </Text>
-      </View>
-      <View style={styles.jobRight}>
-        <Text style={styles.jobSalary}>{item.salary} $</Text>
-        <Text style={styles.jobType}>{item.type}</Text>
-        <Ionicons name="checkmark-done" size={24} color="#34C759" />
-      </View>
-    </TouchableOpacity>
-  );
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) return <ActivityIndicator style={{ marginTop: 50 }} />;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -112,129 +124,51 @@ const AppliedJob = () => {
         <TouchableOpacity style={styles.back_btn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.headerText}>Applied Job List</Text>
+        <Text style={styles.headerText}>Công việc đã ứng tuyển</Text>
       </View>
 
-      <View style={styles.subHeader}>
-        <Text style={styles.savedText}>You Applied {appliedJobs.length} Jobs</Text>
-        <Image
-          source={{ uri: 'https://via.placeholder.com/30' }}
-          style={styles.subHeaderIcon}
-        />
-      </View>
-
-      {loading ? (
-        <Text>Loading...</Text>
+      {appliedJobs.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <Text>Bạn chưa ứng tuyển công việc nào.</Text>
+        </View>
       ) : (
         <FlatList
           data={appliedJobs}
           renderItem={renderItem}
-          keyExtractor={(item) => item.$id.toString()}
-          contentContainerStyle={{ paddingHorizontal: 16 }}
+          keyExtractor={(item, i) => (item?.$id ? String(item.$id) : `job-${i}`)}
+          contentContainerStyle={{ padding: 16 }}
         />
       )}
     </SafeAreaView>
   );
-};
-
-export default AppliedJob;
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9F9FB',
-  },
+  container: { flex: 1, backgroundColor: "#F9F9FB" },
   header: {
-    flexDirection: 'row',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     elevation: 3,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: "#eee",
   },
-  back_btn: {
-    position: 'absolute',
-    left: 16,
-    padding: 6,
-  },
-  headerText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  subHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  savedText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-    flex: 1,
-  },
-  subHeaderIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-  },
+  back_btn: { position: "absolute", left: 16, padding: 6 },
+  headerText: { fontSize: 18, fontWeight: "bold", color: "#007AFF" },
   jobItem: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    backgroundColor: "#fff",
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    alignItems: 'center',
+    padding: 12,
+    marginBottom: 10,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
-  jobImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  jobInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  jobCompany: {
-    fontSize: 14,
-    color: '#777',
-  },
-  jobLocation: {
-    fontSize: 12,
-    color: '#aaa',
-  },
-  jobStatus: {
-    fontSize: 12,
-    marginTop: 4,
-    color: '#444',
-  },
-  jobRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    paddingLeft: 8,
-  },
-  jobSalary: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  jobType: {
-    fontSize: 12,
-    color: '#666',
-    marginVertical: 4,
-  },
+  jobImage: { width: 50, height: 50, borderRadius: 25 },
+  jobInfo: { flex: 1, marginLeft: 12 },
+  jobTitle: { fontSize: 16, fontWeight: "bold" },
+  jobCompany: { fontSize: 14, color: "#777" },
+  jobLocation: { fontSize: 12, color: "#aaa" },
+  jobStatus: { fontSize: 12, marginTop: 4, color: "#444" },
 });

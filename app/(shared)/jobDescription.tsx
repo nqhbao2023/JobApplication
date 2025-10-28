@@ -16,8 +16,10 @@ import { useJobStatus } from "@/hooks/useJobStatus";
 
 const JobDescription = () => {
   const [selected, setSelected] = useState(0);
-  const { jobId, success }: { jobId: string; success?: string } = useLocalSearchParams();
-
+const { jobId, success, fromApplied, status, appliedAt }: {
+  jobId: string; success?: string; fromApplied?: string; status?: string; appliedAt?: string;
+} = useLocalSearchParams();
+  
   const [userId, setUserId] = useState<string>('');
   const [loadding, setLoadding] = useState<boolean>(false);
   const [dataJob, setDataJob] = useState<any>(null);
@@ -26,6 +28,7 @@ const JobDescription = () => {
   const [applyDocId, setApplyDocId] = useState<string | null>(null);
   const [appliedLoading, setAppliedLoading] = useState(true);
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
+  const [fromAppliedImmediate, setFromAppliedImmediate] = useState(false);
 
 const { role: userRole, loading: roleLoading } = useRole();
 // ✅ gom các khả năng đặt field owner trong job
@@ -66,6 +69,11 @@ useEffect(() => {
   }
 }, [userId, jobId]);
 
+useEffect(() => {
+  if (fromApplied && fromApplied === 'true') {
+    setFromAppliedImmediate(true);
+  }
+}, [fromApplied]);
 
 //useEffect(() => {
 //if (userId) load_data_save_jobs();
@@ -260,9 +268,22 @@ const handleDeleteJob = async () => {
       <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Header */}
         <View style={styles.topView}>
-          <TouchableOpacity style={styles.buttons} onPress={smartBack}>
-            <Ionicons name="arrow-back" size={24} />
-          </TouchableOpacity>
+<TouchableOpacity
+  style={styles.buttons}
+  onPress={() => {
+    if (fromApplied === "true") {
+      // 👇 Nếu đến từ trang AppliedJob
+      router.replace("/(candidate)/appliedJob");
+    } else {
+      // 👇 Ngược lại, dùng smartBack như bình thường (về Home)
+      smartBack();
+    }
+  }}
+>
+  <Ionicons name="arrow-back" size={24} />
+</TouchableOpacity>
+
+
           <TouchableOpacity style={styles.buttons} onPress={() => router.push('/')}>
             <Ionicons name="share-social" size={24} />
           </TouchableOpacity>
@@ -275,7 +296,7 @@ const handleDeleteJob = async () => {
           </View>
           <View style={styles.companyName}>
             <Text style={styles.companyNameText}>{dataJob?.title}</Text>
-            <Text style={styles.companyNameText}>{dataJob?.company?.corp_name}</Text>
+            <Text style={styles.companyNameText}>{dataJob?.company?.corp_name ?? 'Đang tải...'}</Text>
           </View>
           <View style={styles.jobInfoContainer}>
             <View style={styles.jobInfoBox}>
@@ -306,7 +327,23 @@ const handleDeleteJob = async () => {
           <TouchableOpacity style={[styles.tabBox, selected === 2 ? styles.tabActive : styles.tabNormal]} onPress={() => setSelected(2)}>
             <Text style={[selected === 2 ? styles.tabActiveText : styles.tabNormalText]}>Responsibility</Text>
           </TouchableOpacity>
+          
         </View>
+        {(fromAppliedImmediate || isApplied) && (
+  <View style={styles.appliedInfoBox}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <Ionicons name="checkmark-done" size={18} color="#34C759" />
+      <Text style={styles.appliedInfoText}>Đã ứng tuyển</Text>
+    </View>
+    {!!status && <Text style={styles.appliedInfoStatus}>Trạng thái: {String(status)}</Text>}
+    {!!appliedAt && (
+      <Text style={styles.appliedInfoDate}>
+        Ngày nộp: {new Date(appliedAt).toLocaleDateString('vi-VN')}
+      </Text>
+    )}
+  </View>
+)}
+
 
         {/* Content */}
         <View style={styles.contentTab}>
@@ -347,9 +384,9 @@ const handleDeleteJob = async () => {
 {showCandidateUI && (
   appliedLoading ? (
     <TouchableOpacity style={[styles.applyContainer, { backgroundColor: '#eee' }]} disabled>
-     <ActivityIndicator size="small" color="#F97459" />
+      <ActivityIndicator size="small" color="#F97459" />
     </TouchableOpacity>
-  ) : isApplied ? (
+  ) : (fromAppliedImmediate || isApplied) ? ( // ✅ Ưu tiên immediate
     <TouchableOpacity
       style={[styles.applyContainer, { backgroundColor: '#ccc' }]}
       onPress={handleCancelApply}
@@ -365,7 +402,6 @@ const handleDeleteJob = async () => {
     </TouchableOpacity>
   )
 )}
-
 
 {/* ✏️ Employer actions */}
 {showEmployerUI && (
@@ -467,5 +503,29 @@ employerText: {
   fontWeight: '600',
   marginLeft: 6,
 },
+appliedInfoBox: {
+  backgroundColor: '#E8FFF2',
+  padding: 12,
+  borderRadius: 10,
+  marginHorizontal: 16,
+  marginTop: 10,
+  borderWidth: 1,
+  borderColor: '#B2F2BB',
+  gap: 4,
+},
+appliedInfoText: {
+  color: '#2E7D32',
+  fontWeight: 'bold',
+  fontSize: 14,
+},
+appliedInfoStatus: {
+  fontSize: 13,
+  color: '#333',
+},
+appliedInfoDate: {
+  fontSize: 12,
+  color: '#666',
+},
+
 
 });

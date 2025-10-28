@@ -25,7 +25,7 @@ export default function CandidateLayout() {
       />
 
       <Tabs.Screen
-        name="savedJobs"  // ✅ dùng đúng file savedJobs.tsx
+        name="savedJobs"
         options={{
           title: "Đã lưu",
           tabBarIcon: ({ color, focused }) => (
@@ -59,6 +59,20 @@ export default function CandidateLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "person-circle" : "person-circle-outline"}
+              color={color}
+              size={22}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: "Chat",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "chatbubbles" : "chatbubbles-outline"}
               color={color}
               size={22}
             />

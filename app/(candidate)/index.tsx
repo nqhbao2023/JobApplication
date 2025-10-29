@@ -307,12 +307,15 @@ const CandidateHome = () => {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push('/(tabs)/person')}>
+            <TouchableOpacity onPress={() => router.push('/(candidate)/profile')}>
               <Image
                 style={styles.avatar}
-                source={{ uri: dataUser?.photoURL || 'https://randomuser.me/api/portraits/men/1.jpg' }}
+                source={{
+                  uri: dataUser?.photoURL || 'https://randomuser.me/api/portraits/men/1.jpg',
+                }}
               />
             </TouchableOpacity>
+
           </View>
         </View>
 

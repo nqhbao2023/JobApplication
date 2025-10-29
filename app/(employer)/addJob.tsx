@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { db, auth, storage } from '@/config/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, getDocs } from 'firebase/firestore';
+import { serverTimestamp, getDoc, doc } from 'firebase/firestore';
 
 type JobOption = { label: string; value: string };
 
@@ -133,26 +134,24 @@ const AddJob = () => {
 const pickImage = async (cb: (uri: string) => void) => {
   const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!p.granted) {
-    Alert.alert('Quyền bị từ chối', 'Cần quyền truy cập ảnh.');
+    Alert.alert("Quyền bị từ chối", "Cần quyền truy cập ảnh.");
     return;
   }
 
   const res = await ImagePicker.launchImageLibraryAsync({
+// ⚠️ Tạm dùng MediaTypeOptions vì type mới chưa được hỗ trợ đầy đủ trong Expo SDK 54
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    // ❌ Bỏ dòng này vì gây che nút OK trên Android:
-    // allowsEditing: true,
-    // aspect: [4, 3],
     quality: 1,
-    selectionLimit: 1, // ✅ chỉ chọn 1 ảnh
+    selectionLimit: 1,
+    // allowsEditing: true, aspect ...  => giữ tắt như em đang làm để tránh che nút OK
   });
 
-  if (!res.canceled && res.assets && res.assets.length > 0) {
+  if (!res.canceled && res.assets?.length) {
     cb(res.assets[0].uri);
   }
 };
-
-  const pickImageForJob = () => pickImage(setImageUri);
-  const pickImageForCompany = () => pickImage(setNewCompanyImageUri);
+const pickImageForJob = () => pickImage(setImageUri);
+const pickImageForCompany = () => pickImage(setNewCompanyImageUri);
 
   const uploadImageToFirebase = async (uri: string, folder: string) => {
     const response = await fetch(uri);
@@ -177,106 +176,158 @@ const pickImage = async (cb: (uri: string) => void) => {
   };
 
   // ====== Submit ======
-  const handleAddJob = async () => {
-    // Validate hard checks
-    if (!canNext()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng hoàn thành các trường bắt buộc.');
+const handleAddJob = async () => {
+  // === 1. Validate cơ bản ===
+  if (!canNext()) {
+    Alert.alert("Thiếu thông tin", "Vui lòng hoàn thành các trường bắt buộc.");
+    return;
+  }
+
+  // --- numeric check ---
+  const min = parseFloat(salaryMin);
+  const max = salaryMax.trim() ? parseFloat(salaryMax) : undefined;
+  if (Number.isNaN(min) || min < 0) {
+    Alert.alert("Lương không hợp lệ", "Lương tối thiểu phải là số dương.");
+    return;
+  }
+  if (max !== undefined && (Number.isNaN(max) || max < min)) {
+    Alert.alert("Lương không hợp lệ", "Lương tối đa phải ≥ lương tối thiểu.");
+    return;
+  }
+  const qty = quantity.trim() ? parseInt(quantity, 10) : 1;
+  if (qty <= 0) {
+    Alert.alert("Số lượng không hợp lệ", "Số lượng tuyển phải ≥ 1.");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    // === 2. Upload ảnh công việc ===
+    let jobImageUrl = image;
+    if (imageUri) jobImageUrl = await uploadImageToFirebase(imageUri, "jobs");
+    if (!jobImageUrl) {
+      Alert.alert("Thiếu ảnh", "Vui lòng cung cấp ảnh cho công việc.");
       return;
     }
 
-    // numeric & logic checks
-    const min = parseFloat(salaryMin);
-    const max = salaryMax.trim() ? parseFloat(salaryMax) : undefined;
-    if (Number.isNaN(min) || min < 0) {
-      Alert.alert('Lương không hợp lệ', 'Lương tối thiểu phải là số dương.');
-      return;
-    }
-    if (max !== undefined && (Number.isNaN(max) || max < min)) {
-      Alert.alert('Lương không hợp lệ', 'Lương tối đa phải là số và ≥ lương tối thiểu.');
-      return;
-    }
-    const qty = quantity.trim() ? parseInt(quantity, 10) : 1;
-    if (qty <= 0) {
-      Alert.alert('Số lượng không hợp lệ', 'Số lượng tuyển phải ≥ 1.');
-      return;
-    }
+    // === 3. Xử lý công ty ===
+    let companyId = selectedCompany;
+    if (isAddingNewCompany) {
+      let companyImageUrl = newCompany.image;
+      if (newCompanyImageUri)
+        companyImageUrl = await uploadImageToFirebase(
+          newCompanyImageUri,
+          "companies"
+        );
 
-    try {
-      setLoading(true);
-
-      // upload job image (required)
-      let jobImageUrl = image;
-      if (imageUri) jobImageUrl = await uploadImageToFirebase(imageUri, 'jobs');
-      if (!jobImageUrl) {
-        Alert.alert('Thiếu ảnh', 'Vui lòng cung cấp ảnh cho công việc.');
+      if (!newCompany.corp_name.trim()) {
+        Alert.alert(
+          "Thiếu thông tin",
+          "Vui lòng nhập tên công ty khi thêm công ty mới."
+        );
         return;
       }
 
-      // company
-      let companyId = selectedCompany;
-      if (isAddingNewCompany) {
-        // company image optional
-        let companyImageUrl = newCompany.image;
-        if (newCompanyImageUri) companyImageUrl = await uploadImageToFirebase(newCompanyImageUri, 'companies');
-
-        if (!newCompany.corp_name.trim()) {
-          Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên công ty khi thêm công ty mới.');
-          return;
-        }
-
-        const companyDoc = await addDoc(collection(db, 'companies'), {
-          ...newCompany,
-          image: companyImageUrl || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-        companyId = companyDoc.id;
-      }
-
-      // job type / category (ID or text “Khác”)
-      const jobTypeValue = selectedJobType === 'other' ? customJobType.trim() : selectedJobType;
-      const jobCategoryValue = selectedJobCategory === 'other' ? customJobCategory.trim() : selectedJobCategory;
-
-      // save job
-      await addDoc(collection(db, 'jobs'), {
-        title,
-        job_Description: jobDescription,
-        responsibilities,
-        skills_required: skillsRequired,
-
-        salaryMin: min,
-        salaryMax: max ?? null,
-        workingType,
-        experience,
-        quantity: qty,
-        deadline: deadline || null,
-
-        jobTypes: jobTypeValue,          // ID hoặc text
-  jobCategories: selectedJobCategory, // ✅ Lưu ID thay vì tên
-        isCustomType: selectedJobType === 'other',
-        isCustomCategory: selectedJobCategory === 'other',
-
-        contact_name: contactName || '',
-        contact_email: contactEmail || '',
-        contact_phone: contactPhone || '',
-
-        company: companyId,
-        image: jobImageUrl,
-
-        users: userId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      const companyDoc = await addDoc(collection(db, "companies"), {
+        ...newCompany,
+        image: companyImageUrl || "",
+        ownerId: userId, // ✅ gắn chủ sở hữu công ty
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
       });
-
-      Alert.alert('✅ Thành công', 'Đã đăng công việc mới!');
-      router.back();
-    } catch (e) {
-      console.error('❌ Lỗi thêm công việc:', e);
-      Alert.alert('Lỗi', 'Không thể thêm công việc');
-    } finally {
-      setLoading(false);
+      companyId = companyDoc.id;
     }
-  };
+
+    // === 4. Chuẩn hóa Job Type ===
+    let jobTypeObj: { id: string | null; type_name: string } = {
+      id: null,
+      type_name: "",
+    };
+    if (selectedJobType === "other") {
+      jobTypeObj = { id: null, type_name: customJobType.trim() };
+    } else if (selectedJobType) {
+      const typeSnap = await getDoc(doc(db, "job_types", selectedJobType));
+      jobTypeObj = {
+        id: typeSnap.exists() ? typeSnap.id : selectedJobType,
+        type_name: typeSnap.exists()
+          ? typeSnap.data()?.type_name || ""
+          : selectedJobType,
+      };
+    }
+
+    // === 5. Chuẩn hóa Job Category ===
+    let jobCategoryObj: { id: string | null; category_name: string } = {
+      id: null,
+      category_name: "",
+    };
+    if (selectedJobCategory === "other") {
+      jobCategoryObj = { id: null, category_name: customJobCategory.trim() };
+    } else if (selectedJobCategory) {
+      const catSnap = await getDoc(doc(db, "job_categories", selectedJobCategory));
+      jobCategoryObj = {
+        id: catSnap.exists() ? catSnap.id : selectedJobCategory,
+        category_name: catSnap.exists()
+          ? catSnap.data()?.category_name || ""
+          : selectedJobCategory,
+      };
+    }
+
+    // === 6. Build payload thống nhất ===
+    const jobPayload = {
+      // --- Core text ---
+      title,
+      job_Description: jobDescription,
+      responsibilities,
+      skills_required: skillsRequired,
+
+      // --- Salary & detail ---
+      salaryMin: min,
+      salaryMax: max ?? null,
+      workingType,
+      experience,
+      quantity: qty,
+      deadline: deadline || null,
+
+      // --- Type / Category ---
+      jobTypes: jobTypeObj,
+      jobCategories: jobCategoryObj,
+      jobTypeId: jobTypeObj.id,
+      jobCategoryId: jobCategoryObj.id,
+      isCustomType: selectedJobType === "other",
+      isCustomCategory: selectedJobCategory === "other",
+
+      // --- Contact ---
+      contact_name: contactName || "",
+      contact_email: contactEmail || "",
+      contact_phone: contactPhone || "",
+
+      // --- Company ---
+      company: companyId,
+      image: jobImageUrl,
+
+      // --- Owner ---
+      ownerId: userId, // ✅ field chuẩn để employer quản lý job
+      users: userId,   // giữ tương thích cũ
+
+      // --- Time ---
+      created_at: serverTimestamp(),
+      updated_at: serverTimestamp(),
+    };
+
+    // === 7. Ghi vào Firestore ===
+    await addDoc(collection(db, "jobs"), jobPayload);
+
+    Alert.alert("✅ Thành công", "Đã đăng công việc mới!");
+    router.back();
+  } catch (e) {
+    console.error("❌ Lỗi thêm công việc:", e);
+    Alert.alert("Lỗi", "Không thể thêm công việc");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // ====== Small inline components ======
   const StepHeader = memo(() => (

@@ -14,6 +14,15 @@ export default function MyJobs() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
+  // ✅ Helper: Chuẩn hoá text cho jobTypes / jobCategories
+  const textify = (val: any, kind: 'type' | 'category') => {
+    if (!val) return '—';
+    if (typeof val === 'string') return val; // fallback khi còn dữ liệu cũ
+    if (kind === 'type') return val.type_name ?? '—';
+    if (kind === 'category') return val.category_name ?? '—';
+    return '—';
+  };
+
   // Lấy job của user hiện tại
   const fetchJobs = async () => {
     try {
@@ -67,6 +76,7 @@ export default function MyJobs() {
     fetchJobs();
   };
 
+  // ✅ Dùng helper textify để tránh crash object
   const renderJob = ({ item }: any) => (
     <TouchableOpacity 
       style={styles.card} 
@@ -83,9 +93,20 @@ export default function MyJobs() {
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.salary}>{item.salary?.toLocaleString('vi-VN')} đ/tháng</Text>
-        <Text style={styles.category}>{item.jobCategories || '—'}</Text>
-        <Text style={styles.date}>Đăng ngày: {new Date(item.created_at).toLocaleDateString('vi-VN')}</Text>
+
+        {/* ✅ Fix crash ở đây */}
+        <Text style={styles.category}>
+          Danh mục: {textify(item.jobCategories, 'category')}
+        </Text>
+        <Text style={styles.category}>
+          Loại: {textify(item.jobTypes, 'type')}
+        </Text>
+
+        <Text style={styles.date}>
+          Đăng ngày: {new Date(item.created_at).toLocaleDateString('vi-VN')}
+        </Text>
       </View>
+
       <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
         <Ionicons name="trash-outline" size={22} color="#ff4444" />
       </TouchableOpacity>
@@ -113,7 +134,7 @@ export default function MyJobs() {
       ) : (
         <FlatList
           data={jobs}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id || item.$id} // ✅ fallback key
           renderItem={renderJob}
           contentContainerStyle={{ padding: 12 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

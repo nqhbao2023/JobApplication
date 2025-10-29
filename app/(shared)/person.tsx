@@ -178,7 +178,7 @@ const Person = () => {
                   styles.appliedJobsButton
 
                 }
-                onPress={() => router.push('/(shared)/appliedList')}
+                onPress={() => router.push('/(shared)/appliedList' as any)}
               >
                
                 <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>

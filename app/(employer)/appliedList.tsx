@@ -34,7 +34,7 @@ const AppliedList = () => {
 
       setLoading(true);
       try {
-        const q = query(collection(db, 'applied_jobs'), where('recruiterId', '==', userId));
+        const q = query(collection(db, 'applied_jobs'), where('employerId', '==', userId));
         const querySnapshot = await getDocs(q);
         const apps = querySnapshot.docs.map(doc => ({ $id: doc.id, ...doc.data() }));
         setApplications(apps);

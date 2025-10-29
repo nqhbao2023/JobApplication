@@ -106,7 +106,7 @@ export default function LoginScreen() {
           router.replace('/(employer)');
           break;
         default:
-          router.replace('/(tabs)');
+          router.replace('/(main)');
           break;
       }
     } catch (error: any) {

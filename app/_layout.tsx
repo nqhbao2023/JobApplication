@@ -21,13 +21,13 @@ export default function RootLayout() {
 
       const group = segments?.[0];
       const inAuth = group === "(auth)";
-      const inTabs = group === "(tabs)";
+      const inTabs = group === "(main)";
 
       if (user) {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
           console.log("🔥 User data from Firestore:", snap.data());
-          if (inAuth) router.replace("/(tabs)");
+          if (inAuth) router.replace("/(main)");
         } else {
           console.log("⚠️ User không có doc → signOut");
           await signOut(auth);

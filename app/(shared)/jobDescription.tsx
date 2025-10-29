@@ -30,6 +30,7 @@ const { jobId, success, fromApplied, status, appliedAt }: {
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
   const [fromAppliedImmediate, setFromAppliedImmediate] = useState(false);
 
+
 const { role: userRole, loading: roleLoading } = useRole();
 // ✅ gom các khả năng đặt field owner trong job
 const resolveOwnerId = (job: any): string | null => {
@@ -177,43 +178,54 @@ useEffect(() => {
 
 
 
-  const handleApply = async () => {
-    if (!userId) {
-      Alert.alert("Thông báo", "Bạn cần đăng nhập trước khi ứng tuyển");
-      return;
-    }
-    if (!jobId) {
-      Alert.alert("Lỗi", "Thiếu Job ID");
-      return;
-    }
+const handleApply = async () => {
+  if (!userId) {
+    Alert.alert("Thông báo", "Bạn cần đăng nhập trước khi ứng tuyển");
+    return;
+  }
+  if (!jobId) {
+    Alert.alert("Lỗi", "Thiếu Job ID");
+    return;
+  }
 
-    try {
-      
-      console.log("🚀 Apply with:", { userId, jobId });
+  try {
+    console.log("🚀 Apply with:", { userId, jobId });
 
-      // 🔥 Xóa các applied_jobs cũ trùng userId + jobId (nếu có)
-      const q = query(collection(db, "applied_jobs"), where("userId", "==", userId), where("jobId", "==", jobId));
-      const res = await getDocs(q);
-      const deletePromises = res.docs.map((d) => deleteDoc(d.ref));
-      await Promise.all(deletePromises);
+    // 🔥 Xóa các applied_jobs cũ trùng userId + jobId (nếu có)
+    const q = query(
+      collection(db, "applied_jobs"),
+      where("userId", "==", userId),
+      where("jobId", "==", jobId)
+    );
+    const res = await getDocs(q);
+    const deletePromises = res.docs.map((d) => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
 
-      // 🔹 Tạo document mới
-      const docRef = await addDoc(collection(db, "applied_jobs"), {
-        userId,
-        jobId,
-        cv_uploaded: false,
-        status: "draft",
-        applied_at: new Date().toISOString(),
-      });
+    // 🔹 Lấy thông tin job để xác định employerId
+    const jobRef = doc(db, "jobs", jobId);
+    const jobSnap = await getDoc(jobRef);
+    const jobData = jobSnap.exists() ? jobSnap.data() : null;
 
-      // ✅ Chuyển sang màn submit để upload CV
+    // 🔹 Tạo document mới trong applied_jobs
+    const docRef = await addDoc(collection(db, "applied_jobs"), {
+      userId,
+      jobId,
+      employerId: jobData?.ownerId || jobData?.userId || "", // ✅ thêm đúng chỗ
+      cv_uploaded: false,
+      status: "draft",
+      applied_at: new Date().toISOString(),
+    });
 
-      router.replace(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${docRef.id}` as any);
+    // ✅ Chuyển sang màn submit để upload CV
+    router.replace(
+      `/submit?jobId=${jobId}&userId=${userId}&applyDocId=${docRef.id}` as any
+    );
+  } catch (err) {
+    console.error("❌ Apply failed:", err);
+    Alert.alert("Lỗi", "Không thể ứng tuyển công việc này, thử lại sau!");
+  }
+};
 
-    } catch (err) {
-      console.error("❌ Apply failed:", err);
-    }
-  };
 
   const handleCancelApply = async () => {
     if (!applyDocId) return;

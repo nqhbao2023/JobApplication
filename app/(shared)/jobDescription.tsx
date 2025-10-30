@@ -13,12 +13,23 @@ import { smartBack } from "@/utils/navigation";
 import { ActivityIndicator } from 'react-native-paper';
 import { useRef } from "react";
 import { useJobStatus } from "@/hooks/useJobStatus";
-
+import { onAuthStateChanged } from "firebase/auth";
 const JobDescription = () => {
   const [selected, setSelected] = useState(0);
-const { jobId, success, fromApplied, status, appliedAt }: {
-  jobId: string; success?: string; fromApplied?: string; status?: string; appliedAt?: string;
-} = useLocalSearchParams();
+
+const params = useLocalSearchParams<{
+  id?: string;
+  jobId?: string;
+  success?: string;
+  fromApplied?: string;
+  status?: string;
+  appliedAt?: string;
+}>();
+
+// CHỈ dùng biến jobId này trong file
+const jobId = (params.jobId || params.id || "") as string;
+const { success, fromApplied, status, appliedAt } = params;
+
   
   const [userId, setUserId] = useState<string>('');
   const [loadding, setLoadding] = useState<boolean>(false);
@@ -27,8 +38,9 @@ const { jobId, success, fromApplied, status, appliedAt }: {
   const [isApplied, setIsApplied] = useState(false);
   const [applyDocId, setApplyDocId] = useState<string | null>(null);
   const [appliedLoading, setAppliedLoading] = useState(true);
-  const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
+  const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId || undefined as any);
   const [fromAppliedImmediate, setFromAppliedImmediate] = useState(false);
+const checkingRef = useRef(false);
 
 
 const { role: userRole, loading: roleLoading } = useRole();
@@ -61,14 +73,24 @@ const showCandidateUI = userRole === 'candidate' && !isOwner;
 const showEmployerUI = userRole === 'employer' && isOwner;
   // ✅ Load user & saved jobs
 useEffect(() => {
-  load_userId();
-}, []);
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    if (user) {
+      setUserId(user.uid);
+      // ✅ Gọi check ngay khi userId có thật
+      if (jobId) checkIfApplied();
+    } else {
+      setUserId("");
+    }
+  });
+  return unsubscribe;
+}, [jobId]);
+
+
 
 useEffect(() => {
-  if (userId && jobId) {
-    checkIfApplied();
-  }
-}, [userId, jobId]);
+  if (!userId || !jobId) return;
+  checkIfApplied();
+}, [userId, jobId, success]);
 
 useEffect(() => {
   if (fromApplied && fromApplied === 'true') {
@@ -86,8 +108,16 @@ useEffect(() => {
 
   // ✅ Check nếu user đã apply
 const checkIfApplied = async () => {
-  if (!userId || !jobId) return;
-  setAppliedLoading(true); // ✅ bắt đầu check
+  // chặn gọi khi chưa sẵn sàng
+  if (!userId || !jobId) {
+    setAppliedLoading(false);
+    return;
+  }
+  // chặn gọi trùng
+  if (checkingRef.current) return;
+  checkingRef.current = true;
+
+  setAppliedLoading(true);
   try {
     const q = query(
       collection(db, "applied_jobs"),
@@ -96,7 +126,6 @@ const checkIfApplied = async () => {
     );
     const res = await getDocs(q);
     console.log(`📦 Applied job found: ${res.size > 0 ? "YES" : "NO"}`);
-
 
     if (!res.empty) {
       const docData = res.docs[0].data();
@@ -109,30 +138,37 @@ const checkIfApplied = async () => {
   } catch (err) {
     console.error("Check applied error:", err);
   } finally {
-    setAppliedLoading(false); // ✅ kết thúc check
+    setAppliedLoading(false);
+    checkingRef.current = false; // ✅ reset flag
   }
 };
+
+
   // ✅ Khi quay lại focus trang
 useFocusEffect(
   useCallback(() => {
     if (!userId || !jobId) return;
     console.log('🔁 Refreshing applied status...');
-    // ✅ Gọi trễ 300ms để tránh nháy UI
     const timer = setTimeout(() => {
       checkIfApplied();
-    }, 300);
+    }, 200);
     return () => clearTimeout(timer);
   }, [userId, jobId])
 );
 
+
 useEffect(() => {
-  console.log('🔎 role:', userRole,
-              'loading:', roleLoading,
-              'userId:', userId,
-              'jobOwnerId:', jobOwnerId,
-              'isOwner:', isOwner,
-              'showCandidateUI:', showCandidateUI,
-              'showEmployerUI:', showEmployerUI);
+  // Chỉ log khi userId đã có giá trị thật
+  if (!userId) return;
+  console.log(
+    '🔎 role:', userRole,
+    'loading:', roleLoading,
+    'userId:', userId,
+    'jobOwnerId:', jobOwnerId,
+    'isOwner:', isOwner,
+    'showCandidateUI:', showCandidateUI,
+    'showEmployerUI:', showEmployerUI
+  );
 }, [userRole, roleLoading, userId, jobOwnerId, isOwner, showCandidateUI, showEmployerUI]);
 
 
@@ -140,8 +176,11 @@ useEffect(() => {
 useEffect(() => {
   if (success === 'true') {
     Alert.alert('🎉 Thành công', 'Bạn đã nộp CV thành công!');
+    if (userId) {
+      checkIfApplied();        // Gọi ngay khi đã có userId
+    }
   }
-}, [success]);
+}, [success, userId]);         // ⬅️ thêm userId vào deps
 
   const load_userId = async () => {
     const user = auth.currentUser;
@@ -191,7 +230,6 @@ const handleApply = async () => {
   try {
     console.log("🚀 Apply with:", { userId, jobId });
 
-    // 🔥 Xóa các applied_jobs cũ trùng userId + jobId (nếu có)
     const q = query(
       collection(db, "applied_jobs"),
       where("userId", "==", userId),
@@ -201,22 +239,24 @@ const handleApply = async () => {
     const deletePromises = res.docs.map((d) => deleteDoc(d.ref));
     await Promise.all(deletePromises);
 
-    // 🔹 Lấy thông tin job để xác định employerId
     const jobRef = doc(db, "jobs", jobId);
     const jobSnap = await getDoc(jobRef);
     const jobData = jobSnap.exists() ? jobSnap.data() : null;
 
-    // 🔹 Tạo document mới trong applied_jobs
-    const docRef = await addDoc(collection(db, "applied_jobs"), {
-      userId,
-      jobId,
-      employerId: jobData?.ownerId || jobData?.userId || "", // ✅ thêm đúng chỗ
-      cv_uploaded: false,
-      status: "draft",
-      applied_at: new Date().toISOString(),
-    });
+    // ✅ Lấy ownerId từ job đã resolve
+        const docRef = await addDoc(collection(db, "applied_jobs"), {
+          userId,
+          jobId,
+          employerId: jobOwnerId || "",   // ✅ dùng owner đã resolve sẵn
+          cv_uploaded: false,
+          status: "draft",
+          applied_at: new Date().toISOString(),
+        });
 
-    // ✅ Chuyển sang màn submit để upload CV
+    // ✅ Cập nhật UI ngay lập tức
+    setIsApplied(true);
+    setAppliedLoading(false);
+
     router.replace(
       `/submit?jobId=${jobId}&userId=${userId}&applyDocId=${docRef.id}` as any
     );
@@ -225,7 +265,6 @@ const handleApply = async () => {
     Alert.alert("Lỗi", "Không thể ứng tuyển công việc này, thử lại sau!");
   }
 };
-
 
   const handleCancelApply = async () => {
     if (!applyDocId) return;
@@ -244,6 +283,7 @@ const handleApply = async () => {
       }
       await deleteDoc(applyRef);
       setIsApplied(false);
+      setAppliedLoading(false);
       setApplyDocId(null);
       Alert.alert('✅ Thành công', 'Đã hủy ứng tuyển và xóa file CV.');
     } catch (err) {
@@ -394,11 +434,15 @@ const handleDeleteJob = async () => {
 
 {/* 🚀 Apply / Cancel */}
 {showCandidateUI && (
-  appliedLoading ? (
+  !userId ? (
     <TouchableOpacity style={[styles.applyContainer, { backgroundColor: '#eee' }]} disabled>
       <ActivityIndicator size="small" color="#F97459" />
     </TouchableOpacity>
-  ) : (fromAppliedImmediate || isApplied) ? ( // ✅ Ưu tiên immediate
+  ) : appliedLoading ? (
+    <TouchableOpacity style={[styles.applyContainer, { backgroundColor: '#eee' }]} disabled>
+      <ActivityIndicator size="small" color="#F97459" />
+    </TouchableOpacity>
+  ) : (fromAppliedImmediate || isApplied) ? (
     <TouchableOpacity
       style={[styles.applyContainer, { backgroundColor: '#ccc' }]}
       onPress={handleCancelApply}
@@ -414,6 +458,7 @@ const handleDeleteJob = async () => {
     </TouchableOpacity>
   )
 )}
+
 
 {/* ✏️ Employer actions */}
 {showEmployerUI && (

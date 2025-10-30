@@ -88,33 +88,29 @@ const AppliedList = () => {
     }
   };
 
-  const handleSelectApp = (app: any) => {
-    router.push({
-      pathname: '../UserDetails',
-      params: {
-        userId: app.userId,
-        cv_url: app.cv_url || '',
-      },
-    });
-  };
+const handleSelectApp = (app: any) => {
+  const url = encodeURIComponent(app.cv_url || '');
+  router.push({ pathname: '/(shared)/PdfViewer', params: { url } });
+};
+
 
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} />;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Danh sách ứng viên</Text>
-      <FlatList
-        data={applications}
-        keyExtractor={(item) => item.$id}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => handleSelectApp(item)}>
+        <FlatList
+          data={applications}
+          keyExtractor={(item) => item.$id}
+          renderItem={({ item }) => (
             <Application
               app={item}
               onStatusChange={(status) => handleStatusChange(item.$id, status)}
+              onViewCV={() => handleSelectApp(item)} // ✅ thêm callback mở PDF
             />
-          </TouchableOpacity>
-        )}
-      />
+          )}
+        />
+
     </View>
   );
 };

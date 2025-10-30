@@ -7,12 +7,12 @@ export default function SharedLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="jobDescription" />
         <Stack.Screen name="submit" />
-        <Stack.Screen name="appliedJob" />
         <Stack.Screen name="companyDescription" />
         <Stack.Screen name="companyList" />
-        <Stack.Screen name="addJob" />
-        <Stack.Screen name="appliedList" />
         <Stack.Screen name="Notifications" />
+        <Stack.Screen name="PdfViewer" />
+        <Stack.Screen name="UserDetails" />
+
       </Stack>
     </SavedJobsProvider>
   );

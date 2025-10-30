@@ -4,10 +4,11 @@ import React from 'react';
 interface ApplicationProps {
   app: any;
   onStatusChange: (status: string) => void;
+  onViewCV?: () => void; // ✅ callback mở CV
 }
 
-const Application: React.FC<ApplicationProps> = ({ app, onStatusChange }) => {
-  const { user, job, status } = app;
+const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onViewCV }) => {
+  const { user, job, status, cv_url } = app;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -24,35 +25,58 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange }) => {
 
   return (
     <View style={styles.card}>
+      {/* Header */}
       <View style={styles.header}>
         <Image
-          source={{ uri: user?.id_image ? user?.id_image : 'https://randomuser.me/api/portraits/men/1.jpg' }}
+          source={{
+            uri:
+              user?.photoURL ||
+              user?.id_image ||
+              'https://randomuser.me/api/portraits/men/1.jpg',
+          }}
           style={styles.avatar}
         />
-        <View style={{ marginLeft: 10 }}>
-          <Text style={styles.name}>{user?.name}</Text>
-          <Text style={styles.jobTitle}>Ứng tuyển: {job?.title}</Text>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={styles.name}>{user?.name || 'Ứng viên ẩn danh'}</Text>
+          <Text style={styles.jobTitle}>Ứng tuyển: {job?.title || 'Không rõ công việc'}</Text>
         </View>
       </View>
 
-      <Text style={[styles.status, { color: getStatusColor(status) }]}>Trạng thái: {status}</Text>
+      {/* Trạng thái */}
+      <Text style={[styles.status, { color: getStatusColor(status) }]}>
+        Trạng thái: {status || 'pending'}
+      </Text>
 
-      {status === 'pending' && (
-        <View style={styles.actions}>
+      {/* Nút hành động */}
+      <View style={styles.actions}>
+        {status === 'pending' && (
+          <>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#4CAF50' }]}
+              onPress={() => onStatusChange('accepted')}
+            >
+              <Text style={styles.buttonText}>Chấp nhận</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#F44336' }]}
+              onPress={() => onStatusChange('rejected')}
+            >
+              <Text style={styles.buttonText}>Từ chối</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ✅ Nút xem CV */}
+        {cv_url && (
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: '#4CAF50' }]}
-            onPress={() => onStatusChange('accepted')}
+            style={[styles.button, { backgroundColor: '#2196F3' }]}
+            onPress={onViewCV}
           >
-            <Text style={styles.buttonText}>Chấp nhận</Text>
+            <Text style={styles.buttonText}>Xem CV</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: '#F44336' }]}
-            onPress={() => onStatusChange('rejected')}
-          >
-            <Text style={styles.buttonText}>Từ chối</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
+      </View>
     </View>
   );
 };
@@ -96,12 +120,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
     flexDirection: 'row',
     gap: 10,
+    flexWrap: 'wrap',
   },
   button: {
-    flex: 1,
+    flexGrow: 1,
     padding: 10,
     borderRadius: 6,
     alignItems: 'center',
+    minWidth: 100,
   },
   buttonText: {
     color: '#fff',

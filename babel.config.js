@@ -13,6 +13,8 @@ module.exports = function (api) {
           },
         },
       ],
+      // ⚠️ PHẢI nằm ở cuối cùng
+      'react-native-reanimated/plugin',
     ],
   };
 };

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
   Text,
@@ -8,21 +7,22 @@ import {
   StyleSheet,
   Dimensions,
   Image,
-  Platform,
+  ActivityIndicator,
 } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { router } from "expo-router";
 import { db } from "@/config/firebase";
 import { collection, getDocs } from "firebase/firestore";
 
 const { width } = Dimensions.get("window");
-const cardSize = width / 2 - 24; // Giảm margin cho vừa màn hơn
+const cardSize = width / 2 - 24;
 
 type Company = {
   $id: string;
   corp_name: string;
   nation?: string;
-  corp_description?: string;
   city?: string;
   image?: string;
   color?: string;
@@ -30,22 +30,10 @@ type Company = {
 
 type Job = {
   $id: string;
-  title: string;
-  image?: string;
-  salary?: number;
-  skills_required?: string;
-  responsibilities?: string;
-  created_at?: string;
-  updated_at?: string;
-  jobTypes?: any;
-  jobCategories?: any;
-  users?: any;
-  job_Description?: string;
   company?: string;
 };
 
 const CompanyList = () => {
-  const insets = useSafeAreaInsets(); // ✅ gọi bên trong component
   const [jobs, setJobs] = useState<Job[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,18 +42,21 @@ const CompanyList = () => {
     try {
       const companiesSnap = await getDocs(collection(db, "companies"));
       const jobsSnap = await getDocs(collection(db, "jobs"));
+
       const companies: Company[] = companiesSnap.docs.map((doc) => ({
         $id: doc.id,
         ...doc.data(),
       })) as Company[];
+
       const fetchedJobs: Job[] = jobsSnap.docs.map((doc) => ({
         $id: doc.id,
         ...doc.data(),
       })) as Job[];
+
       setCompanies(companies);
       setJobs(fetchedJobs);
     } catch (error) {
-      console.error("Lỗi khi lấy dữ liệu:", error);
+      console.error("🔥 Lỗi khi lấy dữ liệu:", error);
     } finally {
       setLoading(false);
     }
@@ -76,10 +67,11 @@ const CompanyList = () => {
   }, []);
 
   const handleCompanyPress = (companyId: string) => {
-    router.push({ pathname: "/companyDescription", params: { companyId } });
+    router.push({ pathname: "/(shared)/companyDescription", params: { companyId } });
   };
 
   const getContrastColor = (hexColor: string) => {
+    if (!hexColor?.startsWith("#")) return "#1e293b";
     const r = parseInt(hexColor.slice(1, 3), 16);
     const g = parseInt(hexColor.slice(3, 5), 16);
     const b = parseInt(hexColor.slice(5, 7), 16);
@@ -90,66 +82,71 @@ const CompanyList = () => {
   const renderItem = ({ item }: { item: Company }) => {
     const jobCount = jobs.filter((job) => job.company === item.$id).length;
     const textColor = item.color ? getContrastColor(item.color) : "#1e293b";
+
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: item.color || "#e2e8f0" }]}
+        style={[styles.card, { backgroundColor: item.color || "#ffffff" }]}
         activeOpacity={0.85}
         onPress={() => handleCompanyPress(item.$id)}
       >
         <View style={styles.contentWrapper}>
-          <View style={styles.iconContainer}>
-            {item.image ? (
-              <Image source={{ uri: item.image }} style={styles.companyImage} />
-            ) : (
-              <MaterialCommunityIcons
-                name="office-building"
-                size={30}
-                color={textColor}
-              />
-            )}
-          </View>
-          <Text style={[styles.companyName, { color: textColor }]}>
-            {item.corp_name || "Unknown Company"}
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.companyImage} />
+          ) : (
+            <View style={styles.iconPlaceholder}>
+              <Ionicons name="business-outline" size={30} color={textColor} />
+            </View>
+          )}
+          <Text
+            style={[styles.companyName, { color: textColor }]}
+            numberOfLines={1}
+          >
+            {item.corp_name || "Unknown"}
           </Text>
           <Text style={[styles.jobCount, { color: textColor }]}>
-            {jobCount} {jobCount === 1 ? "job" : "jobs"}
+            {jobCount} {jobCount === 1 ? "Job" : "Jobs"}
           </Text>
+          {!!item.city && (
+            <Text style={[styles.location, { color: textColor }]} numberOfLines={1}>
+              {item.city}, {item.nation || "—"}
+            </Text>
+          )}
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView
-      style={[
-        styles.container,
-        { paddingTop: Platform.OS === "android" ? insets.top + 10 : insets.top },
-      ]}
-    >
-      {/* Back button */}
-<TouchableOpacity
-  onPress={() => {
-    if (router.canGoBack()) router.back();
-    else router.replace("/"); // về trang home chính, không phải employer
-  }}
-  style={styles.backButton}
-  activeOpacity={0.8}
->
-  <MaterialCommunityIcons name="arrow-left" size={22} color="#1e293b" />
-  <Text style={styles.backText}>Back</Text>
-</TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Danh sách công ty</Text>
+      </View>
 
-
-      <Text style={styles.title}>Company List</Text>
-
-      <FlatList
-        data={companies}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.$id}
-        numColumns={2}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A80F0" />
+          <Text style={{ color: "#64748b", marginTop: 6 }}>Đang tải dữ liệu...</Text>
+        </View>
+      ) : (
+        <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
+          <FlatList
+            data={companies}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.$id}
+            numColumns={2}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+          />
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 };
@@ -159,78 +156,88 @@ export default CompanyList;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 12,
+    backgroundColor: "#F9F9FB",
   },
-  backButton: {
+  header: {
+    backgroundColor: "#4A80F0",
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: "#e2e8f0",
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    elevation: 2,
+  },
+  backBtn: {
+    backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 12,
-    marginLeft: 4,
+    padding: 6,
+    marginRight: 8,
   },
-  backText: {
-    marginLeft: 6,
-    fontSize: 15,
-    color: "#1e293b",
-    fontWeight: "600",
-  },
-  title: {
-    fontSize: 22,
+  headerTitle: {
+    color: "#fff",
+    fontSize: 18,
     fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 14,
-    textAlign: "center",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
   },
   list: {
+    paddingHorizontal: 10,
+    paddingTop: 16,
     paddingBottom: 80,
-    justifyContent: "center",
   },
   card: {
     width: cardSize,
-    borderRadius: 14,
-    paddingVertical: 20,
+    borderRadius: 18,
     margin: 8,
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 18,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
     elevation: 2,
   },
   contentWrapper: {
     alignItems: "center",
   },
-  iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 10,
-    backgroundColor: "rgba(255,255,255,0.3)",
-  },
   companyImage: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
-    resizeMode: "cover",
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginBottom: 10,
+    backgroundColor: "#fff",
+  },
+  iconPlaceholder: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.3)",
+    marginBottom: 10,
   },
   companyName: {
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
     textAlign: "center",
   },
   jobCount: {
     fontSize: 13,
+    opacity: 0.85,
     textAlign: "center",
-    opacity: 0.8,
+    marginTop: 2,
+  },
+  location: {
+    fontSize: 12,
+    opacity: 0.7,
+    textAlign: "center",
+    marginTop: 2,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

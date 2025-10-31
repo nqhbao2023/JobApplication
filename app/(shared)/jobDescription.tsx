@@ -6,7 +6,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth, storage } from '../../src/config/firebase';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
-import { collection, addDoc, deleteDoc, doc, query, where, getDocs, getDoc } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, query, where, getDocs, getDoc,writeBatch } from 'firebase/firestore';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRole } from '@/contexts/RoleContext';
 import { smartBack } from "@/utils/navigation";
@@ -296,18 +296,56 @@ const handleApply = async () => {
 const handleDeleteJob = async () => {
   Alert.alert(
     "Xóa công việc?",
-    "Bạn có chắc muốn xóa bài đăng này không?",
+    // Thêm cảnh báo rõ ràng hơn
+    "Bạn có chắc muốn xóa bài đăng này? Mọi dữ liệu (lượt apply, lượt save) liên quan cũng sẽ bị xóa.", 
     [
       { text: "Hủy", style: "cancel" },
       {
         text: "Xóa",
         style: "destructive",
         onPress: async () => {
+          // Đây là phần 'cà phê' mình thêm vào nè!
           try {
+            setLoadding(true); // Bật loading
+            console.log(`🔥 Bắt đầu xóa Job ID: ${jobId}`);
+
+            const jobRef = doc(db, 'jobs', jobId);
+            
+            // 1. Tìm tất cả 'applied_jobs' liên quan
+            const appliedQuery = query(collection(db, 'applied_jobs'), where('jobId', '==', jobId));
+            const appliedSnap = await getDocs(appliedQuery);
+            
+            // 2. Tìm tất cả 'saved_jobs' liên quan
+            // (Anh giả sử collection tên là 'saved_jobs', em chỉnh lại nếu tên khác nhé)
+            const savedQuery = query(collection(db, 'saved_jobs'), where('jobId', '==', jobId));
+            const savedSnap = await getDocs(savedQuery);
+
+            // 3. Dùng WriteBatch cho an toàn (all or nothing)
+            const batch = writeBatch(db);
+
+            // Thêm job chính vào batch
+            batch.delete(jobRef);
+
+            // Thêm tất cả applied docs vào batch
+            appliedSnap.forEach(d => batch.delete(d.ref));
+
+            // Thêm tất cả saved docs vào batch
+            savedSnap.forEach(d => batch.delete(d.ref));
+
+            // 4. Thực thi batch!
+            await batch.commit();
+
+            Alert.alert("✅ Đã xóa!", "Công việc và dữ liệu liên quan đã được xóa.");
+            console.log(`✅ Xóa thành công Job ID: ${jobId} (và ${appliedSnap.size} applied, ${savedSnap.size} saved)`);
+            
+            // Xóa xong thì 'lượn' (quay về trang trước)
+            smartBack(); 
 
           } catch (err) {
             console.error("Lỗi khi xóa job:", err);
             Alert.alert("Lỗi", "Không thể xóa công việc. Vui lòng thử lại.");
+          } finally {
+            setLoadding(false); // Tắt loading dù thành công hay thất bại
           }
         },
       },
@@ -583,6 +621,4 @@ appliedInfoDate: {
   fontSize: 12,
   color: '#666',
 },
-
-
 });

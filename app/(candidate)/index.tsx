@@ -1,4 +1,4 @@
-// app/screens/CandidateHome.tsx
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -239,6 +239,7 @@ const CandidateHome = () => {
     const comp = getJobCompany(item);
     return (
       <TouchableOpacity
+        activeOpacity={0.8}
         style={styles.jobCard}
         onPress={() =>
           router.push({ pathname: '/jobDescription', params: { jobId: item.$id } })
@@ -330,51 +331,55 @@ const CandidateHome = () => {
           <View style={styles.contentWrapper}>
             {/* Companies */}
             <SectionHeader title="Companies" onPressShowAll={() => router.push('/companyList')} />
-            <FlatList
+            <Animated.FlatList
+              entering={FadeInDown.springify().stiffness(90)}  // Animation xuất hiện
               horizontal
               data={dataCompany}
               keyExtractor={(i) => i.$id}
               showsHorizontalScrollIndicator={false}
               renderItem={({ item }) => <CompanyCard item={item} />}
-              contentContainerStyle={{ paddingRight: 30 }}
+              contentContainerStyle={styles.horizontalList}
               ListEmptyComponent={<Text style={styles.emptyTxt}>No companies</Text>}
             />
 
             {/* Recommend Jobs */}
             <SectionHeader title="Recommend Jobs" onPressShowAll={() => router.push('/(shared)/jobList')} />
-            <FlatList
+            <Animated.FlatList
+              entering={FadeInDown.delay(100).springify()} // Animation
               horizontal
               data={jobsSorted.slice(0, 8)}
               keyExtractor={(i) => i.$id}
               showsHorizontalScrollIndicator={false}
               renderItem={({ item }) => <JobCard item={item} />}
-              contentContainerStyle={{ paddingRight: 30 }}
+              contentContainerStyle={styles.horizontalList}
               ListEmptyComponent={<Text style={styles.emptyTxt}>No jobs</Text>}
             />
 
-            {/* Categories */}
-            <SectionHeader title="Categories" onPressShowAll={() => router.push('/categoriesList')} />
-            <FlatList
-              horizontal
-              data={dataCategories}
-              keyExtractor={(i) => i.$id}
-              showsHorizontalScrollIndicator={false}
-              renderItem={({ item }) => <CategoryCard item={item} />}
-              contentContainerStyle={{ paddingRight: 30 }}
-              ListEmptyComponent={<Text style={styles.emptyTxt}>No categories</Text>}
-            />
+              {/* Categories */}
+              <SectionHeader title="Categories" onPressShowAll={() => router.push('/categoriesList')} />
+              <Animated.FlatList
+                entering={FadeInDown.delay(200).springify()} // Animation mượt, có trễ nhẹ
+                horizontal
+                data={dataCategories}
+                keyExtractor={(i) => i.$id}
+                showsHorizontalScrollIndicator={false}
+                renderItem={({ item }) => <CategoryCard item={item} />}
+                contentContainerStyle={styles.horizontalList}
+                ListEmptyComponent={<Text style={styles.emptyTxt}>No categories</Text>}
+              />
 
-            {/* Latest Jobs */}
-            <SectionHeader title="Latest Jobs" />
-            <FlatList
-              horizontal
-              data={jobsSorted.slice(0, 8)}
-              keyExtractor={(i) => i.$id}
-              showsHorizontalScrollIndicator={false}
-              renderItem={({ item }) => <JobCard item={item} />}
-              contentContainerStyle={{ paddingRight: 30 }}
-              ListEmptyComponent={<Text style={styles.emptyTxt}>No jobs</Text>}
-            />
+              {/* Latest Jobs */}
+              <SectionHeader title="Latest Jobs" />
+              <Animated.FlatList
+                entering={FadeInDown.delay(300).springify()} // Animation cuối
+                horizontal
+                data={jobsSorted.slice(0, 8)}
+                keyExtractor={(i) => i.$id}
+                showsHorizontalScrollIndicator={false}
+                renderItem={({ item }) => <JobCard item={item} />}
+                contentContainerStyle={styles.horizontalList}
+                ListEmptyComponent={<Text style={styles.emptyTxt}>No jobs</Text>}
+              />
           </View>
         }
         data={[]}
@@ -419,24 +424,44 @@ const styles = StyleSheet.create({
   badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 
   // Main content
-  listContent: {
-    backgroundColor: '#F9F9FB',
-    borderTopLeftRadius: 22, borderTopRightRadius: 22,
-  },
+listContent: {
+  backgroundColor: '#F9F9FB',
+  borderTopLeftRadius: 22,
+  borderTopRightRadius: 22,
+  paddingTop: 10,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: -2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 3,
+  elevation: 2,
+},
+
   contentWrapper: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 30, gap: 8 },
 
   // Section header
   cardsHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 6 },
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  showAllBtn: { fontSize: 14, color: '#64748b' },
+  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#1e293b' },
+  showAllBtn: { fontSize: 14, color: '#4A80F0', fontWeight: '500' },
+
 
   // Company card
-  companyCard: {
-    width: 170, height: 170,
-    borderRadius: CARD_RADIUS,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 14, borderWidth: 1, borderColor: '#e5e7eb',
-  },
+companyCard: {
+  width: 160,
+  height: 160,
+  borderRadius: 18,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 14,
+  borderWidth: 1,
+  borderColor: '#e5e7eb',
+  backgroundColor: '#fff',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 3,
+  elevation: 2,
+},
+
   companyImage: {
     height: 68, width: 68, borderRadius: 16,
     borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#fff', marginBottom: 10,
@@ -445,11 +470,24 @@ const styles = StyleSheet.create({
   companySub: { fontSize: 13, opacity: 0.9 },
 
   // Job card
-  jobCard: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, borderRadius: CARD_RADIUS, backgroundColor: '#fff',
-    marginRight: 14, borderWidth: 1, borderColor: '#e5e7eb',
-  },
+jobCard: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  width: 280,
+  height: 120,
+  padding: 14,
+  borderRadius: 18,
+  backgroundColor: '#fff',
+  marginRight: 14,
+  borderWidth: 1,
+  borderColor: '#e5e7eb',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 3,
+  elevation: 2,
+},
+
   jobImage: {
     height: 68, width: 68, borderRadius: 16,
     borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff',
@@ -458,14 +496,31 @@ const styles = StyleSheet.create({
   jobSub: { color: '#64748b', marginTop: 2 },
 
   // Category card
-  categoryCard: {
-    width: 140, height: 120, marginRight: 14,
-    borderRadius: CARD_RADIUS, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#e5e7eb',
-  },
+categoryCard: {
+  width: 130,
+  height: 140,
+  marginRight: 14,
+  borderRadius: 18,
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderWidth: 1,
+  borderColor: '#e5e7eb',
+  backgroundColor: '#fff',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 3,
+  elevation: 2,
+},
+
   categoryTitle: { fontWeight: '800', fontSize: 14 },
   categorySub: { fontSize: 12, opacity: 0.9 },
 
   // empty
   emptyTxt: { color: '#94a3b8', marginLeft: 4 },
+  horizontalList: {
+  paddingLeft: 4,
+  paddingRight: 16,
+  gap: 14,
+},
 });

@@ -7,12 +7,20 @@ const Search = () => {
   const [keyword, setKeyword] = useState('');
   const router = useRouter();
 
-  const handleSearch = () => {
-    if (!keyword) return;
-    router.push(`/(shared)/search?q=${keyword}` as any);
+const handleSearch = () => {
+  if (!keyword.trim()) {
+    console.warn("⚠️ Không thể tìm kiếm với chuỗi rỗng!");
+    return;
+  }
 
+  console.log("🚀 Điều hướng với từ khóa:", keyword);
 
-  };
+  router.push({
+    pathname: "/(shared)/search",
+    params: { q: keyword.trim() },
+  });
+};
+
 
   return (
     <View style={styles.searchbar}>

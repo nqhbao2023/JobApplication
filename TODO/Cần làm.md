@@ -6,7 +6,7 @@
 1. Company List chưa hiển thị đầy đủ thông tin, ảnh
 2. trong Company list back to home ko hoạt động     [đã fix]
 3. Category list trống, chưa có gì                  [Đã fix]
-4. Show all vào Lastest Jobs không hoạt động        [cân nhắc, ko cần fix]
+4. Show all vào Latest Jobs không hoạt động        [cân nhắc, ko cần fix]
 5. Trong tab Person khi nhấn vào nút ảnh (update ảnh) thì không hoạt động
 6. Trang Applied job list trong trong Person.tsx đang bị trùng 1 job có thể bị apply nhiều lần
 7. Khi nhấn vào 1 trong đã Applied trong Applied Job List thì chỉ hiện Loading Job details

@@ -40,6 +40,25 @@ interface Company {
 
 export default function SearchScreen() {
   const { q } = useLocalSearchParams();
+  useEffect(() => {
+  console.log("🔍 [TEST] useLocalSearchParams():", q);
+
+  if (typeof q === "string") {
+    console.log("✅ Kiểu dữ liệu:", typeof q);
+    console.log("📘 Nội dung query nhận được:", q);
+  } else {
+    console.warn("⚠️ Lỗi: q không phải là chuỗi (có thể undefined)");
+  }
+
+  // Test độ an toàn encode/decode
+  try {
+    const decoded = decodeURIComponent(String(q));
+    console.log("🧩 decodeURIComponent test:", decoded);
+  } catch (e) {
+    console.error("❌ decodeURIComponent thất bại:", e);
+  }
+}, [q]);
+
   const [jobs, setJobs] = useState<Job[]>([]);
   const [company, setCompany] = useState<Company[]>([]);
   const [jobTypes, setJobTypes] = useState<JobType[]>([]);

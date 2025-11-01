@@ -203,7 +203,6 @@ export default function CompanyDescription() {
     )}
   </SafeAreaView>
 );
-
 }
 
 const styles = StyleSheet.create({

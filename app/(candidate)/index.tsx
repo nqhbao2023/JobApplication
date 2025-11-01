@@ -343,7 +343,8 @@ const CandidateHome = () => {
             />
 
             {/* Recommend Jobs */}
-            <SectionHeader title="Recommend Jobs" onPressShowAll={() => router.push('/(shared)/jobList')} />
+            <SectionHeader title="Rec
+            ommend Jobs" onPressShowAll={() => router.push('/(shared)/jobList')} />
             <Animated.FlatList
               entering={FadeInDown.delay(100).springify()} // Animation
               horizontal

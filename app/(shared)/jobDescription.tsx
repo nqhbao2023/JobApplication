@@ -14,6 +14,7 @@ import { ActivityIndicator } from 'react-native-paper';
 import { useRef } from "react";
 import { useJobStatus } from "@/hooks/useJobStatus";
 import { onAuthStateChanged } from "firebase/auth";
+import ContactEmployerButton from "@/components/ContactEmployerButton";
 const JobDescription = () => {
   const [selected, setSelected] = useState(0);
 
@@ -41,7 +42,7 @@ const { success, fromApplied, status, appliedAt } = params;
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId || undefined as any);
   const [fromAppliedImmediate, setFromAppliedImmediate] = useState(false);
 const checkingRef = useRef(false);
-
+const [jobData, setJobData] = useState<any>(null);
 
 const { role: userRole, loading: roleLoading } = useRole();
 // ✅ gom các khả năng đặt field owner trong job
@@ -194,6 +195,7 @@ useEffect(() => {
       if (docSnap.exists()) {
         const result = docSnap.data();
         setDataJob(result);
+        setJobData(result);
 
         if (result.users?.id) {
           const userRef = doc(db, 'users', result.users.id);
@@ -214,9 +216,6 @@ useEffect(() => {
       setDataJob(null);
     }
   };
-
-
-
 const handleApply = async () => {
   if (!userId) {
     Alert.alert("Thông báo", "Bạn cần đăng nhập trước khi ứng tuyển");
@@ -242,6 +241,7 @@ const handleApply = async () => {
     const jobRef = doc(db, "jobs", jobId);
     const jobSnap = await getDoc(jobRef);
     const jobData = jobSnap.exists() ? jobSnap.data() : null;
+    setJobData(jobData); 
 
     // ✅ Lấy ownerId từ job đã resolve
         const docRef = await addDoc(collection(db, "applied_jobs"), {
@@ -352,7 +352,6 @@ const handleDeleteJob = async () => {
     ]
   );
 };
-
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: 120 }}>
@@ -453,50 +452,61 @@ const handleDeleteJob = async () => {
       </ScrollView>
 
 {/* Bottom Buttons */}
-<View style={styles.bottomContainer}>
-{/* ❤️ Save/Unsave */}
-{showCandidateUI && (
-  <TouchableOpacity
-    style={styles.heartContainer}
-    onPress={toggleSave}
-    disabled={saveLoading}
-  >
-    <Ionicons
-      name={isSaved ? "heart" : "heart-outline"}
-      size={24}
-      color="red"
+{/* --- BOTTOM ACTION BAR --- */}
+<View style={styles.bottomBar}>
+  {/* ❤️ Save */}
+  {showCandidateUI && (
+    <TouchableOpacity
+      style={styles.saveBtn}
+      onPress={toggleSave}
+      disabled={saveLoading}
+      activeOpacity={0.8}
+    >
+      <Ionicons
+        name={isSaved ? "heart" : "heart-outline"}
+        size={24}
+        color={isSaved ? "#F97459" : "#999"}
+      />
+    </TouchableOpacity>
+  )}
+
+  {/* 🚀 Apply / Cancel */}
+  {showCandidateUI && (
+    !userId ? (
+      <TouchableOpacity style={[styles.actionBtn, styles.disabledBtn]} disabled>
+        <ActivityIndicator size="small" color="#F97459" />
+      </TouchableOpacity>
+    ) : appliedLoading ? (
+      <TouchableOpacity style={[styles.actionBtn, styles.disabledBtn]} disabled>
+        <ActivityIndicator size="small" color="#F97459" />
+      </TouchableOpacity>
+    ) : (fromAppliedImmediate || isApplied) ? (
+      <TouchableOpacity
+        style={[styles.actionBtn, styles.cancelBtn]}
+        onPress={handleCancelApply}
+      >
+        <Text style={styles.actionText}>Cancel Apply</Text>
+      </TouchableOpacity>
+    ) : (
+      <TouchableOpacity
+        style={[styles.actionBtn, styles.applyBtn]}
+        onPress={handleApply}
+      >
+        <Text style={styles.actionText}>Apply Now</Text>
+      </TouchableOpacity>
+    )
+  )}
+
+  {/* 💬 Contact Employer */}
+  {dataJob && (
+    <ContactEmployerButton
+      employerId={dataJob.ownerId}
+      employerName={dataJob.contact_name || "Nhà tuyển dụng"}
+      role="Candidate"
+      style={styles.chatBtn}
     />
-  </TouchableOpacity>
-)}
-
-
-{/* 🚀 Apply / Cancel */}
-{showCandidateUI && (
-  !userId ? (
-    <TouchableOpacity style={[styles.applyContainer, { backgroundColor: '#eee' }]} disabled>
-      <ActivityIndicator size="small" color="#F97459" />
-    </TouchableOpacity>
-  ) : appliedLoading ? (
-    <TouchableOpacity style={[styles.applyContainer, { backgroundColor: '#eee' }]} disabled>
-      <ActivityIndicator size="small" color="#F97459" />
-    </TouchableOpacity>
-  ) : (fromAppliedImmediate || isApplied) ? (
-    <TouchableOpacity
-      style={[styles.applyContainer, { backgroundColor: '#ccc' }]}
-      onPress={handleCancelApply}
-    >
-      <Text style={styles.applyText}>Cancel Apply</Text>
-    </TouchableOpacity>
-  ) : (
-    <TouchableOpacity
-      style={styles.applyContainer}
-      onPress={handleApply}
-    >
-      <Text style={styles.applyText}>Apply Now</Text>
-    </TouchableOpacity>
-  )
-)}
-
+  )}
+</View>
 
 {/* ✏️ Employer actions */}
 {showEmployerUI && (
@@ -521,7 +531,6 @@ const handleDeleteJob = async () => {
   </View>
 )}
 </View>
-    </View>
   );
 };
 
@@ -621,4 +630,73 @@ appliedInfoDate: {
   fontSize: 12,
   color: '#666',
 },
+bottomBar: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingHorizontal: 16,
+  paddingVertical: Platform.OS === 'android' ? 10 : 20,
+  backgroundColor: '#fff',
+  borderTopWidth: 1,
+  borderTopColor: '#eee',
+  gap: 10,
+  elevation: 10,
+  shadowColor: '#000',
+  shadowOpacity: 0.08,
+  shadowOffset: { width: 0, height: -1 },
+  shadowRadius: 4,
+},
+
+saveBtn: {
+  width: 55,
+  height: 55,
+  borderRadius: 16,
+  backgroundColor: '#fff',
+  justifyContent: 'center',
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#ddd',
+  elevation: 3,
+  shadowColor: '#000',
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+},
+
+actionBtn: {
+  flex: 1,
+  height: 55,
+  borderRadius: 14,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+
+applyBtn: {
+  backgroundColor: '#F97459',
+},
+
+cancelBtn: {
+  backgroundColor: '#ccc',
+},
+
+disabledBtn: {
+  backgroundColor: '#eee',
+},
+
+chatBtn: {
+  flex: 1,
+  backgroundColor: '#4A80F0',
+  height: 55,
+  borderRadius: 14,
+  justifyContent: 'center',
+  alignItems: 'center',
+  flexDirection: 'row',
+  gap: 6,
+},
+
+actionText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#fff',
+},
+
 });

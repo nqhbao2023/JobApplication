@@ -6,16 +6,28 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { db, auth } from "@/config/firebase";
 import { router } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
+import { useRole } from "@/contexts/RoleContext";
 
 export default function ChatList() {
   const [chats, setChats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const myUid = auth.currentUser?.uid;
+  const [myUid, setMyUid] = useState<string | null>(null);
+  const { role } = useRole(); // ✅ "candidate" hoặc "employer"
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user) setMyUid(user.uid);
+      else setMyUid(null);
+    });
+    return unsubAuth;
+  }, []);
 
   useEffect(() => {
     if (!myUid) return;
@@ -44,8 +56,13 @@ export default function ChatList() {
       chat.participantsInfo?.[partnerId]?.displayName || "Người dùng";
 
     router.push({
-      pathname: "/(candidate)/chat", // tự điều hướng đúng role (app có thể thay candidate -> employer)
-      params: { partnerId, partnerName },
+      pathname: "/(shared)/chat",
+      params: {
+        chatId: chat.id,
+        partnerId,
+        partnerName,
+        role: role === "candidate" ? "Candidate" : "Recruiter",
+      },
     });
   };
 
@@ -78,19 +95,77 @@ export default function ChatList() {
         const partnerName =
           item.participantsInfo?.[partnerId]?.displayName || "Người dùng";
         const lastMessage = item.lastMessage || "Chưa có tin nhắn";
+        const partnerRole = item.participantsInfo?.[partnerId]?.role || "Unknown";
+
+        // 🎨 Đổi màu và icon nhẹ tùy vai trò
+        const isCandidateView = role === "candidate";
+        const bubbleColor = isCandidateView ? "#4A80F0" : "#34C759";
+        const iconName = isCandidateView
+          ? "briefcase-outline"
+          : "person-outline";
+        const badgeText =
+          partnerRole === "Recruiter"
+            ? "Nhà tuyển dụng"
+            : partnerRole === "Candidate"
+            ? "Ứng viên"
+            : "";
 
         return (
           <TouchableOpacity
             style={styles.chatItem}
             onPress={() => handleOpenChat(item)}
+            activeOpacity={0.85}
           >
-            <Ionicons name="person-circle-outline" size={42} color="#4A80F0" />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.chatName}>{partnerName}</Text>
+            {/* Avatar / Icon */}
+            {item.participantsInfo?.[partnerId]?.photoURL ? (
+              <Image
+                source={{ uri: item.participantsInfo[partnerId].photoURL }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: bubbleColor + "33" }]}>
+                <Ionicons name={iconName} size={26} color={bubbleColor} />
+              </View>
+            )}
+
+            {/* Main text */}
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={styles.nameRow}>
+                <Text style={styles.chatName} numberOfLines={1}>
+                  {partnerName}
+                </Text>
+
+                {/* Badge */}
+                {badgeText ? (
+                  <View
+                    style={[
+                      styles.badge,
+                      {
+                        backgroundColor:
+                          badgeText === "Nhà tuyển dụng" ? "#E0F2FE" : "#E8F5E9",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.badgeText,
+                        {
+                          color:
+                            badgeText === "Nhà tuyển dụng" ? "#0284C7" : "#2E7D32",
+                        },
+                      ]}
+                    >
+                      {badgeText}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
               <Text style={styles.chatLastMsg} numberOfLines={1}>
                 {lastMessage}
               </Text>
             </View>
+
             <Ionicons name="chevron-forward" size={22} color="#aaa" />
           </TouchableOpacity>
         );
@@ -100,20 +175,60 @@ export default function ChatList() {
 }
 
 const styles = StyleSheet.create({
-  listContainer: { padding: 16 },
+  listContainer: {
+    padding: 14,
+    backgroundColor: "#F8FAFC",
+  },
   chatItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 10,
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 3,
     elevation: 2,
   },
-  chatName: { fontSize: 16, fontWeight: "600", color: "#111" },
-  chatLastMsg: { fontSize: 13, color: "#666" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  chatName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    flexShrink: 1,
+  },
+  chatLastMsg: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  badge: {
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 6,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
 });

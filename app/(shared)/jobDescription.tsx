@@ -229,6 +229,7 @@ const handleApply = async () => {
   try {
     console.log("🚀 Apply with:", { userId, jobId });
 
+    // 🔹 1️⃣ Xóa mọi applied_jobs cũ của user với job này (đề phòng apply lại)
     const q = query(
       collection(db, "applied_jobs"),
       where("userId", "==", userId),
@@ -238,61 +239,112 @@ const handleApply = async () => {
     const deletePromises = res.docs.map((d) => deleteDoc(d.ref));
     await Promise.all(deletePromises);
 
+    // 🔹 2️⃣ Lấy dữ liệu job để đính kèm thêm vào bản ghi ứng tuyển
     const jobRef = doc(db, "jobs", jobId);
     const jobSnap = await getDoc(jobRef);
     const jobData = jobSnap.exists() ? jobSnap.data() : null;
-    setJobData(jobData); 
+    setJobData(jobData);
 
-    // ✅ Lấy ownerId từ job đã resolve
-        const docRef = await addDoc(collection(db, "applied_jobs"), {
-          userId,
-          jobId,
-          employerId: jobOwnerId || "",   // ✅ dùng owner đã resolve sẵn
-          cv_uploaded: false,
-          status: "draft",
-          applied_at: new Date().toISOString(),
-        });
+    // 🔹 3️⃣ Lấy thêm thông tin người dùng (để employer xem dễ)
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    const userData = userSnap.exists() ? userSnap.data() : null;
 
-    // ✅ Cập nhật UI ngay lập tức
+    // 🔹 4️⃣ Tạo document applied_jobs mới
+    const docRef = await addDoc(collection(db, "applied_jobs"), {
+      userId,
+      employerId: jobOwnerId || "",
+      jobId,
+      cv_uploaded: false,
+      cv_url: null, // ⚡ reset để tránh link CV cũ lỗi
+      status: "pending", // ✅ chuyển sang pending để employer thấy đúng nút Duyệt
+      applied_at: new Date().toISOString(),
+
+      // ⚙️ Thông tin bổ sung để employer hiển thị nhanh hơn
+      jobInfo: {
+        title: jobData?.title || "",
+        company: jobData?.company?.corp_name || "",
+        salary: jobData?.salary || "",
+      },
+      userInfo: {
+        name: userData?.name || "",
+        email: userData?.email || "",
+        photoURL: userData?.photoURL || null,
+      },
+    });
+
+    // 🔹 5️⃣ Cập nhật UI ngay lập tức
     setIsApplied(true);
     setAppliedLoading(false);
 
+
+    // 🔹 6️⃣ Điều hướng sang trang submit (upload CV)
     router.replace(
       `/submit?jobId=${jobId}&userId=${userId}&applyDocId=${docRef.id}` as any
     );
+
+    console.log("✅ Applied job created:", docRef.id);
   } catch (err) {
     console.error("❌ Apply failed:", err);
     Alert.alert("Lỗi", "Không thể ứng tuyển công việc này, thử lại sau!");
   }
 };
 
-  const handleCancelApply = async () => {
-    if (!applyDocId) return;
-    try {
-      setLoadding(true);
-      const applyRef = doc(db, 'applied_jobs', applyDocId);
-      const applySnap = await getDoc(applyRef);
-      if (applySnap.exists()) {
-        const data = applySnap.data();
-        if (data.cv_url) {
-          const fileRef = storageRef(storage, data.cv_url);
-          await deleteObject(fileRef)
-            .then(() => console.log('🗑️ CV file deleted from Storage'))
-            .catch((err) => console.warn('⚠️ Storage delete failed:', err));
+
+const handleCancelApply = async () => {
+  try {
+    setLoadding(true);
+
+    // 🔎 Truy vấn chính xác hồ sơ ứng tuyển hiện tại
+    const q = query(
+      collection(db, "applied_jobs"),
+      where("userId", "==", userId),
+      where("jobId", "==", jobId)
+    );
+    const res = await getDocs(q);
+
+    if (res.empty) {
+      Alert.alert("⚠️ Không tìm thấy hồ sơ ứng tuyển để hủy.");
+      return;
+    }
+
+    // ✅ Xóa từng hồ sơ tìm thấy
+    for (const docSnap of res.docs) {
+      const data = docSnap.data();
+
+      // 🗑️ Nếu có file CV thì xóa trên Storage
+      if (data.cv_url) {
+        try {
+          // 👉 Phải chuyển URL về path tương đối
+          const decodedPath = decodeURIComponent(
+            data.cv_url.split("/o/")[1].split("?")[0]
+          );
+          const fileRef = storageRef(storage, decodedPath);
+          await deleteObject(fileRef);
+          console.log(`🗑️ CV file deleted from Storage: ${decodedPath}`);
+        } catch (err) {
+          console.warn("⚠️ Không thể xóa file trên Storage:", err);
         }
       }
-      await deleteDoc(applyRef);
-      setIsApplied(false);
-      setAppliedLoading(false);
-      setApplyDocId(null);
-      Alert.alert('✅ Thành công', 'Đã hủy ứng tuyển và xóa file CV.');
-    } catch (err) {
-      console.error('❌ Cancel failed:', err);
-      Alert.alert('Lỗi', 'Không thể hủy ứng tuyển hoặc xóa file CV.');
-    } finally {
-      setLoadding(false);
+      // 🧹 Xóa document Firestore
+      await deleteDoc(docSnap.ref);
+      console.log(`🔥 Deleted applied_jobs document: ${docSnap.id}`);
     }
-  };
+
+    // ✅ Cập nhật UI
+    setIsApplied(false);
+    setAppliedLoading(false);
+    setApplyDocId(null);
+
+    Alert.alert("✅ Thành công", "Đã hủy ứng tuyển và xóa CV.");
+  } catch (err) {
+    console.error("❌ Cancel failed:", err);
+    Alert.alert("Lỗi", "Không thể hủy ứng tuyển hoặc xóa file CV.");
+  } finally {
+    setLoadding(false);
+  }
+};
+
 const handleDeleteJob = async () => {
   Alert.alert(
     "Xóa công việc?",

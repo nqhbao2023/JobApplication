@@ -10,8 +10,6 @@ export default function SharedLayout() {
         <Stack.Screen name="companyDescription" />
         <Stack.Screen name="companyList" />
         <Stack.Screen name="Notifications" />
-        <Stack.Screen name="PdfViewer" />
-        <Stack.Screen name="UserDetails" />
 
       </Stack>
     </SavedJobsProvider>

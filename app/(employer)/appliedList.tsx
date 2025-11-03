@@ -1,131 +1,140 @@
-import { View, Text, FlatList, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
-import React, { useEffect, useState } from 'react';
-import { db, auth } from '@/config/firebase';
-import { collection, getDocs, query, where, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
-import Application from '@/components/Application';
-import { router } from 'expo-router';
+// app/(employer)/appliedList.tsx
+import React, { useEffect, useCallback, useState } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  ActivityIndicator,
+  StyleSheet,
+  RefreshControl,
+  Alert,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
-const AppliedList = () => {
-  const [applications, setApplications] = useState<any[]>([]);
+import { db, auth } from "@/config/firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  getDoc,
+  updateDoc,
+  addDoc,
+  orderBy,
+} from "firebase/firestore";
+
+import Application from "@/components/Application";
+
+/* -------------------------------------------------------------------------- */
+/*                                MAIN SCREEN                                 */
+/* -------------------------------------------------------------------------- */
+export default function AppliedList() {
+  const [apps, setApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string>('');
+  const [refreshing, setRefreshing] = useState(false);
+  const userId = auth.currentUser?.uid;
 
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          setUserId(user.uid);
-        }
-      } catch (err) {
-        console.error('Lỗi khi lấy user:', err);
-      }
-    };
+  /* 1️⃣ fetch data */
+  const fetchData = useCallback(async () => {
+    if (!userId) return;
+    setRefreshing(true);
 
-    getCurrentUser();
-  }, []);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!userId || userId.trim() === '') {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const q = query(collection(db, 'applied_jobs'), where('employerId', '==', userId));
-        const querySnapshot = await getDocs(q);
-        const apps = querySnapshot.docs.map(doc => ({ $id: doc.id, ...doc.data() }));
-        setApplications(apps);
-      } catch (error) {
-        console.error('Lỗi khi lấy danh sách ứng tuyển:', error);
-      }
-      setLoading(false);
-    };
-
-    fetchData();
+    const q = query(
+      collection(db, "applied_jobs"),
+      where("employerId", "==", userId),
+      orderBy("applied_at", "desc")
+    );
+    const snap = await getDocs(q);
+    setApps(snap.docs.map((d) => ({ $id: d.id, ...d.data() })));
+    setLoading(false);
+    setRefreshing(false);
   }, [userId]);
 
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  /* 2️⃣ accept / reject */
   const handleStatusChange = async (appId: string, status: string) => {
     try {
-      // Cập nhật trạng thái đơn ứng tuyển
-      const appRef = doc(db, 'applied_jobs', appId);
-      await updateDoc(appRef, { status });
+      const ref = doc(db, "applied_jobs", appId);
+      await updateDoc(ref, { status });
 
-      // Lấy thông tin ứng tuyển để gửi thông báo
-      const appSnap = await getDoc(appRef);
-      const app = appSnap.data();
+      const app = (await getDoc(ref)).data();
       if (!app) return;
 
-      // Lấy thông tin công việc để lấy tiêu đề công việc
-      const jobSnap = await getDoc(doc(db, 'jobs', app.jobId));
-      const job = jobSnap.data();
+      const job = (await getDoc(doc(db, "jobs", app.jobId))).data();
+      const msg =
+        status === "accepted"
+          ? `Đã chấp nhận đơn cho job “${job?.title ?? ""}”`
+          : `Đã từ chối đơn cho job “${job?.title ?? ""}”`;
 
-      // Gửi thông báo cho người xin việc
-      const message =
-        status === 'accepted'
-          ? `Đơn ứng tuyển của bạn cho công việc ${job?.title || ''} đã được chấp nhận`
-          : `Đơn ứng tuyển của bạn cho công việc ${job?.title || ''} đã bị từ chối`;
-      const type = status === 'accepted' ? 'accepted' : 'rejected';
-
-      await addDoc(collection(db, 'notifications'), {
+      await addDoc(collection(db, "notifications"), {
         userId: app.userId,
-        message,
-        type,
+        message: msg,
+        type: status,
         jobId: app.jobId,
         read: false,
-        created_at: new Date().toISOString(),
+        created_at: new Date(),
       });
 
-      // Cập nhật danh sách ứng tuyển trên giao diện
-      const updated = applications.map((a) =>
-        a.$id === appId ? { ...a, status } : a
-      );
-      setApplications(updated);
-    } catch (error) {
-      console.error('Failed to update status or send notification:', error);
+      /* cập nhật nhanh UI */
+      setApps((p) => p.map((x) => (x.$id === appId ? { ...x, status } : x)));
+      Alert.alert("Thông báo", msg);
+    } catch (e) {
+      Alert.alert("Lỗi", "Không thể thay đổi trạng thái.");
     }
   };
 
-const handleSelectApp = (app: any) => {
-  const url = encodeURIComponent(app.cv_url || '');
-  router.push({ pathname: '/(shared)/PdfViewer', params: { url } });
-};
-
-
-  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} />;
+  /* --------------------------------- UI ---------------------------------- */
+  if (loading)
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <Text style={styles.title}>Danh sách ứng viên</Text>
-        <FlatList
-          data={applications}
-          keyExtractor={(item) => item.$id}
-          renderItem={({ item }) => (
-            <Application
-              app={item}
-              onStatusChange={(status) => handleStatusChange(item.$id, status)}
-              onViewCV={() => handleSelectApp(item)} // ✅ thêm callback mở PDF
-            />
-          )}
-        />
 
-    </View>
+      <FlatList
+        data={apps}
+        keyExtractor={(it) => it.$id}
+        renderItem={({ item }) => (
+          <Application
+            app={item}
+            onStatusChange={(s) => handleStatusChange(item.$id, s)}
+          />
+        )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={fetchData} />
+        }
+        contentContainerStyle={[
+          styles.list,
+          apps.length === 0 && { flex: 1 },
+        ]}
+        ListEmptyComponent={
+          <View style={styles.center}>
+            <Ionicons name="people-outline" size={64} color="#ccc" />
+            <Text style={{ color: "#888", marginTop: 8 }}>
+              Chưa có ứng viên nào
+            </Text>
+          </View>
+        }
+      />
+    </SafeAreaView>
   );
-};
+}
 
-export default AppliedList;
-
+/* -------------------------------------------------------------------------- */
+/*                                   STYLE                                    */
+/* -------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-    backgroundColor: '#f2f2f2',
-    flex: 1,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
+  safe: { flex: 1, backgroundColor: "#F8FAFC", paddingHorizontal: 16 },
+  title: { fontSize: 20, fontWeight: "700", marginVertical: 12 },
+  list: { paddingBottom: 12 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

@@ -21,21 +21,36 @@ export default function RootLayout() {
 
       const group = segments?.[0];
       const inAuth = group === "(auth)";
-      const inTabs = group === "(main)";
+      const inCandidate = group === "(candidate)";
+      const inEmployer = group === "(employer)";
 
       if (user) {
         const snap = await getDoc(doc(db, "users", user.uid));
+
         if (snap.exists()) {
-          console.log("🔥 User data from Firestore:", snap.data());
-          if (inAuth) router.replace("/(main)");
+          const data = snap.data();
+          console.log("🔥 User data:", data);
+
+          // ✅ Route theo role, nhưng chỉ khi đang ở nhóm (auth)
+          if (inAuth) {
+            if (data.role === "candidate") {
+              router.replace("/(candidate)" as any);
+            } else if (data.role === "employer") {
+              router.replace("/(employer)" as any);
+            } else {
+              await signOut(auth);
+              router.replace("/(auth)/login");
+            }
+          }
         } else {
-          console.log("⚠️ User không có doc → signOut");
+          console.log("⚠️ Không có doc → signOut");
           await signOut(auth);
           router.replace("/(auth)/login");
         }
       } else {
-        if (inTabs) {
-          console.log("🔒 No user → chuyển sang login");
+        // ❌ Không có user mà lại đang trong nhóm role → về login
+        if (inCandidate || inEmployer) {
+          console.log("🔒 No user → chuyển login");
           router.replace("/(auth)/login");
         }
       }
@@ -62,10 +77,8 @@ export default function RootLayout() {
   }
 
   return (
-    // ✅ Providers bọc quanh Slot
     <SavedJobsProvider>
       <RoleProvider>
-        {/* Slot render tất cả group con như (candidate), (employer), (auth)... */}
         <Slot />
       </RoleProvider>
     </SavedJobsProvider>

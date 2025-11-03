@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { auth, db } from '@/config/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const isValidEmail = (v: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -98,17 +99,18 @@ export default function LoginScreen() {
       console.log('🔥 User data from Firestore:', userData);
 
       // ✅ Điều hướng theo role duy nhất
-      switch (userData?.role) {
-        case 'admin':
-          router.replace('/admin');
-          break;
-        case 'recruiter':
-          router.replace('/(employer)');
-          break;
-        default:
-          router.replace('/(main)');
-          break;
-      }
+
+        // ✅ Lưu role lại để nhớ
+        await AsyncStorage.setItem("userRole", userData.role);
+
+        // ✅ Điều hướng đúng role
+        if (userData.role === "employer") {
+          router.replace("/(employer)");
+        } else if (userData.role === "candidate") {
+          router.replace("/(candidate)");
+        } else {
+          router.replace("/(auth)/login");
+        }
     } catch (error: any) {
       if (error.message === 'deleted-user') {
         setErrorMsg(

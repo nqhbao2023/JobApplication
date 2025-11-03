@@ -7,6 +7,7 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { db, auth } from '../../src/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import AsyncStorage from "@react-native-async-storage/async-storage"; // 👈 thêm import này ở đầu file
 
 const Person = () => {
   const [editField, setEditField] = useState<null | 'phone' | 'email' | 'password' | 'name'>(null);
@@ -51,15 +52,20 @@ const Person = () => {
     setEditField(null);
   };
 
-  const handleLogout = async () => {
-    try {
-        await auth.signOut();
-        router.replace('/(auth)/login');
+const handleLogout = async () => {
+  try {
+    // 🧹 Xoá role đã lưu
+    await AsyncStorage.removeItem("userRole");
 
-    } catch (error) {
-      console.log('Logout Error:', error);
-    }
-  };
+    // 🔒 Đăng xuất Firebase
+    await auth.signOut();
+
+    // 🚪 Quay về màn hình login
+    router.replace("/(auth)/login");
+  } catch (error) {
+    console.log("Logout Error:", error);
+  }
+};
 
   const load_user_id = async () => {
     const user = auth.currentUser;

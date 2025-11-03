@@ -1,4 +1,7 @@
 // app/(shared)/chat.tsx
+import { useKeyboard } from "@react-native-community/hooks";
+import { useHeaderHeight } from "@react-navigation/elements"; // expo-router có sẵn
+import dayjs from "dayjs";         // expo install dayjs
 import {
   View,
   Text,
@@ -10,7 +13,7 @@ import {
   FlatList,
   Keyboard,
 } from "react-native";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -73,6 +76,8 @@ const Chat = () => {
     if (myUid && partnerId) return makeChatId(myUid, partnerId);
     return undefined;
   }, [paramChatId, myUid, partnerId]);
+const { keyboardHeight } = useKeyboard();
+const headerHeight = useHeaderHeight();
 
   // Lắng nghe tin nhắn realtime khi đã có effectiveChatId
   useEffect(() => {
@@ -95,40 +100,31 @@ const Chat = () => {
   }, [effectiveChatId]);
 
   // Gửi tin nhắn
-  const handleSendMessage = async () => {
-    if (!effectiveChatId || !myUid) return;
-    const trimmed = message.trim();
-    if (!trimmed) return;
+const handleSendMessage = useCallback(async () => {
+  if (!effectiveChatId || !myUid) return;
+  const trimmed = message.trim();
+  if (!trimmed) return;
 
-    const newMsg = {
-      text: trimmed,
-      role: myRole,
-      senderId: myUid,
-      createdAt: serverTimestamp(),
-    };
+  // ⇢ reset input trước để UI mượt
+  setMessage("");
 
-    // Lưu tin nhắn vào subcollection
-    await addDoc(collection(db, "chats", effectiveChatId, "messages"), newMsg);
-
-    // Cập nhật doc phòng chat (participants bằng UID, kèm info hiển thị)
-    await setDoc(
-      doc(db, "chats", effectiveChatId),
-      {
-        participants: [myUid, partnerId].filter(Boolean),
-        participantsInfo: {
-          [myUid]: { role: myRole },
-          ...(partnerId ? { [partnerId]: { displayName: partnerName } } : {}),
-        },
-        lastMessage: newMsg.text,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    setMessage("");
-    Keyboard.dismiss();
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+  const newMsg = {
+    text: trimmed,
+    role: myRole,
+    senderId: myUid,
+    createdAt: serverTimestamp(),
   };
+  await addDoc(collection(db, "chats", effectiveChatId, "messages"), newMsg);
+  await setDoc(
+    doc(db, "chats", effectiveChatId),
+    {
+      participants: [myUid, partnerId].filter(Boolean),
+      lastMessage: newMsg.text,
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+}, [message, effectiveChatId, myUid, myRole, partnerId]);
 
   // Nếu chưa đủ dữ liệu để xác định phòng chat → báo nhẹ nhàng
   if (!effectiveChatId) {
@@ -148,29 +144,31 @@ const Chat = () => {
     );
   }
 
-  const renderMessage = ({ item }: { item: MessageType }) => {
-    // Bên nào gửi? So theo role hiện tại
-    const isMine = item.senderId === myUid; // tin của mình
-    return (
-      <View
-        style={[
-          styles.messageBubble,
-          isMine ? styles.userBubble : styles.recruiterBubble,
-        ]}
-      >
-        <Text style={[styles.messageText, isMine && { color: "#fff" }]}>
-          {item.text}
-        </Text>
-      </View>
-    );
-  };
+const renderMessage = ({ item, index }: { item: MessageType; index: number }) => {
+  const isMine = item.senderId === myUid;
+  const next = messages[index + 1];
+  const showTime =
+    !next || dayjs(next.createdAt?.toDate()).diff(item.createdAt?.toDate(), "minute") >= 2;
 
+return (
+  <View style={[styles.row, isMine ? styles.selfRight : styles.selfLeft]}>
+    <View style={[styles.bubble, isMine ? styles.mine : styles.theirs]}>
+      <Text style={[styles.messageText, isMine && { color:"#fff" }]}>{item.text}</Text>
+    </View>
+    {showTime && (
+      <Text style={styles.time}>
+        {dayjs(item.createdAt?.toDate()).format("HH:mm")}
+      </Text>
+    )}
+  </View>
+);
+};
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
-    >
+  <KeyboardAvoidingView
+    style={styles.container}
+    behavior={Platform.OS === "ios" ? "padding" : undefined}
+    keyboardVerticalOffset={headerHeight}
+  >
       {/* Header */}
       <View style={styles.headerContainer}>
         <TouchableOpacity style={styles.back_btn} onPress={() => router.back()}>
@@ -182,19 +180,18 @@ const Chat = () => {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Messages */}
+    {/* Messages list */}
       <FlatList
         ref={flatListRef}
         data={messages}
+        /* 👉 xoá inverted */
         keyExtractor={(item) => item.id}
         renderItem={renderMessage}
-        contentContainerStyle={styles.messageContainer}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: true })
-        }
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: keyboardHeight + 70 },
+        ]}
       />
-
-      {/* Input */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.textInput}
@@ -203,19 +200,27 @@ const Chat = () => {
           placeholder="Nhập tin nhắn..."
           multiline
         />
-        <TouchableOpacity style={styles.send_btn} onPress={handleSendMessage}>
-          <Ionicons name="send" size={24} color="#007AFF" />
-        </TouchableOpacity>
+<TouchableOpacity
+  style={[styles.sendBtn, !message.trim() && { opacity: 0.5 }]}
+  disabled={!message.trim()}
+  onPress={handleSendMessage}
+>
+  <Ionicons name="paper-plane" size={18} color="#fff" />
+</TouchableOpacity>
+
+
       </View>
     </KeyboardAvoidingView>
   );
 };
 
 export default Chat;
-
 const styles = StyleSheet.create({
+  /* Layout chung */
   container: { flex: 1, backgroundColor: "#F5F5F5" },
   centerBox: { flex: 1, justifyContent: "center", alignItems: "center", padding: 20 },
+
+  /* Header */
   headerContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -229,38 +234,57 @@ const styles = StyleSheet.create({
     shadowRadius: 1,
   },
   back_btn: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
-  header_username: { fontSize: 18, fontWeight: "700", flex: 1, textAlign: "center" },
-  messageContainer: { padding: 15, flexGrow: 1, justifyContent: "flex-end" },
-  messageBubble: {
-    maxWidth: "80%",
+  header_username: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "700" },
+
+  /* Bubble */
+  row: { flexDirection: "row", marginVertical: 4 },
+  selfRight: { alignSelf: "flex-end" },
+  selfLeft: { alignSelf: "flex-start" },
+  bubble: {
+    maxWidth: "78%",
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    marginVertical: 4,
+    paddingHorizontal: 14,
+    borderRadius: 18,
   },
-  userBubble: { alignSelf: "flex-end", backgroundColor: "#007AFF", borderBottomRightRadius: 0 },
-  recruiterBubble: { alignSelf: "flex-start", backgroundColor: "#E5E5EA", borderBottomLeftRadius: 0 },
+  mine: { backgroundColor: "#007AFF", borderBottomRightRadius: 6 },
+  theirs: { backgroundColor: "#E6E6EB", borderBottomLeftRadius: 6 },
+  time: { fontSize: 11, color: "#94a3b8", marginHorizontal: 6 },
   messageText: { fontSize: 16, color: "#0f172a" },
+
+  /* List & input */
+  listContent: { paddingHorizontal: 15, flexGrow: 1, justifyContent: "flex-end" },
   inputContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
     padding: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
+    borderColor: "#E0E0E0",
   },
   textInput: {
     flex: 1,
     minHeight: 40,
     maxHeight: 100,
+    backgroundColor: "#F9F9F9",
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#E0E0E0",
-    borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
     fontSize: 16,
-    backgroundColor: "#F9F9F9",
     marginRight: 10,
   },
-  send_btn: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
 });

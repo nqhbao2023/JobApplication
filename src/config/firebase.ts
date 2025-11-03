@@ -1,5 +1,5 @@
 // src/config/firebase.ts
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps } from "firebase/app";
 import {
   initializeAuth,
   getAuth,
@@ -7,22 +7,28 @@ import {
   type Auth,
   // @ts-ignore
   getReactNativePersistence,
-} from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+} from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// ⚙️ Cấu hình Firebase — chú ý dòng storageBucket
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET, // <-- sẽ là job4s-app.firebasestorage.app
+
+  // ✅ Bucket thật của anh là .firebasestorage.app (không phải appspot.com)
+  storageBucket: "job4s-app.firebasestorage.app",
+
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
+// ✅ Khởi tạo app Firebase (tránh tạo lại nếu đã có)
 const app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);
 
+// ✅ Auth với persistence React Native (AsyncStorage)
 let auth: Auth;
 try {
   auth = initializeAuth(app, {
@@ -32,17 +38,16 @@ try {
   auth = getAuth(app);
 }
 
+// ✅ Firestore
 const db = getFirestore(app);
 
-// ✅ BUCKET .firebasestorage.app chuẩn cho Blaze
-const bucket = firebaseConfig.storageBucket?.includes('firebasestorage.app')
-  ? firebaseConfig.storageBucket
-  : `${firebaseConfig.projectId}.firebasestorage.app`;
+// ✅ Storage: ép trỏ đúng bucket domain .firebasestorage.app
+const storage = getStorage(app, "gs://job4s-app.firebasestorage.app");
 
-const storage = getStorage(app, `gs://${bucket}`);
+// ✅ Log kiểm tra bucket thực tế
+console.log("🔥 STORAGE USED =", storage.app.options.storageBucket);
 
-console.log('🔥 STORAGE USED =', `gs://${bucket}`);
-
+// ✅ Provider Google Auth
 const googleProvider = new GoogleAuthProvider();
 
 export { auth, db, storage, googleProvider };

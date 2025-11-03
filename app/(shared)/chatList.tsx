@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// app/(shared)/chatList.tsx
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,190 +8,205 @@ import {
   StyleSheet,
   ActivityIndicator,
   Image,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  orderBy,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import { db, auth } from "@/config/firebase";
 import { router } from "expo-router";
-import { onAuthStateChanged } from "firebase/auth";
 import { useRole } from "@/contexts/RoleContext";
 
+/* -------------------------------------------------------------------------- */
+/*                                  MAIN LIST                                 */
+/* -------------------------------------------------------------------------- */
 export default function ChatList() {
-  const [chats, setChats] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [myUid, setMyUid] = useState<string | null>(null);
-  const { role } = useRole(); // ✅ "candidate" hoặc "employer"
+  const { role: ctxRole } = useRole(); // ctxRole = "candidate" | "employer" | null
+  const viewerRole: "candidate" | "employer" =
+    ctxRole === "employer" ? "employer" : "candidate";
 
+  const [myUid, setMyUid] = useState<string>();
+  const [chats, setChats] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  /* 1️⃣ Lấy uid */
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (user) setMyUid(user.uid);
-      else setMyUid(null);
-    });
-    return unsubAuth;
+    return onAuthStateChanged(auth, (u) => setMyUid(u?.uid));
   }, []);
 
+  /* 2️⃣ Nghe realtime */
   useEffect(() => {
     if (!myUid) return;
-
     const q = query(
       collection(db, "chats"),
       where("participants", "array-contains", myUid),
       orderBy("updatedAt", "desc")
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const chatData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setChats(chatData);
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    const unsub = onSnapshot(q, (snap) =>
+      setChats(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+    return unsub;
   }, [myUid]);
 
-  const handleOpenChat = (chat: any) => {
-    const partnerId = chat.participants.find((id: string) => id !== myUid);
-    const partnerName =
-      chat.participantsInfo?.[partnerId]?.displayName || "Người dùng";
+  /* 3️⃣ Mở phòng chat */
+  const openChat = useCallback(
+    (chat: any) => {
+      const partnerId = chat.participants.find((id: string) => id !== myUid);
+      const partnerName =
+        chat.participantsInfo?.[partnerId]?.displayName || "Người dùng";
 
-    router.push({
-      pathname: "/(shared)/chat",
-      params: {
-        chatId: chat.id,
-        partnerId,
-        partnerName,
-        role: role === "candidate" ? "Candidate" : "Recruiter",
-      },
-    });
+      router.push({
+        pathname: "/(shared)/chat",
+        params: {
+          chatId: chat.id,
+          partnerId,
+          partnerName,
+          role: viewerRole === "candidate" ? "Candidate" : "Recruiter",
+        },
+      });
+    },
+    [myUid, viewerRole]
+  );
+
+  /* 4️⃣ Row component */
+  const renderItem = useCallback(
+    ({ item }: { item: any }) => (
+      <ChatRow
+        item={item}
+        myUid={myUid!}
+        viewerRole={viewerRole}
+        onPress={() => openChat(item)}
+      />
+    ),
+    [myUid, viewerRole, openChat]
+  );
+
+  /* 5️⃣ Pull refresh stub */
+  const onRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 600);
   };
 
-  if (loading) {
+  if (!myUid)
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#4A80F0" />
       </View>
     );
-  }
-
-  if (chats.length === 0) {
-    return (
-      <View style={styles.center}>
-        <Ionicons name="chatbubbles-outline" size={64} color="#aaa" />
-        <Text style={{ color: "#888", marginTop: 10 }}>
-          Chưa có cuộc trò chuyện nào
-        </Text>
-      </View>
-    );
-  }
 
   return (
-    <FlatList
-      data={chats}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContainer}
-      renderItem={({ item }) => {
-        const partnerId = item.participants.find((id: string) => id !== myUid);
-        const partnerName =
-          item.participantsInfo?.[partnerId]?.displayName || "Người dùng";
-        const lastMessage = item.lastMessage || "Chưa có tin nhắn";
-        const partnerRole = item.participantsInfo?.[partnerId]?.role || "Unknown";
-
-        // 🎨 Đổi màu và icon nhẹ tùy vai trò
-        const isCandidateView = role === "candidate";
-        const bubbleColor = isCandidateView ? "#4A80F0" : "#34C759";
-        const iconName = isCandidateView
-          ? "briefcase-outline"
-          : "person-outline";
-        const badgeText =
-          partnerRole === "Recruiter"
-            ? "Nhà tuyển dụng"
-            : partnerRole === "Candidate"
-            ? "Ứng viên"
-            : "";
-
-        return (
-          <TouchableOpacity
-            style={styles.chatItem}
-            onPress={() => handleOpenChat(item)}
-            activeOpacity={0.85}
-          >
-            {/* Avatar / Icon */}
-            {item.participantsInfo?.[partnerId]?.photoURL ? (
-              <Image
-                source={{ uri: item.participantsInfo[partnerId].photoURL }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={[styles.avatar, { backgroundColor: bubbleColor + "33" }]}>
-                <Ionicons name={iconName} size={26} color={bubbleColor} />
-              </View>
-            )}
-
-            {/* Main text */}
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={styles.nameRow}>
-                <Text style={styles.chatName} numberOfLines={1}>
-                  {partnerName}
-                </Text>
-
-                {/* Badge */}
-                {badgeText ? (
-                  <View
-                    style={[
-                      styles.badge,
-                      {
-                        backgroundColor:
-                          badgeText === "Nhà tuyển dụng" ? "#E0F2FE" : "#E8F5E9",
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.badgeText,
-                        {
-                          color:
-                            badgeText === "Nhà tuyển dụng" ? "#0284C7" : "#2E7D32",
-                        },
-                      ]}
-                    >
-                      {badgeText}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              <Text style={styles.chatLastMsg} numberOfLines={1}>
-                {lastMessage}
-              </Text>
-            </View>
-
-            <Ionicons name="chevron-forward" size={22} color="#aaa" />
-          </TouchableOpacity>
-        );
-      }}
-    />
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <FlatList
+        style={{ flex: 1 }}
+        data={chats}
+        keyExtractor={(it) => it.id}
+        renderItem={renderItem}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListEmptyComponent={
+          <View style={styles.center}>
+            <Ionicons name="chatbubbles-outline" size={64} color="#aaa" />
+            <Text style={{ color: "#888", marginTop: 10 }}>
+              Chưa có cuộc trò chuyện nào
+            </Text>
+          </View>
+        }
+        contentContainerStyle={[
+          styles.listContainer,
+          chats.length === 0 && { flex: 1 },
+        ]}
+      />
+    </SafeAreaView>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                CHAT ROW                                    */
+/* -------------------------------------------------------------------------- */
+type RowProps = {
+  item: any;
+  myUid: string;
+  viewerRole: "candidate" | "employer";
+  onPress: () => void;
+};
+
+const ChatRow = React.memo<RowProps>(({ item, myUid, viewerRole, onPress }) => {
+  const partnerId = item.participants.find((id: string) => id !== myUid);
+  const info = item.participantsInfo?.[partnerId] || {};
+  const name = info.displayName || "Người dùng";
+  const lastMsg = item.lastMessage || "Chưa có tin nhắn";
+  const partnerRole = info.role || "Unknown";
+
+  const isCandidate = viewerRole === "candidate";
+  const color = isCandidate ? "#4A80F0" : "#34C759";
+  const icon = isCandidate ? "briefcase-outline" : "person-outline";
+
+  const badge =
+    partnerRole === "Recruiter"
+      ? { text: "Nhà tuyển dụng", bg: "#E0F2FE", fc: "#0284C7" }
+      : partnerRole === "Candidate"
+      ? { text: "Ứng viên", bg: "#E8F5E9", fc: "#2E7D32" }
+      : null;
+
+  return (
+    <TouchableOpacity style={styles.chatItem} onPress={onPress} activeOpacity={0.85}>
+      {info.photoURL ? (
+        <Image source={{ uri: info.photoURL }} style={styles.avatar} />
+      ) : (
+        <View style={[styles.avatar, { backgroundColor: `${color}33` }]}>
+          <Ionicons name={icon} size={24} color={color} />
+        </View>
+      )}
+
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <View style={styles.nameRow}>
+          <Text style={styles.chatName} numberOfLines={1}>
+            {name}
+          </Text>
+          {badge && (
+            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+              <Text style={[styles.badgeText, { color: badge.fc }]}>{badge.text}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.chatLastMsg} numberOfLines={1}>
+          {lastMsg}
+        </Text>
+      </View>
+
+      <Ionicons name="chevron-forward" size={22} color="#A3A3A3" />
+    </TouchableOpacity>
+  );
+});
+
+/* -------------------------------------------------------------------------- */
+/*                                   STYLES                                   */
+/* -------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
-  listContainer: {
-    padding: 14,
-    backgroundColor: "#F8FAFC",
-  },
+  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+  listContainer: { padding: 14 },
+
   chatItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
     padding: 12,
     borderRadius: 14,
-    marginBottom: 10,
+    marginBottom: 12,
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 1 },
     shadowRadius: 3,
-    elevation: 2,
+    elevation: 1,
   },
   avatar: {
     width: 48,
@@ -199,36 +215,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+  nameRow: { flexDirection: "row", alignItems: "center" },
   chatName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
-    flexShrink: 1,
+    maxWidth: "78%",
   },
-  chatLastMsg: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  badge: {
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 6,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
+  chatLastMsg: { fontSize: 13, color: "#6B7280", marginTop: 2 },
+
+  badge: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 },
+  badgeText: { fontSize: 11, fontWeight: "600" },
+
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

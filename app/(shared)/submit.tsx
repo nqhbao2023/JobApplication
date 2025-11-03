@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react';
+// app/(shared)/submit.tsx
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
-import { db, storage } from '@/config/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
+import { db, storage, auth } from "@/config/firebase";
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+} from "firebase/storage";
 import {
   addDoc,
   collection,
@@ -21,195 +26,208 @@ import {
   where,
   getDocs,
   getDoc,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB
+const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
+const ALLOW_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 
-const guessMimeFromName = (name?: string) => {
-  if (!name) return 'application/octet-stream';
-  const lower = name.toLowerCase();
-  if (lower.endsWith('.pdf')) return 'application/pdf';
-  if (lower.endsWith('.doc')) return 'application/msword';
-  if (lower.endsWith('.docx'))
-    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  return 'application/octet-stream';
-};
-
-const Submit = () => {
+export default function Submit() {
   const { jobId, userId } = useLocalSearchParams<{ jobId: string; userId: string }>();
-  const [cvFile, setCvFile] = useState<any>(null);
-  const [uploading, setUploading] = useState(false);
+
+  const [cvFile, setCvFile] = useState<{
+    uri: string;
+    name: string;
+    type: string;
+  } | null>(null);
+  const [progress, setProgress] = useState<number>(0);
   const [employerId, setEmployerId] = useState<string | null>(null);
 
-  // 🧠 Lấy thông tin employer của job
+  /* ----------------------------- lấy ownerId ----------------------------- */
   useEffect(() => {
-    const getJobOwner = async () => {
+    (async () => {
       if (!jobId) return;
-      const jobSnap = await getDoc(doc(db, 'jobs', jobId));
-      if (jobSnap.exists()) {
-        const data = jobSnap.data();
-        setEmployerId(data.users || data.ownerId || null);
-      }
-    };
-    getJobOwner();
+      const job = await getDoc(doc(db, "jobs", jobId));
+      const owner = job.data()?.ownerId;
+      setEmployerId(owner ?? null);
+    })();
   }, [jobId]);
 
-  // 🧩 Chọn CV
-  const handleCvUpload = async () => {
+  /* ----------------------------- pick file ------------------------------- */
+  const handlePick = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ],
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ALLOW_TYPES,
         copyToCacheDirectory: true,
       });
+      if (res.canceled) return;
+      const f = res.assets?.[0];
+      if (!f) return;
 
-      if (result.canceled) return;
-      const asset = result.assets?.[0];
-      if (!asset) return;
-
-      if (asset.size && asset.size > MAX_SIZE) {
-        Alert.alert('File quá lớn', 'Vui lòng chọn file nhỏ hơn 25MB.');
-        return;
+      if (f.size && f.size > MAX_SIZE) {
+        return Alert.alert("File quá lớn", "Giới hạn 25 MB.");
+      }
+      if (!ALLOW_TYPES.includes(f.mimeType ?? "")) {
+        return Alert.alert("Sai định dạng", "Chỉ nhận PDF / DOC / DOCX.");
       }
 
-      setCvFile({
-        uri: asset.uri,
-        name: asset.name ?? 'cv.pdf',
-        type: asset.mimeType ?? guessMimeFromName(asset.name),
-      });
-
-      console.log('📄 File selected:', asset.uri);
-    } catch (error) {
-      console.error('❌ Error picking file:', error);
-      Alert.alert('Lỗi', 'Không thể chọn file. Vui lòng thử lại.');
+      setCvFile({ uri: f.uri, name: f.name!, type: f.mimeType! });
+    } catch (e) {
+      Alert.alert("Lỗi", "Không thể chọn file, thử lại.");
     }
   };
 
-  // ☁️ Upload CV lên Firebase Storage + lưu Firestore
-  const uploadToFirebase = async () => {
+  /* ----------------------------- upload file ----------------------------- */
+  const handleSubmit = async () => {
     if (!cvFile || !jobId || !userId) {
-      Alert.alert('Lỗi', 'Vui lòng chọn CV và đảm bảo thông tin hợp lệ.');
-      return;
+      return Alert.alert("Thiếu dữ liệu", "Hãy chọn CV trước.");
     }
 
     try {
-      setUploading(true);
+      /* 1. chuẩn bị upload */
       const blob = await (await fetch(cvFile.uri)).blob();
-      const contentType = cvFile.type ?? guessMimeFromName(cvFile.name);
-      const fileName = `${userId}_${Date.now()}_${cvFile.name}`;
-      const storageRef = ref(storage, `cvs/${fileName}`);
+      const fname = `${userId}_${Date.now()}_${cvFile.name}`;
+      const r = ref(storage, `cvs/${fname}`);
+      const task = uploadBytesResumable(r, blob, { contentType: cvFile.type });
 
-      await uploadBytes(storageRef, blob, { contentType });
-      const downloadUrl = await getDownloadURL(storageRef);
-      console.log('🔥 Uploaded URL:', downloadUrl);
+      /* 2. theo dõi % */
+      task.on("state_changed", (snap) => {
+        setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+      });
 
-      // 🔎 Kiểm tra xem đã apply chưa
-      const q = query(
-        collection(db, 'applied_jobs'),
-        where('userId', '==', userId),
-        where('jobId', '==', jobId)
+      await task; // wait finish
+      const url = await getDownloadURL(r);
+
+      /* 3. thông tin user + job để embed */
+      const [userSnap, jobSnap] = await Promise.all([
+        getDoc(doc(db, "users", userId)),
+        getDoc(doc(db, "jobs", jobId)),
+      ]);
+
+      const userInfo = {
+        name: userSnap.data()?.name ?? "",
+        email: userSnap.data()?.email ?? "",
+        photoURL: userSnap.data()?.photoURL ?? null,
+      };
+      const jobInfo = {
+        title: jobSnap.data()?.title ?? "",
+        company: jobSnap.data()?.company ?? "",
+        salary: jobSnap.data()?.salary ?? "",
+      };
+
+      /* 4. tạo / update applied_jobs */
+      const qExisting = query(
+        collection(db, "applied_jobs"),
+        where("userId", "==", userId),
+        where("jobId", "==", jobId)
       );
-      const snapshot = await getDocs(q);
+      const snap = await getDocs(qExisting);
 
-      if (!snapshot.empty) {
-        // 🔄 Cập nhật lại CV
-        const existing = snapshot.docs[0].ref;
-        await updateDoc(existing, {
-          cv_url: downloadUrl,
-          cv_uploaded: true,
-          updated_at: serverTimestamp(),
-        });
-        console.log('🌀 CV updated for existing application');
+      const payload = {
+        userId,
+        jobId,
+        employerId,
+        userInfo,
+        jobInfo,
+        cv_url: url,
+        cv_path: r.fullPath,
+        cv_uploaded: true,
+        status: "pending",
+        applied_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      };
+
+      if (snap.empty) {
+        await addDoc(collection(db, "applied_jobs"), payload);
       } else {
-        // ➕ Tạo mới application
-        await addDoc(collection(db, 'applied_jobs'), {
-          userId,
-          jobId,
-          employerId: employerId ?? null,
-          cv_url: downloadUrl,
-          cv_uploaded: true,
-          status: 'pending',
-          applied_at: serverTimestamp(),
-        });
-        console.log('✅ New application added');
+        await updateDoc(snap.docs[0].ref, payload);
       }
 
-      Alert.alert('🎉 Thành công', 'CV của bạn đã được tải lên!');
-router.replace({
-  pathname: '/(shared)/jobDescription',
-  params: { jobId, success: 'true' },
-});
-    } catch (error: any) {
-      console.error('❌ Upload failed:', error);
-      Alert.alert('Lỗi', error.message || 'Không thể upload CV');
+      Alert.alert("Thành công", "Đã nộp CV!");
+      router.replace({ pathname: "/(shared)/jobDescription", params: { jobId } });
+    } catch (e: any) {
+      Alert.alert("Lỗi", e.message ?? "Không thể upload");
     } finally {
-      setUploading(false);
+      setProgress(0);
     }
   };
 
+  /* --------------------------------- UI ---------------------------------- */
   return (
     <View style={styles.container}>
-      <View style={styles.topView}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+      <View style={styles.top}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Ionicons name="arrow-back" size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerText}>Hồ sơ & Portfolio</Text>
+        <Text style={styles.title}>Hồ sơ & Portfolio</Text>
       </View>
 
-      <View style={styles.sectionContainer}>
-        <Text style={styles.sectionTitle}>CV hoặc Resume</Text>
-        <Text style={styles.sectionSubtitle}>Tải lên hồ sơ cá nhân để ứng tuyển công việc</Text>
+      <View style={styles.body}>
+        <Text style={styles.label}>CV / Resume</Text>
+        <Text style={styles.sub}>Tải lên để ứng tuyển công việc</Text>
 
-        <TouchableOpacity style={styles.uploadButton} onPress={handleCvUpload}>
-          <Text style={styles.uploadButtonText}>
-            {cvFile ? cvFile.name : 'Tải file Doc/Docx/PDF'}
+        <TouchableOpacity style={styles.upload} onPress={handlePick}>
+          <Text style={styles.uploadTxt}>
+            {cvFile ? cvFile.name : "Chọn file PDF / DOCX"}
           </Text>
         </TouchableOpacity>
 
+        {progress > 0 && (
+          <Text style={{ marginBottom: 8 }}>Đang tải: {progress}%</Text>
+        )}
+
         <TouchableOpacity
-          style={[styles.applyButton, uploading && styles.disabledButton]}
-          onPress={uploadToFirebase}
-          disabled={uploading}
+          style={[styles.submit, !cvFile && { opacity: 0.5 }]}
+          disabled={!cvFile}
+          onPress={handleSubmit}
         >
-          <Text style={styles.applyButtonText}>
-            {uploading ? 'Đang tải lên...' : 'Nộp đơn'}
-          </Text>
+          <Text style={styles.submitTxt}>Nộp đơn</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-};
+}
 
-export default Submit;
-
+/* -------------------------------- Styles -------------------------------- */
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20, backgroundColor: '#fff' },
-  topView: { flexDirection: 'row', alignItems: 'center', marginTop: 40, marginBottom: 20 },
-  backButton: {
-    height: 40,
-    width: 40,
-    backgroundColor: 'white',
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
+  container: { flex: 1, backgroundColor: "#fff", paddingHorizontal: 20 },
+  top: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 40,
+    marginBottom: 20,
   },
-  headerText: { flex: 1, textAlign: 'center', fontSize: 20, fontWeight: 'bold', color: '#2F264F' },
-  sectionContainer: { marginBottom: 30 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
-  sectionSubtitle: { fontSize: 14, color: '#666', marginBottom: 10 },
-  uploadButton: {
+  back: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: { flex: 1, textAlign: "center", fontSize: 20, fontWeight: "700" },
+
+  body: { marginBottom: 30 },
+  label: { fontSize: 18, fontWeight: "700", marginBottom: 5 },
+  sub: { fontSize: 14, color: "#666", marginBottom: 10 },
+
+  upload: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderRadius: 10,
     padding: 15,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 15,
   },
-  uploadButtonText: { fontSize: 16, color: '#666' },
-  applyButton: { backgroundColor: '#28A745', borderRadius: 10, padding: 15, alignItems: 'center' },
-  applyButtonText: { fontSize: 18, color: 'white', fontWeight: 'bold' },
-  disabledButton: { opacity: 0.6 },
+  uploadTxt: { fontSize: 16, color: "#666" },
+
+  submit: {
+    backgroundColor: "#28A745",
+    borderRadius: 10,
+    padding: 15,
+    alignItems: "center",
+  },
+  submitTxt: { fontSize: 18, color: "#fff", fontWeight: "700" },
 });

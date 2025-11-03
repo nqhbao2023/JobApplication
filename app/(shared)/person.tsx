@@ -8,6 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { db, auth } from '../../src/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import AsyncStorage from "@react-native-async-storage/async-storage"; // 👈 thêm import này ở đầu file
+import * as ImagePicker from "expo-image-picker";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { updateProfile } from "firebase/auth";
+import { storage } from "@/config/firebase";  
+import { Pressable } from "react-native"; 
 
 const Person = () => {
   const [editField, setEditField] = useState<null | 'phone' | 'email' | 'password' | 'name'>(null);
@@ -100,21 +105,76 @@ const handleLogout = async () => {
     load_user_id();
     load_data_user();
   }, [userId]);
+const pickAndUploadAvatar = async () => {
+  console.log("⚡️ pick avatar pressed");
+  try {
+    /* xin quyền */
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Quyền bị từ chối", "Cấp quyền truy cập thư viện ảnh để tiếp tục");
+      return;
+    }
+
+    /* mở thư viện */
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.6,          // nén nhẹ
+    });
+    if (res.canceled) return;
+
+    const asset = res.assets![0];
+    const blob = await (await fetch(asset.uri)).blob();
+
+    /* upload lên Storage */
+    const uid = auth.currentUser!.uid;
+    const fileRef = ref(storage, `avatars/${uid}.jpg`);
+    await uploadBytes(fileRef, blob, { contentType: asset.mimeType || "image/jpeg" });
+
+    const url = await getDownloadURL(fileRef);
+
+    /* cập nhật profile & firestore */
+    await updateProfile(auth.currentUser!, { photoURL: url });
+    await updateDoc(doc(db, "users", uid), { photoURL: url, id_image: url });
+
+    setDataUser((prev: any) => ({ ...prev, photoURL: url, id_image: url }));
+    Alert.alert("✅ Thành công", "Ảnh đại diện đã được cập nhật!");
+  } catch (err: any) {
+    console.log("Avatar change err:", err);
+    Alert.alert("Lỗi", err.message || "Không thể cập nhật ảnh");
+  }
+};
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-        <View style={styles.avatarSection}>
-          <View>
-            <Image style={styles.avatar} source={{ uri: dataUser?.id_image ? dataUser.id_image : 'https://randomuser.me/api/portraits/men/1.jpg' }} />
-            <TouchableOpacity style={styles.editAvatar}>
-              <Feather name="camera" size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
+/**************  Avatar section  ****************/
+<View style={styles.avatarSection}>
+  {/* 👉 Dùng Pressable bao cả ảnh – tap cực dễ */}
+  <Pressable
+    onPress={pickAndUploadAvatar}
+    hitSlop={10}                          // mở rộng vùng nhấn
+    style={{ alignItems: "center" }}
+  >
+    <Image
+      style={styles.avatar}
+      source={{
+        uri:
+          dataUser?.photoURL ||
+          dataUser?.id_image ||
+          "https://placehold.co/120x120?text=Avatar",
+      }}
+    />
 
-          <Text style={styles.name}>{dataUser?.name || 'No name'}</Text>
-        </View>
+    {/* Icon camera chỉ để hiển thị, không bắt touch */}
+    <View pointerEvents="none" style={styles.editAvatar}>
+      <Feather name="camera" size={20} color="#fff" />
+    </View>
+  </Pressable>
+
+  <Text style={styles.name}>{dataUser?.name || "No name"}</Text>
+</View>
+
 
         <Text style={styles.editProfile}> Edit Profile</Text>
 
@@ -164,36 +224,29 @@ const handleLogout = async () => {
             <Text style={styles.buttonText}>Applied Jobs</Text>
             <Ionicons name="checkmark-done" size={18} color="#fff" />
           </TouchableOpacity>
+          {/* --- ACTION BUTTONS --- */}
           {dataUser?.isRecruiter && (
-            <View>
+            <>
+              {/* Thêm công việc */}
               <TouchableOpacity
-                style={
-                  styles.appliedJobsButton
-
-                }
+                style={styles.appliedJobsButton}
                 onPress={() => router.push('/(shared)/addJob' as any)}
               >
-                
-                <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
-                  Thêm công việc
-                </Text>
                 <Ionicons name="add-circle-outline" size={20} color="#fff" />
+                <Text style={styles.buttonText}>Thêm công việc</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={
-                  styles.appliedJobsButton
 
-                }
+              {/* Danh sách đơn */}
+              <TouchableOpacity
+                style={styles.appliedJobsButton}
                 onPress={() => router.push('/(shared)/appliedList' as any)}
               >
-               
-                <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 8 }}>
-                  Đơn ứng tuyển
-                </Text>
-                <Ionicons name='receipt-outline' size={20} color="#fff" />
+                <Ionicons name="receipt-outline" size={20} color="#fff" />
+                <Text style={styles.buttonText}>Đơn ứng tuyển</Text>
               </TouchableOpacity>
-            </View>
+            </>
           )}
+
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.buttonText}>Logout</Text>
             <Ionicons name="log-out-outline" size={18} color="#fff" />
@@ -308,23 +361,24 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 30,
   },
-  avatar: {
-    height: 120,
-    width: 120,
-    borderRadius: 60,
-    borderWidth: 3,
-    borderColor: '#4A90E2',
-  },
-  editAvatar: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#4A90E2',
-    borderRadius: 20,
-    padding: 6,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
+    avatar: {
+      height: 130,
+      width: 130,
+      borderRadius: 65,
+      borderWidth: 3,
+      borderColor: "#4A90E2",
+    },
+    editAvatar: {
+      position: "absolute",
+      bottom: 4,
+      right: 4,
+      backgroundColor: "#4A90E2",
+      borderRadius: 24,
+      padding: 8,             // tăng từ 6 → 8
+      borderWidth: 2,
+      borderColor: "#fff",
+      elevation: 4,           // đổ bóng Android
+    },
   name: {
     fontSize: 22,
     fontWeight: '700',
@@ -427,4 +481,5 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 10,
   },
+  
 });

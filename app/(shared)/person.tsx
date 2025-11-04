@@ -1,20 +1,40 @@
 import { updatePassword, updateEmail } from 'firebase/auth';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Alert, Modal, TextInput } from 'react-native'
+import { StyleSheet, Text, View, TouchableOpacity, Image, Alert, Modal, TextInput, ScrollView } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { RelativePathString, Stack } from 'expo-router'
 import { Feather, Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { db, auth } from '../../src/config/firebase';
+import { auth, db, storage } from "@/config/firebase";
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import AsyncStorage from "@react-native-async-storage/async-storage"; // 👈 thêm import này ở đầu file
 import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { updateProfile } from "firebase/auth";
-import { storage } from "@/config/firebase";  
 import { Pressable } from "react-native"; 
 
 const Person = () => {
+  /* ——— nút dùng chung ——— */
+const ActionBtn = ({
+  icon,
+  label,
+  onPress,
+  color = '#4A90E2',
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  color?: string;
+}) => (
+  <TouchableOpacity
+    style={[styles.actionBtn, { backgroundColor: color }]}
+    activeOpacity={0.8}
+    onPress={onPress}
+  >
+    <Ionicons name={icon} size={20} color="#fff" />
+    <Text style={styles.buttonText}>{label}</Text>
+  </TouchableOpacity>
+);
   const [editField, setEditField] = useState<null | 'phone' | 'email' | 'password' | 'name'>(null);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -22,7 +42,6 @@ const Person = () => {
   const [userName, setUserName] = useState('');
   const [dataUser, setDataUser] = useState<any>();
   const [userId, setUserId] = useState<string>('');
-
   const handleSave = async () => {
     try {
       const user = auth.currentUser;
@@ -93,9 +112,6 @@ const handleLogout = async () => {
     }
   };
 
-
-
-
   useEffect(() => {
     const user = auth.currentUser;
     if (user) setUserName(user.displayName || '');
@@ -108,31 +124,33 @@ const handleLogout = async () => {
 const pickAndUploadAvatar = async () => {
   console.log("⚡️ pick avatar pressed");
   try {
-    /* xin quyền */
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Quyền bị từ chối", "Cấp quyền truy cập thư viện ảnh để tiếp tục");
       return;
     }
 
-    /* mở thư viện */
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.6,          // nén nhẹ
-    });
+// Cách an toàn nhất hiện tại cho SDK 54
+// @ts-ignore: expo-image-picker type chưa có MediaType (SDK 55 mới có)
+const res = await ImagePicker.launchImageLibraryAsync({
+  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  quality: 0.7,
+  allowsEditing: true,
+  aspect: [1, 1],
+});
+
     if (res.canceled) return;
 
     const asset = res.assets![0];
     const blob = await (await fetch(asset.uri)).blob();
 
-    /* upload lên Storage */
     const uid = auth.currentUser!.uid;
-    const fileRef = ref(storage, `avatars/${uid}.jpg`);
+    // Đúng chuẩn: avatars/<uid>/avatar.jpg
+    const fileRef = ref(storage, `avatars/${uid}/avatar.jpg`);
     await uploadBytes(fileRef, blob, { contentType: asset.mimeType || "image/jpeg" });
 
     const url = await getDownloadURL(fileRef);
 
-    /* cập nhật profile & firestore */
     await updateProfile(auth.currentUser!, { photoURL: url });
     await updateDoc(doc(db, "users", uid), { photoURL: url, id_image: url });
 
@@ -148,47 +166,48 @@ const pickAndUploadAvatar = async () => {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container}>
-/**************  Avatar section  ****************/
-<View style={styles.avatarSection}>
-  {/* 👉 Dùng Pressable bao cả ảnh – tap cực dễ */}
-  <Pressable
-    onPress={pickAndUploadAvatar}
-    hitSlop={10}                          // mở rộng vùng nhấn
-    style={{ alignItems: "center" }}
+          <ScrollView
+    showsVerticalScrollIndicator={false}
+    contentContainerStyle={{ paddingBottom: 40 }} // đủ chỗ cho nút cuối
   >
-    <Image
-      style={styles.avatar}
-      source={{
-        uri:
-          dataUser?.photoURL ||
-          dataUser?.id_image ||
-          "https://placehold.co/120x120?text=Avatar",
-      }}
-    />
+      {/* Avatar section */}
+      <View style={styles.avatarSection}>
+       
+          <Pressable onPress={pickAndUploadAvatar} hitSlop={10} style={{ alignItems: 'center' }}>
+            <Image
+              style={styles.avatar}
+              source={{
+                uri:
+                  (dataUser?.photoURL ||
+                  dataUser?.id_image ||
+                  'https://placehold.co/120x120?text=Avatar') +
+                  `?v=${Date.now()}`,   // 👈 ép React-Native tải lại ảnh mới
+              }}
+            />
+            <View pointerEvents="none" style={styles.editAvatar}>
+              <Feather name="camera" size={20} color="#fff" />
+            </View>
+          </Pressable>
 
-    {/* Icon camera chỉ để hiển thị, không bắt touch */}
-    <View pointerEvents="none" style={styles.editAvatar}>
-      <Feather name="camera" size={20} color="#fff" />
-    </View>
-  </Pressable>
+        <Text style={styles.name}>
+          {dataUser?.name || "No name"}
+        </Text>
+      </View>
 
-  <Text style={styles.name}>{dataUser?.name || "No name"}</Text>
-</View>
+      <Text style={styles.editProfile}>Edit Profile</Text>
 
-
-        <Text style={styles.editProfile}> Edit Profile</Text>
-
-        <View style={styles.infoBox}>
-          <Text style={styles.label}> Name </Text>
-          <View style={styles.inputRow}>
-            <Text style={styles.input}>{userName}</Text>
-            <TouchableOpacity onPress={() => setEditField('name')}>
-              <Feather name="edit-2" size={16} color="#333" />
-            </TouchableOpacity>
-          </View>
+      {/* Info boxes */}
+      <View style={styles.infoBox}>
+        <Text style={styles.label}>Name</Text>
+        <View style={styles.inputRow}>
+          <Text style={styles.input}>{userName}</Text>
+          <TouchableOpacity onPress={() => setEditField('name')}>
+            <Feather name="edit-2" size={16} color="#333" />
+          </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={styles.infoBox}>
+      <View style={styles.infoBox}>
           <Text style={styles.label}> Phone number</Text>
           <View style={styles.inputRow}>
             <Text style={styles.input}>{phone}</Text>
@@ -218,136 +237,139 @@ const pickAndUploadAvatar = async () => {
           </View>
         </View>
 
-        <View style={styles.buttonContainer}>
+      {/* Button container */}
+<View style={styles.buttonContainer}>
+  {/* candidate only */}
+  {dataUser?.role === 'candidate' && (
+    <ActionBtn
+      icon="checkmark-done"
+      label="Applied Jobs"
+      onPress={() =>
+        router.push('/(shared)/appliedJob' as RelativePathString)
+      }
+    />
+  )}
 
-          <TouchableOpacity style={styles.appliedJobsButton} onPress={() => router.push('/(shared)/appliedJob' as any)}>
-            <Text style={styles.buttonText}>Applied Jobs</Text>
-            <Ionicons name="checkmark-done" size={18} color="#fff" />
-          </TouchableOpacity>
-          {/* --- ACTION BUTTONS --- */}
-          {dataUser?.isRecruiter && (
-            <>
-              {/* Thêm công việc */}
-              <TouchableOpacity
-                style={styles.appliedJobsButton}
-                onPress={() => router.push('/(shared)/addJob' as any)}
-              >
-                <Ionicons name="add-circle-outline" size={20} color="#fff" />
-                <Text style={styles.buttonText}>Thêm công việc</Text>
-              </TouchableOpacity>
+  {/* employer only */}
+  {dataUser?.role === 'employer' && (
+    <>
+      <ActionBtn
+        icon="add-circle-outline"
+        label="Thêm công việc"
+        onPress={() =>
+          router.push('/(employer)/addJob' as RelativePathString)
+        }
+      />
+      <ActionBtn
+        icon="receipt-outline"
+        label="Đơn ứng tuyển"
+        onPress={() =>
+          router.push('/(employer)/applications' as RelativePathString)
+        }
+      />
+    </>
+  )}
+  {/* always visible */}
+  <ActionBtn
+    icon="log-out-outline"
+    label="Logout"
+    color="#FF4F4F"
+    onPress={handleLogout}
+  />
+</View>
+  </ScrollView>
+</SafeAreaView>
+      {/* Modal */}
+      <Modal visible={!!editField} transparent animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editField === 'phone'
+                ? 'Edit Phone Number'
+                : editField === 'email'
+                  ? 'Edit Email'
+                  : editField === 'name'
+                    ? 'Edit Name'
+                    : 'Change Password'}
+            </Text>
+            {editField === 'name' && (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter your name"
+                value={userName}
+                onChangeText={setUserName}
+              />
+            )}
 
-              {/* Danh sách đơn */}
-              <TouchableOpacity
-                style={styles.appliedJobsButton}
-                onPress={() => router.push('/(shared)/appliedList' as any)}
-              >
-                <Ionicons name="receipt-outline" size={20} color="#fff" />
-                <Text style={styles.buttonText}>Đơn ứng tuyển</Text>
-              </TouchableOpacity>
-            </>
-          )}
+            {editField === 'phone' && (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter phone number"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+            )}
 
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.buttonText}>Logout</Text>
-            <Ionicons name="log-out-outline" size={18} color="#fff" />
-          </TouchableOpacity>
-
-        </View>
-
-        <Modal visible={!!editField} transparent animationType="slide">
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>
-                {editField === 'phone'
-                  ? 'Edit Phone Number'
-                  : editField === 'email'
-                    ? 'Edit Email'
-                    : editField === 'name'
-                      ? 'Edit Name'
-                      : 'Change Password'}
-              </Text>
-
-              {editField === 'name' && (
+            {editField === 'email' && (
+              <>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="Enter your name"
-                  value={userName}
-                  onChangeText={setUserName}
+                  placeholder="Enter new email"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
                 />
-              )}
-
-              {editField === 'phone' && (
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="Enter phone number"
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
+                  placeholder="Enter current password"
+                  secureTextEntry
+                  value={passwords.current}
+                  onChangeText={(text) => setPasswords({ ...passwords, current: text })}
                 />
-              )}
+              </>
+            )}
 
-              {editField === 'email' && (
-                <>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Enter new email"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                  />
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Enter current password"
-                    secureTextEntry
-                    value={passwords.current}
-                    onChangeText={(text) => setPasswords({ ...passwords, current: text })}
-                  />
-                </>
-              )}
+            {editField === 'password' && (
+              <>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Current password"
+                  secureTextEntry
+                  value={passwords.current}
+                  onChangeText={(text) => setPasswords({ ...passwords, current: text })}
+                />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="New password"
+                  secureTextEntry
+                  value={passwords.new}
+                  onChangeText={(text) => setPasswords({ ...passwords, new: text })}
+                />
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Confirm new password"
+                  secureTextEntry
+                  value={passwords.confirm}
+                  onChangeText={(text) => setPasswords({ ...passwords, confirm: text })}
+                />
+              </>
+            )}
 
-              {editField === 'password' && (
-                <>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Current password"
-                    secureTextEntry
-                    value={passwords.current}
-                    onChangeText={(text) => setPasswords({ ...passwords, current: text })}
-                  />
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="New password"
-                    secureTextEntry
-                    value={passwords.new}
-                    onChangeText={(text) => setPasswords({ ...passwords, new: text })}
-                  />
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Confirm new password"
-                    secureTextEntry
-                    value={passwords.confirm}
-                    onChangeText={(text) => setPasswords({ ...passwords, confirm: text })}
-                  />
-                </>
-              )}
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity onPress={() => setEditField(null)}>
-                  <Text style={{ color: 'red' }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleSave}>
-                  <Text style={{ color: 'blue' }}>Save</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity onPress={() => setEditField(null)}>
+                <Text style={{ color: 'red' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSave}>
+                <Text style={{ color: 'blue' }}>Save</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-
-      </SafeAreaView>
+        </View>
+      </Modal>
     </>
   );
 }
-
 export default Person;
 
 const styles = StyleSheet.create({
@@ -420,9 +442,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   buttonContainer: {
-    marginTop: 30,
-    gap: 15,
+    marginTop: 24,
   },
+  actionBtn: {          
+  flexDirection: 'row',
+  alignItems: 'center',
+  borderRadius: 10,
+  paddingVertical: 14,
+  justifyContent: 'center',
+  gap: 8,
+  marginBottom: 14,
+},
   appliedJobsButton: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,4 +1,12 @@
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { 
+  FadeInDown, 
+  useAnimatedStyle, 
+  useSharedValue, 
+  interpolate,
+  Extrapolate,
+  withTiming,
+  useAnimatedScrollHandler
+} from 'react-native-reanimated';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
@@ -15,6 +23,8 @@ import Search from '@/components/Search';
 import { router } from 'expo-router';
 import { collection, getDocs, getDoc, query, where, doc } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
 type Job = {
   $id: string;
@@ -22,7 +32,7 @@ type Job = {
   image?: string;
   created_at?: string;
   company?: string | { $id?: string; corp_name?: string; nation?: string };
-  jobCategories?: any; // string | string[] | { $id: string } | { $id: string }[]
+  jobCategories?: any;
 };
 
 type Company = {
@@ -40,20 +50,23 @@ type Category = {
   color?: string;
 };
 
-const PLACEHOLDER_JOB_IMG =
-  'https://via.placeholder.com/140x140.png?text=Job';
-const PLACEHOLDER_COMPANY_IMG =
-  'https://via.placeholder.com/140x140.png?text=Company';
+const PLACEHOLDER_JOB_IMG = 'https://via.placeholder.com/140x140.png?text=Job';
+const PLACEHOLDER_COMPANY_IMG = 'https://via.placeholder.com/140x140.png?text=Company';
+const HEADER_MAX_HEIGHT = 180;
+const HEADER_MIN_HEIGHT = 70;
+const SCROLL_THRESHOLD = 100;
 
 const CandidateHome = () => {
   const [userId, setUserId] = useState<string>('');
-
   const [dataJob, setDataJob] = useState<Job[]>([]);
   const [dataUser, setDataUser] = useState<any>();
   const [dataCategories, setDataCategories] = useState<Category[]>([]);
   const [dataCompany, setDataCompany] = useState<Company[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ✅ Animation values
+  const scrollY = useSharedValue(0);
 
   useEffect(() => { load_user_id(); }, []);
   useEffect(() => {
@@ -77,7 +90,7 @@ const CandidateHome = () => {
     ]).finally(() => setRefreshing(false));
   }, []);
 
-  // ===== LOADERS =====
+  // ===== LOADERS (GIỮ NGUYÊN LOGIC) =====
   const load_user_id = async () => {
     try {
       const user = auth.currentUser;
@@ -114,7 +127,6 @@ const CandidateHome = () => {
 
   const load_data_categories = async () => {
     try {
-      // ĐÚNG collection: job_categories
       const q = query(collection(db, 'job_categories'));
       const snap = await getDocs(q);
       const categories = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Category));
@@ -135,7 +147,7 @@ const CandidateHome = () => {
     } catch (e) { console.error('loadUnreadNotifications:', e); }
   };
 
-  // ===== HELPERS =====
+  // ===== HELPERS (GIỮ NGUYÊN LOGIC) =====
   const companyMap = useMemo(() => {
     const m: Record<string, Company> = {};
     for (const c of dataCompany) m[c.$id] = c;
@@ -165,16 +177,10 @@ const CandidateHome = () => {
     return dataJob.filter(job => {
       const jc = job.jobCategories;
       if (!jc) return false;
-
-      // string
       if (typeof jc === 'string') return jc === categoryId || jc === catName;
-
-      // array of strings
       if (Array.isArray(jc) && typeof jc[0] === 'string') {
         return (jc as string[]).some(x => x === categoryId || x === catName);
       }
-
-      // object or array of objects { $id }
       if (Array.isArray(jc)) {
         return jc.some((x: any) => x?.$id === categoryId);
       }
@@ -194,7 +200,54 @@ const CandidateHome = () => {
     return lum > 0.5 ? '#000000' : '#FFFFFF';
   };
 
-  // ===== SMALL UI PARTS =====
+  // ✅ Scroll handler
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  // ✅ Header animation styles
+  const headerAnimatedStyle = useAnimatedStyle(() => {
+    const height = interpolate(
+      scrollY.value,
+      [0, SCROLL_THRESHOLD],
+      [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      height: withTiming(height, { duration: 150 }),
+    };
+  });
+
+  const welcomeTextAnimatedStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [0, SCROLL_THRESHOLD / 2],
+      [1, 0],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      opacity: withTiming(opacity, { duration: 150 }),
+    };
+  });
+
+  const searchAnimatedStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(
+      scrollY.value,
+      [0, SCROLL_THRESHOLD],
+      [0, -10],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      transform: [{ translateY: withTiming(translateY, { duration: 150 }) }],
+    };
+  });
+
+  // ===== SMALL UI PARTS (GIỮ NGUYÊN) =====
   const SectionHeader = ({
     title,
     onPressShowAll,
@@ -283,14 +336,24 @@ const CandidateHome = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#4A80F0' }} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.headerContainer}>
+      {/* ✅ Animated Header */}
+      <Animated.View style={[styles.headerContainer, headerAnimatedStyle]}>
+        <LinearGradient
+          colors={['#4A80F0', '#357AE8']}
+          style={StyleSheet.absoluteFill}
+        />
+        
+        {/* Top Row */}
         <View style={styles.topView}>
-          <View style={styles.welcomeTextContainer}>
+          {/* Welcome Text (Thu nhỏ khi scroll) */}
+          <Animated.View style={[styles.welcomeTextContainer, welcomeTextAnimatedStyle]}>
             <Text style={styles.hello}>Welcome Back!</Text>
-            {!!dataUser?.displayName && <Text style={styles.hello2}>{dataUser.displayName}</Text>}
-          </View>
+            {!!dataUser?.displayName && (
+              <Text style={styles.hello2}>{dataUser.displayName}</Text>
+            )}
+          </Animated.View>
 
+          {/* Icons */}
           <View style={styles.headerIcons}>
             <TouchableOpacity
               onPress={() => {
@@ -299,7 +362,7 @@ const CandidateHome = () => {
               }}
             >
               <View style={styles.notificationIconContainer}>
-                <Ionicons name="notifications-outline" size={28} color="#FFFFFF" style={styles.icon} />
+                <Ionicons name="notifications-outline" size={26} color="#FFFFFF" />
                 {unreadCount > 0 && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{unreadCount}</Text>
@@ -316,23 +379,25 @@ const CandidateHome = () => {
                 }}
               />
             </TouchableOpacity>
-
           </View>
         </View>
 
-        <View style={styles.searchContainer}>
+        {/* Search Bar (Sticky) */}
+        <Animated.View style={[styles.searchContainer, searchAnimatedStyle]}>
           <Search />
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
 
-      {/* Content */}
-      <FlatList
+      {/* ✅ Content with Scroll Handler */}
+      <Animated.FlatList
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
         ListHeaderComponent={
           <View style={styles.contentWrapper}>
             {/* Companies */}
             <SectionHeader title="Companies" onPressShowAll={() => router.push('/companyList')} />
             <Animated.FlatList
-              entering={FadeInDown.springify().stiffness(90)}  // Animation xuất hiện
+              entering={FadeInDown.springify().stiffness(90)}
               horizontal
               data={dataCompany}
               keyExtractor={(i) => i.$id}
@@ -343,10 +408,9 @@ const CandidateHome = () => {
             />
 
             {/* Recommend Jobs */}
-            <SectionHeader title="Rec
-            ommend Jobs" onPressShowAll={() => router.push('/(shared)/jobList')} />
+            <SectionHeader title="Recommend Jobs" onPressShowAll={() => router.push('/(shared)/jobList')} />
             <Animated.FlatList
-              entering={FadeInDown.delay(100).springify()} // Animation
+              entering={FadeInDown.delay(100).springify()}
               horizontal
               data={jobsSorted.slice(0, 8)}
               keyExtractor={(i) => i.$id}
@@ -356,31 +420,31 @@ const CandidateHome = () => {
               ListEmptyComponent={<Text style={styles.emptyTxt}>No jobs</Text>}
             />
 
-              {/* Categories */}
-              <SectionHeader title="Categories" onPressShowAll={() => router.push('/categoriesList')} />
-              <Animated.FlatList
-                entering={FadeInDown.delay(200).springify()} // Animation mượt, có trễ nhẹ
-                horizontal
-                data={dataCategories}
-                keyExtractor={(i) => i.$id}
-                showsHorizontalScrollIndicator={false}
-                renderItem={({ item }) => <CategoryCard item={item} />}
-                contentContainerStyle={styles.horizontalList}
-                ListEmptyComponent={<Text style={styles.emptyTxt}>No categories</Text>}
-              />
+            {/* Categories */}
+            <SectionHeader title="Categories" onPressShowAll={() => router.push('/categoriesList')} />
+            <Animated.FlatList
+              entering={FadeInDown.delay(200).springify()}
+              horizontal
+              data={dataCategories}
+              keyExtractor={(i) => i.$id}
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => <CategoryCard item={item} />}
+              contentContainerStyle={styles.horizontalList}
+              ListEmptyComponent={<Text style={styles.emptyTxt}>No categories</Text>}
+            />
 
-              {/* Latest Jobs */}
-              <SectionHeader title="Latest Jobs" />
-              <Animated.FlatList
-                entering={FadeInDown.delay(300).springify()} // Animation cuối
-                horizontal
-                data={jobsSorted.slice(0, 8)}
-                keyExtractor={(i) => i.$id}
-                showsHorizontalScrollIndicator={false}
-                renderItem={({ item }) => <JobCard item={item} />}
-                contentContainerStyle={styles.horizontalList}
-                ListEmptyComponent={<Text style={styles.emptyTxt}>No jobs</Text>}
-              />
+            {/* Latest Jobs */}
+            <SectionHeader title="Latest Jobs" />
+            <Animated.FlatList
+              entering={FadeInDown.delay(300).springify()}
+              horizontal
+              data={jobsSorted.slice(0, 8)}
+              keyExtractor={(i) => i.$id}
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => <JobCard item={item} />}
+              contentContainerStyle={styles.horizontalList}
+              ListEmptyComponent={<Text style={styles.emptyTxt}>No jobs</Text>}
+            />
           </View>
         }
         data={[]}
@@ -401,127 +465,233 @@ const CandidateHome = () => {
 
 export default CandidateHome;
 
-const CARD_RADIUS = 18;
-
 const styles = StyleSheet.create({
-  // Header
-  headerContainer: { backgroundColor: '#4A80F0', paddingHorizontal: 24, paddingTop: 10, paddingBottom: 14 },
-  topView: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  welcomeTextContainer: { flex: 1 },
-  hello: { fontSize: 16, color: '#FFFFFF', opacity: 0.9 },
-  hello2: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginTop: 4 },
-  headerIcons: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { height: 42, width: 42, borderRadius: 21, marginLeft: 10, backgroundColor: '#e2e8f0' },
-  icon: { marginRight: 6 },
-  searchContainer: { width: '100%' },
+  // ✅ Animated Header
+  headerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  topView: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  welcomeTextContainer: {
+    flex: 1,
+  },
+  hello: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    opacity: 0.95,
+    fontWeight: '500',
+  },
+  hello2: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatar: {
+    height: 40,
+    width: 40,
+    borderRadius: 20,
+    backgroundColor: '#e2e8f0',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  searchContainer: {
+    width: '100%',
+    marginTop: 4,
+  },
 
   // Badge
-  notificationIconContainer: { position: 'relative', padding: 6 },
-  badge: {
-    position: 'absolute', top: 2, right: 2,
-    backgroundColor: '#FF3B30', borderRadius: 10, minWidth: 18, height: 18,
-    justifyContent: 'center', alignItems: 'center',
+  notificationIconContainer: {
+    position: 'relative',
+    padding: 4,
   },
-  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#4A80F0',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
 
   // Main content
-listContent: {
-  backgroundColor: '#F9F9FB',
-  borderTopLeftRadius: 22,
-  borderTopRightRadius: 22,
-  paddingTop: 10,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: -2 },
-  shadowOpacity: 0.05,
-  shadowRadius: 3,
-  elevation: 2,
-},
-
-  contentWrapper: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 30, gap: 8 },
+  listContent: {
+    backgroundColor: '#F9F9FB',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 10,
+    marginTop: -10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  contentWrapper: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+    gap: 10,
+  },
 
   // Section header
-  cardsHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 6 },
-  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#1e293b' },
-  showAllBtn: { fontSize: 14, color: '#4A80F0', fontWeight: '500' },
-
+  cardsHeaderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+    letterSpacing: 0.2,
+  },
+  showAllBtn: {
+    fontSize: 14,
+    color: '#4A80F0',
+    fontWeight: '600',
+  },
 
   // Company card
-companyCard: {
-  width: 160,
-  height: 160,
-  borderRadius: 18,
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginRight: 14,
-  borderWidth: 1,
-  borderColor: '#e5e7eb',
-  backgroundColor: '#fff',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.06,
-  shadowRadius: 3,
-  elevation: 2,
-},
-
-  companyImage: {
-    height: 68, width: 68, borderRadius: 16,
-    borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#fff', marginBottom: 10,
+  companyCard: {
+    width: 150,
+    height: 150,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  companyTitle: { fontSize: 16, fontWeight: '700' },
-  companySub: { fontSize: 13, opacity: 0.9 },
+  companyImage: {
+    height: 64,
+    width: 64,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: '#fff',
+    marginBottom: 10,
+  },
+  companyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  companySub: {
+    fontSize: 12,
+    opacity: 0.85,
+    marginTop: 2,
+  },
 
   // Job card
-jobCard: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  width: 280,
-  height: 120,
-  padding: 14,
-  borderRadius: 18,
-  backgroundColor: '#fff',
-  marginRight: 14,
-  borderWidth: 1,
-  borderColor: '#e5e7eb',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.06,
-  shadowRadius: 3,
-  elevation: 2,
-},
-
-  jobImage: {
-    height: 68, width: 68, borderRadius: 16,
-    borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff',
+  jobCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 280,
+    height: 110,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    marginRight: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  jobTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  jobSub: { color: '#64748b', marginTop: 2 },
+  jobImage: {
+    height: 64,
+    width: 64,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: '#f8fafc',
+  },
+  jobTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  jobSub: {
+    color: '#64748b',
+    marginTop: 4,
+    fontSize: 13,
+  },
 
   // Category card
-categoryCard: {
-  width: 130,
-  height: 140,
-  marginRight: 14,
-  borderRadius: 18,
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderWidth: 1,
-  borderColor: '#e5e7eb',
-  backgroundColor: '#fff',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.06,
-  shadowRadius: 3,
-  elevation: 2,
-},
-
-  categoryTitle: { fontWeight: '800', fontSize: 14 },
-  categorySub: { fontSize: 12, opacity: 0.9 },
-
-  // empty
-  emptyTxt: { color: '#94a3b8', marginLeft: 4 },
+  categoryCard: {
+    width: 130,
+    height: 130,
+    marginRight: 14,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  categoryTitle: {
+    fontWeight: '700',
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  categorySub: {
+    fontSize: 12,
+    opacity: 0.85,
+    marginTop: 2,
+  },
+  // Empty
+  emptyTxt: {
+    color: '#94a3b8',
+    marginLeft: 4,
+    fontSize: 14,
+  },
   horizontalList: {
-  paddingLeft: 4,
-  paddingRight: 16,
-  gap: 14,
-},
+    paddingLeft: 4,
+    paddingRight: 16,
+    gap: 14,
+  },
 });

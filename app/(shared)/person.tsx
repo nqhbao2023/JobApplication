@@ -371,7 +371,6 @@ const res = await ImagePicker.launchImageLibraryAsync({
   );
 }
 export default Person;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,

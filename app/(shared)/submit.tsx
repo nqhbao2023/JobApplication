@@ -1,11 +1,14 @@
 // app/(shared)/submit.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import * as Haptics from "expo-haptics";
 import {
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   Alert,
+  ActivityIndicator,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -15,6 +18,7 @@ import {
   ref,
   uploadBytesResumable,
   getDownloadURL,
+  deleteObject,
 } from "firebase/storage";
 import {
   addDoc,
@@ -38,25 +42,25 @@ const ALLOW_TYPES = [
 export default function Submit() {
   const { jobId, userId } = useLocalSearchParams<{ jobId: string; userId: string }>();
 
-  const [cvFile, setCvFile] = useState<{
-    uri: string;
-    name: string;
-    type: string;
-  } | null>(null);
+  const [cvFile, setCvFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [progress, setProgress] = useState<number>(0);
   const [employerId, setEmployerId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  /* ----------------------------- lấy ownerId ----------------------------- */
+  // 🔐 refs kiểm soát an toàn
+  const uploadRef = useRef<any>(null);
+  const isSubmittingRef = useRef(false);
+
+  /* ------------------ Lấy ownerId ------------------ */
   useEffect(() => {
     (async () => {
       if (!jobId) return;
       const job = await getDoc(doc(db, "jobs", jobId));
-      const owner = job.data()?.ownerId;
-      setEmployerId(owner ?? null);
+      setEmployerId(job.data()?.ownerId ?? null);
     })();
   }, [jobId]);
 
-  /* ----------------------------- pick file ------------------------------- */
+  /* ------------------ Chọn file ------------------ */
   const handlePick = async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
@@ -64,44 +68,66 @@ export default function Submit() {
         copyToCacheDirectory: true,
       });
       if (res.canceled) return;
+
       const f = res.assets?.[0];
       if (!f) return;
 
       if (f.size && f.size > MAX_SIZE) {
-        return Alert.alert("File quá lớn", "Giới hạn 25 MB.");
+        return Alert.alert("❌ File quá lớn", "Giới hạn tối đa là 25 MB.");
       }
       if (!ALLOW_TYPES.includes(f.mimeType ?? "")) {
-        return Alert.alert("Sai định dạng", "Chỉ nhận PDF / DOC / DOCX.");
+        return Alert.alert("⚠️ Định dạng không hợp lệ", "Chỉ chấp nhận PDF, DOC hoặc DOCX.");
       }
 
       setCvFile({ uri: f.uri, name: f.name!, type: f.mimeType! });
-    } catch (e) {
-      Alert.alert("Lỗi", "Không thể chọn file, thử lại.");
+    } catch {
+      Alert.alert("Lỗi", "Không thể chọn file, vui lòng thử lại.");
     }
   };
 
-  /* ----------------------------- upload file ----------------------------- */
+  /* ------------------ Nộp file ------------------ */
   const handleSubmit = async () => {
-    if (!cvFile || !jobId || !userId) {
-      return Alert.alert("Thiếu dữ liệu", "Hãy chọn CV trước.");
+    if (isSubmittingRef.current) return; // ⚡ chặn double tap tức thì
+    isSubmittingRef.current = true;
+
+    if (!auth.currentUser) {
+      isSubmittingRef.current = false;
+      return Alert.alert("Chưa đăng nhập", "Vui lòng đăng nhập để nộp CV.");
+    }
+
+    if (!userId || !jobId) {
+      isSubmittingRef.current = false;
+      return Alert.alert("Thiếu dữ liệu", "Không xác định được công việc hoặc người dùng.");
+    }
+
+    if (!cvFile) {
+      isSubmittingRef.current = false;
+      return Alert.alert("Chưa chọn file", "Hãy chọn CV trước khi nộp.");
     }
 
     try {
-      /* 1. chuẩn bị upload */
+      setIsUploading(true);
+      setProgress(1);
+      console.log("🚀 Bắt đầu upload CV...");
+
       const blob = await (await fetch(cvFile.uri)).blob();
       const fname = `${userId}_${Date.now()}_${cvFile.name}`;
-      const r = ref(storage, `cvs/${fname}`);
-      const task = uploadBytesResumable(r, blob, { contentType: cvFile.type });
+      const fileRef = ref(storage, `cvs/${userId}/${fname}`);
 
-      /* 2. theo dõi % */
-      task.on("state_changed", (snap) => {
-        setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+      const uploadTask = uploadBytesResumable(fileRef, blob, {
+        contentType: cvFile.type,
+      });
+      uploadRef.current = uploadTask;
+
+      uploadTask.on("state_changed", (snap) => {
+        const percent = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        setProgress(percent);
       });
 
-      await task; // wait finish
-      const url = await getDownloadURL(r);
+      await uploadTask;
+      const url = await getDownloadURL(fileRef);
 
-      /* 3. thông tin user + job để embed */
+      // 🔎 Lấy dữ liệu user + job
       const [userSnap, jobSnap] = await Promise.all([
         getDoc(doc(db, "users", userId)),
         getDoc(doc(db, "jobs", jobId)),
@@ -114,11 +140,11 @@ export default function Submit() {
       };
       const jobInfo = {
         title: jobSnap.data()?.title ?? "",
-        company: jobSnap.data()?.company ?? "",
+        company: jobSnap.data()?.company?.corp_name ?? "",
         salary: jobSnap.data()?.salary ?? "",
       };
 
-      /* 4. tạo / update applied_jobs */
+      // 🧾 Ghi Firestore
       const qExisting = query(
         collection(db, "applied_jobs"),
         where("userId", "==", userId),
@@ -133,7 +159,7 @@ export default function Submit() {
         userInfo,
         jobInfo,
         cv_url: url,
-        cv_path: r.fullPath,
+        cv_path: fileRef.fullPath,
         cv_uploaded: true,
         status: "pending",
         applied_at: serverTimestamp(),
@@ -145,17 +171,47 @@ export default function Submit() {
       } else {
         await updateDoc(snap.docs[0].ref, payload);
       }
+Alert.alert("🎉 Thành công", "Bạn đã nộp CV thành công!");
+await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+await new Promise(r => setTimeout(r, 400));
 
-      Alert.alert("Thành công", "Đã nộp CV!");
-      router.replace({ pathname: "/(shared)/jobDescription", params: { jobId } });
+router.dismiss(1); // 👈 Đóng màn hình JobDescription cũ phía dưới Submit
+router.replace({
+  pathname: "/(shared)/jobDescription",
+  params: { jobId, success: "true" },
+});
+
+
     } catch (e: any) {
-      Alert.alert("Lỗi", e.message ?? "Không thể upload");
+      console.error("❌ Upload CV error:", e);
+      Alert.alert("Lỗi", e.message ?? "Không thể upload CV, thử lại sau.");
+
+      // 🧹 Nếu lỗi giữa chừng, xóa file lỗi
+      if (uploadRef.current?.snapshot?.ref) {
+        try {
+          await deleteObject(uploadRef.current.snapshot.ref);
+          console.log("🧹 Đã xóa file lỗi khi upload.");
+        } catch {}
+      }
     } finally {
+      setIsUploading(false);
       setProgress(0);
+      uploadRef.current = null;
+      isSubmittingRef.current = false; // ✅ mở khóa
     }
   };
 
-  /* --------------------------------- UI ---------------------------------- */
+  /* ------------------ Cleanup ------------------ */
+  useEffect(() => {
+    return () => {
+      if (uploadRef.current) {
+        console.log("🛑 Cancel upload vì rời màn hình");
+        uploadRef.current.cancel();
+      }
+    };
+  }, []);
+
+  /* ------------------ UI ------------------ */
   return (
     <View style={styles.container}>
       <View style={styles.top}>
@@ -169,29 +225,35 @@ export default function Submit() {
         <Text style={styles.label}>CV / Resume</Text>
         <Text style={styles.sub}>Tải lên để ứng tuyển công việc</Text>
 
-        <TouchableOpacity style={styles.upload} onPress={handlePick}>
+        <TouchableOpacity style={styles.upload} onPress={handlePick} disabled={isUploading}>
           <Text style={styles.uploadTxt}>
             {cvFile ? cvFile.name : "Chọn file PDF / DOCX"}
           </Text>
         </TouchableOpacity>
 
-        {progress > 0 && (
-          <Text style={{ marginBottom: 8 }}>Đang tải: {progress}%</Text>
+        {isUploading && (
+          <View style={styles.progressBox}>
+            <ActivityIndicator color="#28A745" />
+            <Text style={styles.progressTxt}>Đang tải: {progress}%</Text>
+          </View>
         )}
 
         <TouchableOpacity
-          style={[styles.submit, !cvFile && { opacity: 0.5 }]}
-          disabled={!cvFile}
+          style={[styles.submit, (!cvFile || isUploading) && { opacity: 0.6 }]}
+          disabled={!cvFile || isUploading}
           onPress={handleSubmit}
+          activeOpacity={0.7}
         >
-          <Text style={styles.submitTxt}>Nộp đơn</Text>
+          <Text style={styles.submitTxt}>
+            {isUploading ? "Đang nộp..." : "Nộp đơn"}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-/* -------------------------------- Styles -------------------------------- */
+/* ------------------ Styles ------------------ */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", paddingHorizontal: 20 },
   top: {
@@ -208,7 +270,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: { flex: 1, textAlign: "center", fontSize: 20, fontWeight: "700" },
-
   body: { marginBottom: 30 },
   label: { fontSize: 18, fontWeight: "700", marginBottom: 5 },
   sub: { fontSize: 14, color: "#666", marginBottom: 10 },
@@ -222,6 +283,13 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   uploadTxt: { fontSize: 16, color: "#666" },
+  progressBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  progressTxt: { color: "#28A745", fontSize: 14, fontWeight: "600" },
 
   submit: {
     backgroundColor: "#28A745",

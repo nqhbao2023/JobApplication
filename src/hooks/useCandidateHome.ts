@@ -1,16 +1,10 @@
-// src/hooks/useCandidateHome.ts
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-} from 'firebase/firestore';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSharedValue } from 'react-native-reanimated';
+import { collection, getDocs, getDoc, query, where, doc, limit } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
+import * as Haptics from 'expo-haptics';
 
-/* ------------ TYPES ------------ */
+// ===== TYPES =====
 export type Job = {
   $id: string;
   title?: string;
@@ -18,6 +12,9 @@ export type Job = {
   created_at?: string;
   company?: string | { $id?: string; corp_name?: string; nation?: string };
   jobCategories?: any;
+  type?: string;
+  salary?: string;
+  location?: string;
 };
 
 export type Company = {
@@ -35,147 +32,242 @@ export type Category = {
   color?: string;
 };
 
-/* ------------ HOOK ------------ */
+export type QuickFilter = 'all' | 'intern' | 'part-time' | 'remote' | 'nearby';
+
+export type CategoryWithCount = Category & { jobCount: number };
+
+// ===== HOOK =====
 export const useCandidateHome = () => {
-  /* ---------- state ---------- */
-  const [userId, setUserId] = useState('');
+  // ===== STATE =====
+  const [userId, setUserId] = useState<string>('');
   const [dataJob, setDataJob] = useState<Job[]>([]);
   const [dataUser, setDataUser] = useState<any>();
   const [dataCategories, setDataCategories] = useState<Category[]>([]);
   const [dataCompany, setDataCompany] = useState<Company[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedFilter, setSelectedFilter] = useState<QuickFilter>('all');
 
-  /* ---------- loaders ---------- */
-  const load_user_id = async () => {
-    const user = auth.currentUser;
-    if (user) setUserId(user.uid);
-  };
+  // ===== ANIMATION VALUES =====
+  const scrollY = useSharedValue(0);
+  const hasTriggeredHaptic = useSharedValue(false);
 
-  const load_data_user = async () => {
+  // ===== DATA LOADERS =====
+  const load_user_id = useCallback(async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) setUserId(user.uid);
+    } catch (e) {
+      console.error('load_user_id error:', e);
+    }
+  }, []);
+
+  const load_data_user = useCallback(async () => {
     if (!userId) return;
-    const snap = await getDoc(doc(db, 'users', userId));
-    if (snap.exists()) setDataUser({ $id: snap.id, ...snap.data() });
-  };
+    try {
+      const docRef = doc(db, 'users', userId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        setDataUser({ $id: snap.id, ...snap.data() });
+      }
+    } catch (e) {
+      console.error('load_data_user error:', e);
+    }
+  }, [userId]);
 
-  const load_data_job = async () => {
-    const snap = await getDocs(query(collection(db, 'jobs')));
-    setDataJob(snap.docs.map((d) => ({ $id: d.id, ...d.data() } as Job)));
-  };
+  const load_data_job = useCallback(async () => {
+    try {
+      const q = query(collection(db, 'jobs'), limit(30));
+      const snap = await getDocs(q);
+      let jobs = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Job));
+      // Sort by created_at descending
+      jobs.sort((a, b) => (Date.parse(b.created_at || '0') || 0) - (Date.parse(a.created_at || '0') || 0));
+      setDataJob(jobs);
+    } catch (e) {
+      console.error('load_data_job error:', e);
+    }
+  }, []);
 
-  const load_data_company = async () => {
-    const snap = await getDocs(query(collection(db, 'companies')));
-    setDataCompany(snap.docs.map((d) => ({ $id: d.id, ...d.data() } as Company)));
-  };
+  const load_data_company = useCallback(async () => {
+    try {
+      const q = query(collection(db, 'companies'), limit(12));
+      const snap = await getDocs(q);
+      const companies = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Company));
+      setDataCompany(companies);
+    } catch (e) {
+      console.error('load_data_company error:', e);
+    }
+  }, []);
 
-  const load_data_categories = async () => {
-    const snap = await getDocs(query(collection(db, 'job_categories')));
-    setDataCategories(
-      snap.docs.map((d) => ({ $id: d.id, ...d.data() } as Category)),
-    );
-  };
+  const load_data_categories = useCallback(async () => {
+    try {
+      const q = query(collection(db, 'job_categories'), limit(12));
+      const snap = await getDocs(q);
+      const categories = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Category));
+      setDataCategories(categories);
+    } catch (e) {
+      console.error('load_data_categories error:', e);
+    }
+  }, []);
 
-  const loadUnreadNotifications = async () => {
+  const loadUnreadNotifications = useCallback(async () => {
     if (!userId) return;
-    const snap = await getDocs(
-      query(
+    try {
+      const q = query(
         collection(db, 'notifications'),
         where('userId', '==', userId),
         where('read', '==', false),
-      ),
-    );
-    setUnreadCount(snap.size);
-  };
+      );
+      const snap = await getDocs(q);
+      setUnreadCount(snap.size);
+    } catch (e) {
+      console.error('loadUnreadNotifications error:', e);
+    }
+  }, [userId]);
 
-  /* ---------- effects ---------- */
+  const loadAllData = useCallback(async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        load_data_user(),
+        load_data_job(),
+        load_data_company(),
+        load_data_categories(),
+        loadUnreadNotifications(),
+      ]);
+    } catch (e) {
+      console.error('loadAllData error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [load_data_user, load_data_job, load_data_company, load_data_categories, loadUnreadNotifications]);
+
+  // ===== EFFECTS =====
   useEffect(() => {
     load_user_id();
-  }, []);
+  }, [load_user_id]);
 
   useEffect(() => {
     if (!userId) return;
-    load_data_user();
-    load_data_job();
-    load_data_company();
-    load_data_categories();
-    loadUnreadNotifications();
-  }, [userId]);
+    loadAllData();
+  }, [userId, loadAllData]);
 
-  /* ---------- refresh ---------- */
-  const onRefresh = useCallback(() => {
+  // ===== HANDLERS =====
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    Promise.all([
-      load_user_id(),
-      load_data_user(),
-      load_data_job(),
-      load_data_company(),
-      load_data_categories(),
-      loadUnreadNotifications(),
-    ]).finally(() => setRefreshing(false));
-  }, [userId]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await loadAllData();
+    setRefreshing(false);
+  }, [loadAllData]);
 
-  /* ---------- helpers ---------- */
+  const handleFilterChange = useCallback((filter: QuickFilter) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedFilter(filter);
+  }, []);
+
+  const clearNotifications = useCallback(() => {
+    setUnreadCount(0);
+  }, []);
+
+  // ===== COMPUTED DATA =====
   const companyMap = useMemo(() => {
-    const map: Record<string, Company> = {};
-    dataCompany.forEach((c) => (map[c.$id] = c));
-    return map;
+    const m: Record<string, Company> = {};
+    for (const c of dataCompany) {
+      m[c.$id] = c;
+    }
+    return m;
   }, [dataCompany]);
 
-  const getJobCompany = (job: Job) => {
+  const getJobCompany = useCallback((job: Job): Company | undefined => {
     if (!job.company) return undefined;
     if (typeof job.company === 'string') return companyMap[job.company];
-    if (typeof job.company === 'object' && job.company.$id)
+    if (typeof job.company === 'object' && job.company.$id) {
       return companyMap[job.company.$id];
+    }
     return undefined;
-  };
+  }, [companyMap]);
 
-  const jobsSorted = useMemo(() => {
-    return [...dataJob].sort(
-      (a, b) =>
-        (Date.parse(b.created_at || '0') || 0) -
-        (Date.parse(a.created_at || '0') || 0),
-    );
-  }, [dataJob]);
+  const categoryJobCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    dataCategories.forEach(cat => {
+      counts[cat.$id] = dataJob.filter(job => {
+        const jc = job.jobCategories;
+        if (!jc) return false;
+        if (typeof jc === 'string') return jc === cat.$id || jc === cat.category_name;
+        if (Array.isArray(jc) && typeof jc[0] === 'string') {
+          return (jc as string[]).some(x => x === cat.$id || x === cat.category_name);
+        }
+        if (Array.isArray(jc)) {
+          return jc.some((x: any) => x?.$id === cat.$id);
+        }
+        if (typeof jc === 'object' && jc.$id) {
+          return jc.$id === cat.$id;
+        }
+        return false;
+      }).length;
+    });
+    return counts;
+  }, [dataJob, dataCategories]);
 
-  const getJobCountByCategory = (categoryId: string) => {
-    const catName = dataCategories.find((c) => c.$id === categoryId)
-      ?.category_name;
-    return dataJob.filter((job) => {
-      const jc = job.jobCategories;
-      if (!jc) return false;
-      if (typeof jc === 'string') return jc === categoryId || jc === catName;
-      if (Array.isArray(jc) && typeof jc[0] === 'string')
-        return jc.some((x) => x === categoryId || x === catName);
-      if (Array.isArray(jc)) return jc.some((x: any) => x?.$id === categoryId);
-      if (typeof jc === 'object' && jc.$id) return jc.$id === categoryId;
-      return false;
-    }).length;
-  };
+  const filteredJobs = useMemo(() => {
+    if (selectedFilter === 'all') return dataJob;
+    return dataJob.filter(job => {
+      const type = job.type?.toLowerCase() || '';
+      if (selectedFilter === 'intern') {
+        return type.includes('intern') || type.includes('thực tập');
+      }
+      if (selectedFilter === 'part-time') {
+        return type.includes('part') || type.includes('bán thời gian');
+      }
+      if (selectedFilter === 'remote') {
+        return type.includes('remote') || type.includes('từ xa');
+      }
+      // nearby filter not implemented yet
+      return true;
+    });
+  }, [dataJob, selectedFilter]);
 
-  const getContrastColor = (hex = '') => {
-    if (!hex.startsWith('#') || hex.length < 7) return '#1e293b';
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return lum > 0.5 ? '#000' : '#FFF';
-  };
+  const forYouJobs = useMemo(() => filteredJobs.slice(0, 5), [filteredJobs]);
 
-  /* ---------- return ---------- */
+  const latestJobs = useMemo(() => dataJob.slice(0, 6), [dataJob]);
+
+  const trendingCategories = useMemo((): CategoryWithCount[] => {
+    return dataCategories
+      .map(cat => ({ ...cat, jobCount: categoryJobCounts[cat.$id] || 0 }))
+      .sort((a, b) => b.jobCount - a.jobCount)
+      .slice(0, 6);
+  }, [dataCategories, categoryJobCounts]);
+
+  // ===== RETURN =====
   return {
-    /* data */
-    dataUser,
-    dataCompany,
-    dataCategories,
+    // State
+    userId,
     dataJob,
+    dataUser,
+    dataCategories,
+    dataCompany,
     unreadCount,
     refreshing,
-    /* helpers */
-    jobsSorted,
+    loading,
+    selectedFilter,
+    
+    // Animation values
+    scrollY,
+    hasTriggeredHaptic,
+    
+    // Computed data
+    companyMap,
+    categoryJobCounts,
+    filteredJobs,
+    forYouJobs,
+    latestJobs,
+    trendingCategories,
+    
+    // Methods
     getJobCompany,
-    getJobCountByCategory,
-    getContrastColor,
-    /* actions */
     onRefresh,
+    handleFilterChange,
+    clearNotifications,
   };
 };

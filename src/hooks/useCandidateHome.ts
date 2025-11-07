@@ -47,6 +47,7 @@ export const useCandidateHome = () => {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<QuickFilter>('all');
 
   // ===== ANIMATION VALUES =====
@@ -128,6 +129,7 @@ export const useCandidateHome = () => {
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       await Promise.all([
         load_data_user(),
@@ -137,6 +139,8 @@ export const useCandidateHome = () => {
         loadUnreadNotifications(),
       ]);
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Có lỗi xảy ra khi tải dữ liệu';
+      setError(errorMessage);
       console.error('loadAllData error:', e);
     } finally {
       setLoading(false);
@@ -167,6 +171,10 @@ export const useCandidateHome = () => {
   }, []);
 
   const clearNotifications = useCallback(() => {
+    setUnreadCount(0);
+  }, []);
+
+  const resetUnreadCount = useCallback(() => {
     setUnreadCount(0);
   }, []);
 
@@ -240,6 +248,14 @@ export const useCandidateHome = () => {
   }, [dataCategories, categoryJobCounts]);
 
   // ===== RETURN =====
+  const data = useMemo(() => ({
+    user: dataUser,
+    jobs: dataJob,
+    companies: dataCompany,
+    categories: dataCategories,
+    unreadCount,
+  }), [dataUser, dataJob, dataCompany, dataCategories, unreadCount]);
+
   return {
     // State
     userId,
@@ -250,7 +266,9 @@ export const useCandidateHome = () => {
     unreadCount,
     refreshing,
     loading,
+    error,
     selectedFilter,
+    data,
     
     // Animation values
     scrollY,
@@ -269,5 +287,6 @@ export const useCandidateHome = () => {
     onRefresh,
     handleFilterChange,
     clearNotifications,
+    resetUnreadCount,
   };
 };

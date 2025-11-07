@@ -39,6 +39,17 @@ const AdminDashboard = () => {
       color: "#f59e0b",
     },
     {
+      title: "Job_Types",
+      icon: "layers-outline",
+      route: "/(admin)/job-types",
+      color: "#8b5cf6",
+    },
+    { 
+      title: "Categories", 
+      icon: "apps-outline", 
+      route: "/(admin)/job-categories", 
+      color: "#ec4899" },
+    {
       title: "Analytics",
       icon: "bar-chart-outline",
       route: "/(admin)/analytics",

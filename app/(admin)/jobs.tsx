@@ -11,7 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "@/config/firebase";
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
-
+import { useRouter } from "expo-router";
 type Job = {
   $id: string;
   title?: string;
@@ -22,6 +22,7 @@ type Job = {
 };
 
 const JobsScreen = () => {
+  const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -73,9 +74,16 @@ const JobsScreen = () => {
           </View>
         </View>
       </View>
-      <TouchableOpacity onPress={() => handleDelete(item.$id)}>
-        <Ionicons name="trash-outline" size={24} color="#ef4444" />
-      </TouchableOpacity>
+      <View style={styles.actions}>
+        <TouchableOpacity 
+          onPress={() => router.push({ pathname: "/(admin)/job-detail", params: { jobId: item.$id } } as any)}
+        >
+          <Ionicons name="pencil" size={22} color="#3b82f6" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDelete(item.$id)}>
+          <Ionicons name="trash-outline" size={22} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -143,5 +151,6 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 12, fontWeight: "600", color: "#fff" },
   emptyText: { textAlign: "center", marginTop: 40, fontSize: 15, color: "#64748b" },
+  actions: { flexDirection: "row", gap: 16, alignItems: "center" },
 });
 

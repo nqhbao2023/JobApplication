@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "@/config/firebase";
 import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { router } from "expo-router";
 
 type User = {
   $id: string;
@@ -76,9 +77,16 @@ const UsersScreen = () => {
           )}
         </View>
       </View>
-      <TouchableOpacity onPress={() => handleDelete(item.$id)}>
-        <Ionicons name="trash-outline" size={24} color="#ef4444" />
-      </TouchableOpacity>
+      <View style={styles.actions}>
+        <TouchableOpacity 
+          onPress={() => router.push({ pathname: "/(admin)/user-detail", params: { userId: item.$id } } as any)}
+        >
+          <Ionicons name="pencil" size={22} color="#3b82f6" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDelete(item.$id)}>
+          <Ionicons name="trash-outline" size={22} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -92,6 +100,14 @@ const UsersScreen = () => {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.createBtn}
+        onPress={() => router.push("/(admin)/user-create")}
+      >
+        <Ionicons name="person-add" size={20} color="#fff" />
+        <Text style={styles.createBtnText}>Tạo User Mới</Text>
+      </TouchableOpacity>
+  
       <FlatList
         data={users}
         renderItem={renderUser}
@@ -145,4 +161,21 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 12, fontWeight: "600", color: "#fff" },
   emptyText: { textAlign: "center", marginTop: 40, fontSize: 15, color: "#64748b" },
+  actions: { flexDirection: "row", gap: 16, alignItems: "center" },
+  createBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#10b981",
+    margin: 16,
+    marginBottom: 0,
+    padding: 14,
+    borderRadius: 12,
+  },
+  createBtnText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
+  },
 });

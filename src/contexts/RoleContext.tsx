@@ -87,15 +87,7 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
     return unsub;
   }, []);
 
-  // ✅ Auto redirect khi role thay đổi
-  useEffect(() => {
-    if (!loading) {
-        if (!role) router.replace("/(auth)/login" as any);
-        else if (role === "candidate") router.replace("/(candidate)" as any);
-        else if (role === "employer") router.replace("/(employer)" as any);
-        else if (role === "admin") router.replace("/admin" as any);
-            }
-  }, [role, loading]);
+  // ✅ Auto redirect removed - handled by app/_layout.tsx to avoid conflicts
 
   const value = useMemo(() => ({ role, loading, refresh: loadRole }), [role, loading]);
 

@@ -11,10 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { auth, db } from '@/config/firebase';
+import { auth } from '@/config/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getCurrentUserRole } from '@/utils/roles';
 
 const isValidEmail = (v: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -79,43 +79,44 @@ export default function LoginScreen() {
 
     try {
       // ✅ Đăng nhập qua Firebase Auth
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-      const user = userCredential.user;
+      await signInWithEmailAndPassword(auth, email.trim(), password);
 
-      // 🔍 Kiểm tra user trong Firestore
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDocSnap = await getDoc(userDocRef);
+      // ✅ Lấy role từ utility function (đã xử lý isAdmin)
+      const role = await getCurrentUserRole();
+      console.log('🔥 User role after login:', role);
 
-      if (!userDocSnap.exists()) {
+      if (!role) {
         throw new Error('deleted-user');
       }
 
-      // ✅ Lấy thông tin user
-      const userData = userDocSnap.data();
-      console.log('🔥 User data from Firestore:', userData);
+      // ✅ Lưu role để cache
+      await AsyncStorage.setItem("userRole", role);
 
-      // ✅ Điều hướng theo role duy nhất
-
-        // ✅ Lưu role lại để nhớ
-        await AsyncStorage.setItem("userRole", userData.role);
-
-        // ✅ Điều hướng đúng role
-        if (userData.role === "employer") {
-          router.replace("/(employer)");
-        } else if (userData.role === "candidate") {
-          router.replace("/(candidate)");
-        } else {
-          router.replace("/(auth)/login");
-        }
+      // ✅ Điều hướng theo role (bao gồm admin)
+      if (role === "admin") {
+        console.log("🔐 Redirecting to admin dashboard");
+        router.replace("/(admin)" as any);
+      } else if (role === "employer") {
+        console.log("💼 Redirecting to employer dashboard");
+        router.replace("/(employer)");
+      } else if (role === "candidate") {
+        console.log("👤 Redirecting to candidate dashboard");
+        router.replace("/(candidate)");
+      } else {
+        throw new Error('invalid-role');
+      }
     } catch (error: any) {
       if (error.message === 'deleted-user') {
         setErrorMsg(
           'Tài khoản của bạn đã bị xóa khỏi hệ thống. Vui lòng liên hệ quản trị viên.'
         );
+        await auth.signOut();
+        setLoading(false);
+        return;
+      }
+
+      if (error.message === 'invalid-role') {
+        setErrorMsg('Tài khoản của bạn chưa được phân quyền. Vui lòng liên hệ quản trị viên.');
         await auth.signOut();
         setLoading(false);
         return;

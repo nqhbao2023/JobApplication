@@ -2,10 +2,10 @@ import React, { useEffect, useState, useRef } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Slot, router, useSegments } from "expo-router";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth, db } from "@/config/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { auth } from "@/config/firebase";
 import { SavedJobsProvider } from "@/contexts/saveJobsContext";
 import { RoleProvider } from "@/contexts/RoleContext";
+import { getCurrentUserRole } from "@/utils/roles";
 
 export default function RootLayout() {
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -17,40 +17,49 @@ export default function RootLayout() {
     listenerAttached.current = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("👀 Firebase auth state:", user ? user.email : "No user");
+      console.log("👀 Auth state:", user ? user.email : "No user");
 
       const group = segments?.[0];
       const inAuth = group === "(auth)";
       const inCandidate = group === "(candidate)";
       const inEmployer = group === "(employer)";
+      const inAdmin = group === "(admin)";
 
       if (user) {
-        const snap = await getDoc(doc(db, "users", user.uid));
+        try {
+          const role = await getCurrentUserRole();
+          console.log("🔥 User role from utils:", role, "Current segment:", group);
 
-        if (snap.exists()) {
-          const data = snap.data();
-          console.log("🔥 User data:", data);
-
-          // ✅ Route theo role, nhưng chỉ khi đang ở nhóm (auth)
           if (inAuth) {
-            if (data.role === "candidate") {
-              router.replace("/(candidate)" as any);
-            } else if (data.role === "employer") {
-              router.replace("/(employer)" as any);
+            if (role === "admin") {
+              console.log("🔐 Routing to admin from auth screen");
+              router.replace("/(admin)" as any);
+            } else if (role === "candidate") {
+              console.log("👤 Routing to candidate");
+              router.replace("/(candidate)");
+            } else if (role === "employer") {
+              console.log("💼 Routing to employer");
+              router.replace("/(employer)");
             } else {
+              console.log("❌ Invalid role, signing out");
               await signOut(auth);
               router.replace("/(auth)/login");
             }
+          } else if (inAdmin && role !== "admin") {
+            console.log("❌ Not admin, redirecting from admin route");
+            if (role === "candidate") router.replace("/(candidate)");
+            else if (role === "employer") router.replace("/(employer)");
+            else router.replace("/(auth)/login");
           }
-        } else {
-          console.log("⚠️ Không có doc → signOut");
-          await signOut(auth);
-          router.replace("/(auth)/login");
+        } catch (error) {
+          console.error("❌ Error:", error);
+          if (inAdmin || inCandidate || inEmployer) {
+            await signOut(auth);
+            router.replace("/(auth)/login");
+          }
         }
       } else {
-        // ❌ Không có user mà lại đang trong nhóm role → về login
-        if (inCandidate || inEmployer) {
-          console.log("🔒 No user → chuyển login");
+        if (inCandidate || inEmployer || inAdmin) {
           router.replace("/(auth)/login");
         }
       }
@@ -58,19 +67,12 @@ export default function RootLayout() {
       setCheckingAuth(false);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, [segments]);
 
   if (checkingAuth) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#fff",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
+      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#F97459" />
       </View>
     );

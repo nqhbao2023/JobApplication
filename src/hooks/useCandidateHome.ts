@@ -3,6 +3,7 @@ import { useSharedValue } from 'react-native-reanimated';
 import { collection, getDocs, getDoc, query, where, doc, limit } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
 import * as Haptics from 'expo-haptics';
+import { handleFirestoreError } from '@/utils/firebaseErrorHandler';
 
 // ===== TYPES =====
 export type Job = {
@@ -72,8 +73,8 @@ export const useCandidateHome = () => {
       if (snap.exists()) {
         setDataUser({ $id: snap.id, ...snap.data() });
       }
-    } catch (e) {
-      console.error('load_data_user error:', e);
+    } catch (e: any) {
+      handleFirestoreError(e, 'load_data_user');
     }
   }, [userId]);
 
@@ -85,8 +86,8 @@ export const useCandidateHome = () => {
       // Sort by created_at descending
       jobs.sort((a, b) => (Date.parse(b.created_at || '0') || 0) - (Date.parse(a.created_at || '0') || 0));
       setDataJob(jobs);
-    } catch (e) {
-      console.error('load_data_job error:', e);
+    } catch (e: any) {
+      handleFirestoreError(e, 'load_data_job');
     }
   }, []);
 
@@ -96,8 +97,8 @@ export const useCandidateHome = () => {
       const snap = await getDocs(q);
       const companies = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Company));
       setDataCompany(companies);
-    } catch (e) {
-      console.error('load_data_company error:', e);
+    } catch (e: any) {
+      handleFirestoreError(e, 'load_data_company');
     }
   }, []);
 
@@ -107,8 +108,8 @@ export const useCandidateHome = () => {
       const snap = await getDocs(q);
       const categories = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Category));
       setDataCategories(categories);
-    } catch (e) {
-      console.error('load_data_categories error:', e);
+    } catch (e: any) {
+      handleFirestoreError(e, 'load_data_categories');
     }
   }, []);
 
@@ -122,8 +123,8 @@ export const useCandidateHome = () => {
       );
       const snap = await getDocs(q);
       setUnreadCount(snap.size);
-    } catch (e) {
-      console.error('loadUnreadNotifications error:', e);
+    } catch (e: any) {
+      handleFirestoreError(e, 'loadUnreadNotifications');
     }
   }, [userId]);
 

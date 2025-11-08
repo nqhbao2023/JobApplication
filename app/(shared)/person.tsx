@@ -106,8 +106,10 @@ const handleLogout = async () => {
           setUserName(result.name || '');
           setPhone(result.phone || '');
         }
-      } catch (error) {
-        console.log(error);
+      } catch (error: any) {
+        if (error?.code !== 'unavailable' && !error?.message?.includes('offline')) {
+          console.error('load_data_user error:', error);
+        }
       }
     }
   };

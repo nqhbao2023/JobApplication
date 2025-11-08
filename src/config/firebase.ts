@@ -8,7 +8,7 @@ import {
   // @ts-ignore
   getReactNativePersistence,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore, memoryLocalCache } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -38,8 +38,15 @@ try {
   auth = getAuth(app);
 }
 
-// ✅ Firestore
-const db = getFirestore(app);
+// ✅ Firestore với memory cache cho React Native (không dùng IndexedDB)
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: memoryLocalCache()
+  });
+} catch {
+  db = getFirestore(app);
+}
 
 // ✅ Storage: ép trỏ đúng bucket domain .firebasestorage.app
 const storage = getStorage(app, "gs://job4s-app.firebasestorage.app");

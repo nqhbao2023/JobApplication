@@ -7,6 +7,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from "firebase/auth";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppRoleOrNull } from '@/types';
+import { isOfflineError } from '@/utils/firebaseErrorHandler';
 
 type RoleContextType = {
   role: AppRoleOrNull;
@@ -35,38 +36,48 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       // ✅ B1: đọc cache trước
-      if (!role) {
-        const cached = await AsyncStorage.getItem('userRole');
-        if (cached) setRole(cached as AppRoleOrNull);
-      }
-
-      // ✅ B2: fetch Firestore
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      if (!snap.exists()) {
-        setRole(null);
-        await AsyncStorage.removeItem('userRole');
-        return;
-      }
-
-      let r = (snap.data()?.role as string) || null;
-      if (r === 'student') {
-        await updateDoc(doc(db, 'users', user.uid), { role: 'candidate' });
-        r = 'candidate';
-      }
-
-      if (r && ['candidate', 'employer', 'admin'].includes(r.toLowerCase())) {
-        const normalized = r.toLowerCase() as AppRoleOrNull;
-        setRole(normalized);
-        await AsyncStorage.setItem('userRole', normalized ?? '');
-
-      } else {
-        setRole(null);
-        await AsyncStorage.removeItem('userRole');
-      }
-    } catch (e) {
-      console.warn('⚠️ loadRole error:', e);
       const cached = await AsyncStorage.getItem('userRole');
-      if (cached) setRole(cached as AppRoleOrNull);
+      if (cached && !role) {
+        setRole(cached as AppRoleOrNull);
+      }
+
+      // ✅ B2: fetch Firestore với getDocFromCache trước
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (!snap.exists()) {
+          setRole(null);
+          await AsyncStorage.removeItem('userRole');
+          return;
+        }
+
+        let r = (snap.data()?.role as string) || null;
+        if (r === 'student') {
+          await updateDoc(doc(db, 'users', user.uid), { role: 'candidate' });
+          r = 'candidate';
+        }
+
+        if (r && ['candidate', 'employer', 'admin'].includes(r.toLowerCase())) {
+          const normalized = r.toLowerCase() as AppRoleOrNull;
+          setRole(normalized);
+          await AsyncStorage.setItem('userRole', normalized ?? '');
+        } else {
+          setRole(null);
+          await AsyncStorage.removeItem('userRole');
+        }
+      } catch (firestoreError: any) {
+        if (isOfflineError(firestoreError)) {
+          if (cached) {
+            setRole(cached as AppRoleOrNull);
+          }
+        } else {
+          throw firestoreError;
+        }
+      }
+    } catch (e: any) {
+      const cached = await AsyncStorage.getItem('userRole');
+      if (cached) {
+        setRole(cached as AppRoleOrNull);
+      }
     } finally {
       setLoading(false);
     }

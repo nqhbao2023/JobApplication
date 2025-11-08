@@ -6,12 +6,10 @@ import { auth, db } from '@/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from "firebase/auth";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from "expo-router";
-
-export type AppRole = 'candidate' | 'employer' | 'admin' | null;
+import { AppRoleOrNull } from '@/types';
 
 type RoleContextType = {
-  role: AppRole;
+  role: AppRoleOrNull;
   loading: boolean;
   refresh: () => Promise<void>;
 };
@@ -23,7 +21,7 @@ const RoleContext = createContext<RoleContextType>({
 });
 
 export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
-  const [role, setRole] = useState<AppRole>(null);
+  const [role, setRole] = useState<AppRoleOrNull>(null);
   const [loading, setLoading] = useState(true);
 
   const loadRole = async () => {
@@ -39,7 +37,7 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
       // ✅ B1: đọc cache trước
       if (!role) {
         const cached = await AsyncStorage.getItem('userRole');
-        if (cached) setRole(cached as AppRole);
+        if (cached) setRole(cached as AppRoleOrNull);
       }
 
       // ✅ B2: fetch Firestore
@@ -57,7 +55,7 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       if (r && ['candidate', 'employer', 'admin'].includes(r.toLowerCase())) {
-        const normalized = r.toLowerCase() as AppRole;
+        const normalized = r.toLowerCase() as AppRoleOrNull;
         setRole(normalized);
         await AsyncStorage.setItem('userRole', normalized ?? '');
 
@@ -68,7 +66,7 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (e) {
       console.warn('⚠️ loadRole error:', e);
       const cached = await AsyncStorage.getItem('userRole');
-      if (cached) setRole(cached as AppRole);
+      if (cached) setRole(cached as AppRoleOrNull);
     } finally {
       setLoading(false);
     }

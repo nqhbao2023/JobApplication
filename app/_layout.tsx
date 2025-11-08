@@ -5,6 +5,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "@/config/firebase";
 import { SavedJobsProvider } from "@/contexts/saveJobsContext";
 import { RoleProvider } from "@/contexts/RoleContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { getCurrentUserRole } from "@/utils/roles";
 
 export default function RootLayout() {
@@ -81,7 +82,9 @@ export default function RootLayout() {
   return (
     <SavedJobsProvider>
       <RoleProvider>
-        <Slot />
+        <AuthProvider>
+          <Slot />
+        </AuthProvider>
       </RoleProvider>
     </SavedJobsProvider>
   );

@@ -1,23 +1,22 @@
 // src/utils/roles.ts
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/config/firebase";
-
-export type AppRole = "candidate" | "employer" | "admin";
+import { AppRole, AppRoleOrNull } from "@/types";
 
 // Map các role cũ về role chuẩn
-export function normalizeRole(raw?: string | null): AppRole | null {
+export function normalizeRole(raw?: string | null): AppRoleOrNull {
   if (!raw) return null;
   if (raw === "student") return "candidate";
   if (["candidate", "employer", "admin"].includes(raw)) return raw as AppRole;
   return null;
 }
 
-export const isCandidate = (r?: AppRole | null) => r === "candidate";
-export const isEmployer  = (r?: AppRole | null) => r === "employer";
-export const isAdmin     = (r?: AppRole | null) => r === "admin";
+export const isCandidate = (r?: AppRoleOrNull) => r === "candidate";
+export const isEmployer  = (r?: AppRoleOrNull) => r === "employer";
+export const isAdmin     = (r?: AppRoleOrNull) => r === "admin";
 
 // Lấy role hiện tại từ Firestore + tự động normalize
-export async function getCurrentUserRole(): Promise<AppRole | null> {
+export async function getCurrentUserRole(): Promise<AppRoleOrNull> {
   const user = auth.currentUser;
   if (!user) return null;
   const ref = doc(db, "users", user.uid);

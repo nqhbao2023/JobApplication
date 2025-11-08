@@ -1,443 +1,212 @@
-import { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { auth, db } from '@/config/firebase';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-
-const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-const isValidPhone = (v: string) => /^[0-9]{9,11}$/.test(v.trim()); // 9–11 số
-
-const mapAuthError = (code?: string) => {
-  switch (code) {
-    case 'auth/email-already-in-use':
-      return 'Email đã được sử dụng. Vui lòng dùng email khác.';
-    case 'auth/invalid-email':
-      return 'Địa chỉ email không hợp lệ.';
-    case 'auth/weak-password':
-      return 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
-    case 'auth/network-request-failed':
-      return 'Mất kết nối mạng. Vui lòng kiểm tra Internet và thử lại.';
-    case 'auth/operation-not-allowed':
-      return 'Phương thức đăng ký đang bị tắt. Vui lòng liên hệ hỗ trợ.';
-    default:
-      return 'Đăng ký thất bại. Vui lòng thử lại.';
-  }
-};
+import React, { useState, useMemo } from 'react';
+import { View, Text, KeyboardAvoidingView, Platform, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { Button } from '@/components/base/Button';
+import { AuthInput } from '@/components/auth/AuthInput';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import { RoleSelector } from '@/components/auth/RoleSelector';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAuthValidation } from '@/hooks/auth/useAuthValidation';
+import { AppRole } from '@/types';
 
 export default function RegisterScreen() {
-  const router = useRouter();
-
-  // form states
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [secure, setSecure] = useState(true);
-  const [secure2, setSecure2] = useState(true);
-  const [isRecruiter, setIsRecruiter] = useState(false);
+  const [role, setRole] = useState<Exclude<AppRole, 'admin'>>('candidate');
 
-  // ui states
-  const [loading, setLoading] = useState(false);
-  const [emailErr, setEmailErr] = useState('');
-  const [nameErr, setNameErr] = useState('');
-  const [phoneErr, setPhoneErr] = useState('');
-  const [passErr, setPassErr] = useState('');
-  const [confirmErr, setConfirmErr] = useState('');
-  const [formErr, setFormErr] = useState('');
+  const { signUp, loading: authLoading, error: authError, clearError } = useAuth();
+  const { errors, clearError: clearFieldError, validateRegisterForm, getPasswordStrength } = useAuthValidation();
 
-  const passStrength = useMemo(() => {
-    if (!password) return '';
-    if (password.length < 6) return 'Yếu';
-    if (password.length < 10) return 'Khá';
-    return 'Mạnh';
-  }, [password]);
-
-  const validate = () => {
-    let ok = true;
-    setFormErr('');
-    setEmailErr('');
-    setNameErr('');
-    setPhoneErr('');
-    setPassErr('');
-    setConfirmErr('');
-
-    if (!name.trim()) {
-      setNameErr('Vui lòng nhập họ và tên.');
-      ok = false;
-    }
-    if (!phone.trim()) {
-      setPhoneErr('Vui lòng nhập số điện thoại.');
-      ok = false;
-    } else if (!isValidPhone(phone)) {
-      setPhoneErr('Số điện thoại không hợp lệ (9–11 số).');
-      ok = false;
-    }
-    if (!email.trim()) {
-      setEmailErr('Vui lòng nhập email.');
-      ok = false;
-    } else if (!isValidEmail(email)) {
-      setEmailErr('Email không đúng định dạng (ví dụ: name@gmail.com).');
-      ok = false;
-    }
-    if (!password) {
-      setPassErr('Vui lòng nhập mật khẩu.');
-      ok = false;
-    } else if (password.length < 6) {
-      setPassErr('Mật khẩu tối thiểu 6 ký tự.');
-      ok = false;
-    }
-    if (!confirmPassword) {
-      setConfirmErr('Vui lòng xác nhận mật khẩu.');
-      ok = false;
-    } else if (confirmPassword !== password) {
-      setConfirmErr('Mật khẩu xác nhận không khớp.');
-      ok = false;
-    }
-    return ok;
-  };
-
-  const writeUserDocWithTimeout = async (uid: string, payload: any) => {
-    const writeUserDoc = setDoc(doc(db, 'users', uid), payload);
-    const timeout = new Promise<void>((_, reject) =>
-      setTimeout(() => reject(new Error('timeout')), 15000)
-    );
-    await Promise.race([writeUserDoc, timeout]);
-  };
+  const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
 
   const handleRegister = async () => {
-    if (!validate()) return;
-
-    setLoading(true);
-    setFormErr('');
+    if (!validateRegisterForm(name, phone, email, password, confirmPassword)) return;
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-      const user = userCredential.user;
-
-      // ✅ Cập nhật displayName vào Auth profile
-      await updateProfile(user, { displayName: name.trim() });
-
-      // ✅ Dữ liệu lưu Firestore
-      const payload = {
-        uid: user.uid,
-        email: user.email,
-        name: name.trim(),
-        phone: phone.trim(),
-        role: isRecruiter ? 'employer' : 'candidate',
-        skills: [],
-        savedJobIds: [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      await writeUserDocWithTimeout(user.uid, payload);
-
-      setLoading(false);
-      Alert.alert('🎉 Thành công', 'Tạo tài khoản thành công!');
-      router.replace('/(auth)/login');
-    } catch (err: any) {
-      console.log('Register error:', err?.code || err?.message || err);
-      setLoading(false);
-
-      if (err?.message === 'timeout') {
-        setFormErr('Ghi dữ liệu quá lâu (timeout 15s). Kiểm tra mạng và thử lại.');
-        return;
-      }
-      if (err?.code === 'permission-denied') {
-        setFormErr('Không có quyền ghi dữ liệu. Vui lòng liên hệ hỗ trợ.');
-        return;
-      }
-      setFormErr(mapAuthError(err?.code));
+      await signUp(name, phone, email, password, role);
+      Alert.alert('🎉 Thành công', 'Tạo tài khoản thành công!', [
+        { text: 'OK', onPress: () => router.replace('/(auth)/login') },
+      ]);
+    } catch (err) {
+      // Error handled by AuthContext
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Tạo tài khoản ✨</Text>
-        <Text style={styles.subtitle}>
-          Tham gia cộng đồng và mở khóa hàng ngàn cơ hội việc làm
-        </Text>
-      </View>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        keyboardShouldPersistTaps="handled" 
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeIn.duration(600)} style={styles.header}>
+          <Text style={styles.title}>Tạo tài khoản ✨</Text>
+          <Text style={styles.subtitle}>Tham gia cộng đồng và mở khóa hàng ngàn cơ hội việc làm</Text>
+        </Animated.View>
 
-      {/* Role segmented */}
-      <View style={styles.roleSeg}>
-        <TouchableOpacity
-          style={[styles.roleBtn, !isRecruiter && styles.roleBtnActive]}
-          onPress={() => setIsRecruiter(false)}
-          disabled={loading}
-        >
-          <Ionicons
-            name="person-outline"
-            size={18}
-            color={!isRecruiter ? '#fff' : '#64748b'}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.roleText, !isRecruiter && styles.roleTextActive]}>
-            Người tìm việc
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.roleBtn, isRecruiter && styles.roleBtnActive]}
-          onPress={() => setIsRecruiter(true)}
-          disabled={loading}
-        >
-          <Ionicons
-            name="briefcase-outline"
-            size={18}
-            color={isRecruiter ? '#fff' : '#64748b'}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.roleText, isRecruiter && styles.roleTextActive]}>
-            Nhà tuyển dụng
-          </Text>
-        </TouchableOpacity>
-      </View>
+        <RoleSelector selected={role} onChange={setRole} disabled={authLoading} />
 
-      {/* Form */}
-      <View style={styles.form}>
-        {/* Name */}
-        <View style={[styles.inputContainer, !!nameErr && styles.inputError]}>
-          <Ionicons
-            name="person-outline"
-            size={22}
-            color={nameErr ? '#ef4444' : '#64748b'}
-            style={styles.icon}
-          />
-          <TextInput
+        <View style={styles.form}>
+          <AuthInput
+            icon="person-outline"
             placeholder="Họ và tên"
-            placeholderTextColor="#94a3b8"
             value={name}
-            onChangeText={(t) => {
-              setName(t);
-              if (nameErr) setNameErr('');
-              if (formErr) setFormErr('');
+            onChangeText={(text) => {
+              setName(text);
+              clearFieldError('name');
+              clearError();
             }}
-            style={styles.input}
+            error={errors.name}
+            editable={!authLoading}
             returnKeyType="next"
           />
-        </View>
-        {!!nameErr && <Text style={styles.fieldError}>{nameErr}</Text>}
 
-        {/* Phone */}
-        <View style={[styles.inputContainer, !!phoneErr && styles.inputError]}>
-          <Ionicons
-            name="call-outline"
-            size={22}
-            color={phoneErr ? '#ef4444' : '#64748b'}
-            style={styles.icon}
-          />
-          <TextInput
+          <AuthInput
+            icon="call-outline"
             placeholder="Số điện thoại"
-            placeholderTextColor="#94a3b8"
             value={phone}
-            onChangeText={(t) => {
-              setPhone(t);
-              if (phoneErr) setPhoneErr('');
-              if (formErr) setFormErr('');
+            onChangeText={(text) => {
+              setPhone(text);
+              clearFieldError('phone');
+              clearError();
             }}
+            error={errors.phone}
             keyboardType="phone-pad"
-            style={styles.input}
+            editable={!authLoading}
             returnKeyType="next"
           />
-        </View>
-        {!!phoneErr && <Text style={styles.fieldError}>{phoneErr}</Text>}
 
-        {/* Email */}
-        <View style={[styles.inputContainer, !!emailErr && styles.inputError]}>
-          <Ionicons
-            name="mail-outline"
-            size={22}
-            color={emailErr ? '#ef4444' : '#64748b'}
-            style={styles.icon}
-          />
-          <TextInput
+          <AuthInput
+            icon="mail-outline"
             placeholder="Email"
-            placeholderTextColor="#94a3b8"
             value={email}
-            onChangeText={(t) => {
-              setEmail(t);
-              if (emailErr) setEmailErr('');
-              if (formErr) setFormErr('');
+            onChangeText={(text) => {
+              setEmail(text);
+              clearFieldError('email');
+              clearError();
             }}
+            error={errors.email}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            style={styles.input}
+            editable={!authLoading}
             returnKeyType="next"
           />
-        </View>
-        {!!emailErr && <Text style={styles.fieldError}>{emailErr}</Text>}
 
-        {/* Password */}
-        <View style={[styles.inputContainer, !!passErr && styles.inputError]}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={22}
-            color={passErr ? '#ef4444' : '#64748b'}
-            style={styles.icon}
-          />
-          <TextInput
-            placeholder="Mật khẩu (≥ 6 ký tự)"
-            placeholderTextColor="#94a3b8"
+          <PasswordInput
+            placeholder="Mật khẩu (tối thiểu 6 ký tự)"
             value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              if (passErr) setPassErr('');
-              if (formErr) setFormErr('');
+            onChangeText={(text) => {
+              setPassword(text);
+              clearFieldError('password');
+              clearError();
             }}
-            secureTextEntry={secure}
-            style={styles.input}
+            error={errors.password}
+            showStrength
+            strength={passwordStrength}
+            editable={!authLoading}
             returnKeyType="next"
           />
-          <TouchableOpacity onPress={() => setSecure((s) => !s)}>
-            <Ionicons
-              name={secure ? 'eye-off-outline' : 'eye-outline'}
-              size={22}
-              color="#64748b"
-            />
-          </TouchableOpacity>
-        </View>
-        {!!passErr && <Text style={styles.fieldError}>{passErr}</Text>}
 
-        {/* Confirm password */}
-        <View style={[styles.inputContainer, !!confirmErr && styles.inputError]}>
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={22}
-            color={confirmErr ? '#ef4444' : '#64748b'}
-            style={styles.icon}
-          />
-          <TextInput
+          <PasswordInput
             placeholder="Xác nhận mật khẩu"
-            placeholderTextColor="#94a3b8"
             value={confirmPassword}
-            onChangeText={(t) => {
-              setConfirmPassword(t);
-              if (confirmErr) setConfirmErr('');
-              if (formErr) setFormErr('');
+            onChangeText={(text) => {
+              setConfirmPassword(text);
+              clearFieldError('confirmPassword');
+              clearError();
             }}
-            secureTextEntry={secure2}
-            style={styles.input}
+            error={errors.confirmPassword}
+            editable={!authLoading}
             returnKeyType="done"
             onSubmitEditing={handleRegister}
           />
-          <TouchableOpacity onPress={() => setSecure2((s) => !s)}>
-            <Ionicons
-              name={secure2 ? 'eye-off-outline' : 'eye-outline'}
-              size={22}
-              color="#64748b"
-            />
+
+          {authError && (
+            <Animated.Text entering={FadeInDown.duration(300)} style={styles.errorText}>
+              {authError}
+            </Animated.Text>
+          )}
+
+          <Button
+            title={role === 'employer' ? 'Tạo tài khoản nhà tuyển dụng' : 'Tạo tài khoản ứng viên'}
+            onPress={handleRegister}
+            loading={authLoading}
+            disabled={authLoading}
+            fullWidth
+            size="large"
+          />
+
+          <TouchableOpacity 
+            onPress={() => router.replace('/(auth)/login')} 
+            disabled={authLoading}
+            style={styles.linkContainer}
+          >
+            <Text style={styles.linkText}>Đã có tài khoản? </Text>
+            <Text style={styles.linkTextBold}>Đăng nhập</Text>
           </TouchableOpacity>
         </View>
-        {!!confirmErr && <Text style={styles.fieldError}>{confirmErr}</Text>}
-
-        {!!formErr && <Text style={styles.formError}>{formErr}</Text>}
-
-        {/* Button */}
-        <TouchableOpacity
-          style={[styles.button, loading && { opacity: 0.85 }]}
-          onPress={handleRegister}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>
-              {isRecruiter
-                ? 'Tạo tài khoản nhà tuyển dụng'
-                : 'Tạo tài khoản ứng viên'}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
-          <Text style={styles.link}>Đã có tài khoản? Đăng nhập</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F9FB', paddingHorizontal: 28, paddingTop: 24 },
-  header: { alignItems: 'center', marginBottom: 22, marginTop: 12 },
-  title: { fontSize: 28, fontWeight: '800', color: '#1e293b' },
-  subtitle: { fontSize: 14, color: '#64748b', marginTop: 6, textAlign: 'center' },
-
-  roleSeg: {
-    flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
-    padding: 4,
-    borderRadius: 14,
-    marginBottom: 14,
-    alignSelf: 'center',
+  container: {
+    flex: 1,
+    backgroundColor: '#F9F9FB',
   },
-  roleBtn: {
-    flexDirection: 'row',
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 32,
+  },
+  header: {
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    marginBottom: 24,
   },
-  roleBtnActive: { backgroundColor: '#4A80F0' },
-  roleText: { color: '#64748b', fontWeight: '600' },
-  roleTextActive: { color: '#fff' },
-
-  form: { gap: 10 },
-
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    height: 54,
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1e293b',
+    marginBottom: 8,
   },
-  inputError: { borderColor: '#ef4444' },
-  icon: { marginRight: 10 },
-  input: { flex: 1, fontSize: 16, color: '#0f172a' },
-
-  fieldError: { color: '#ef4444', fontSize: 12, marginTop: -6, marginBottom: 4, marginLeft: 6 },
-  formError: {
-    color: '#ef4444',
-    textAlign: 'center',
+  subtitle: {
     fontSize: 14,
-    marginTop: 2,
-    marginBottom: 4,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 16,
   },
-
-  button: {
-    backgroundColor: '#4A80F0',
-    height: 52,
-    borderRadius: 16,
+  form: {
+    marginTop: 8,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 16,
+    lineHeight: 20,
+  },
+  linkContainer: {
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 6,
-    elevation: 2,
+    marginTop: 20,
   },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  link: { color: '#4A80F0', textAlign: 'center', fontWeight: '600', marginTop: 14, marginBottom: 10 },
+  linkText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  linkTextBold: {
+    fontSize: 14,
+    color: '#4A80F0',
+    fontWeight: '700',
+  },
 });

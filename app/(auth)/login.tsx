@@ -1,295 +1,108 @@
-import { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { View, Text, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { auth } from '@/config/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getCurrentUserRole } from '@/utils/roles';
-
-const isValidEmail = (v: string) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-
-const mapAuthError = (code?: string) => {
-  switch (code) {
-    case 'auth/invalid-email':
-      return 'Địa chỉ email không hợp lệ.';
-    case 'auth/user-not-found':
-      return 'Không tìm thấy tài khoản. Vui lòng đăng ký.';
-    case 'auth/wrong-password':
-      return 'Sai mật khẩu. Vui lòng thử lại.';
-    case 'auth/too-many-requests':
-      return 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau.';
-    case 'auth/network-request-failed':
-      return 'Mất kết nối mạng. Vui lòng kiểm tra Internet và thử lại.';
-    default:
-      return 'Đăng nhập thất bại. Vui lòng thử lại.';
-  }
-};
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { Button } from '@/components/base/Button';
+import { AuthInput } from '@/components/auth/AuthInput';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAuthValidation } from '@/hooks/auth/useAuthValidation';
+import { useAuthRedirect } from '@/hooks/auth/useAuthRedirect';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [secure, setSecure] = useState(true);
-  const [loading, setLoading] = useState(false);
 
-  const [emailErr, setEmailErr] = useState('');
-  const [passErr, setPassErr] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const { signIn, loading: authLoading, error: authError, clearError } = useAuth();
+  const { errors, clearError: clearFieldError, validateLoginForm } = useAuthValidation();
 
-  const validate = () => {
-    let ok = true;
-    setEmailErr('');
-    setPassErr('');
-    setErrorMsg('');
-
-    if (!email.trim()) {
-      setEmailErr('Vui lòng nhập email.');
-      ok = false;
-    } else if (!isValidEmail(email)) {
-      setEmailErr('Email không đúng định dạng (ví dụ: name@gmail.com).');
-      ok = false;
-    }
-
-    if (!password) {
-      setPassErr('Vui lòng nhập mật khẩu.');
-      ok = false;
-    } else if (password.length < 6) {
-      setPassErr('Mật khẩu tối thiểu 6 ký tự.');
-      ok = false;
-    }
-
-    return ok;
-  };
+  useAuthRedirect();
 
   const handleLogin = async () => {
-    if (!validate()) return;
-
-    setLoading(true);
-    setErrorMsg('');
+    if (!validateLoginForm(email, password)) return;
 
     try {
-      // ✅ Đăng nhập qua Firebase Auth
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-
-      // ✅ Lấy role từ utility function (đã xử lý isAdmin)
-      const role = await getCurrentUserRole();
-      console.log('🔥 User role after login:', role);
-
-      if (!role) {
-        throw new Error('deleted-user');
-      }
-
-      // ✅ Lưu role để cache
-      await AsyncStorage.setItem("userRole", role);
-
-      // ✅ Điều hướng theo role (bao gồm admin)
-      if (role === "admin") {
-        console.log("🔐 Redirecting to admin dashboard");
-        router.replace("/(admin)" as any);
-      } else if (role === "employer") {
-        console.log("💼 Redirecting to employer dashboard");
-        router.replace("/(employer)");
-      } else if (role === "candidate") {
-        console.log("👤 Redirecting to candidate dashboard");
-        router.replace("/(candidate)");
-      } else {
-        throw new Error('invalid-role');
-      }
-    } catch (error: any) {
-      if (error.message === 'deleted-user') {
-        setErrorMsg(
-          'Tài khoản của bạn đã bị xóa khỏi hệ thống. Vui lòng liên hệ quản trị viên.'
-        );
-        await auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      if (error.message === 'invalid-role') {
-        setErrorMsg('Tài khoản của bạn chưa được phân quyền. Vui lòng liên hệ quản trị viên.');
-        await auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      __DEV__ && console.log('Auth error:', error?.code, error?.message);
-      setErrorMsg(mapAuthError(error?.code));
-    } finally {
-      setLoading(false);
+      await signIn(email, password);
+    } catch (err) {
+      // Error handled by AuthContext
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Welcome Back 👋</Text>
-        <Text style={styles.subtitle}>
-          Đăng nhập để tiếp tục hành trình tìm việc của bạn
-        </Text>
-      </View>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Animated.View entering={FadeIn.duration(600)} style={styles.header}>
+        <Text style={styles.title}>Chào mừng trở lại! 👋</Text>
+        <Text style={styles.subtitle}>Đăng nhập để tiếp tục hành trình tìm việc của bạn</Text>
+      </Animated.View>
 
       <View style={styles.form}>
-        {/* Email */}
-        <View
-          style={[
-            styles.inputContainer,
-            !!emailErr && styles.inputContainerError,
-          ]}
-        >
-          <Ionicons
-            name="mail-outline"
-            size={22}
-            color={emailErr ? '#ef4444' : '#64748b'}
-            style={styles.icon}
-          />
-          <TextInput
-            placeholder="Email"
-            placeholderTextColor="#94a3b8"
-            value={email}
-            onChangeText={(t) => {
-              setEmail(t);
-              if (emailErr) setEmailErr('');
-              if (errorMsg) setErrorMsg('');
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-            returnKeyType="next"
-          />
-        </View>
-        {!!emailErr && <Text style={styles.fieldError}>{emailErr}</Text>}
+        <AuthInput
+          icon="mail-outline"
+          placeholder="Email"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            clearFieldError('email');
+            clearError();
+          }}
+          error={errors.email}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!authLoading}
+          returnKeyType="next"
+        />
 
-        {/* Password */}
-        <View
-          style={[
-            styles.inputContainer,
-            !!passErr && styles.inputContainerError,
-          ]}
-        >
-          <Ionicons
-            name="lock-closed-outline"
-            size={22}
-            color={passErr ? '#ef4444' : '#64748b'}
-            style={styles.icon}
-          />
-          <TextInput
-            placeholder="Mật khẩu"
-            placeholderTextColor="#94a3b8"
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              if (passErr) setPassErr('');
-              if (errorMsg) setErrorMsg('');
-            }}
-            secureTextEntry={secure}
-            style={styles.input}
-            returnKeyType="done"
-            onSubmitEditing={handleLogin}
-          />
-          <TouchableOpacity onPress={() => setSecure((s) => !s)}>
-            <Ionicons
-              name={secure ? 'eye-off-outline' : 'eye-outline'}
-              size={22}
-              color="#64748b"
-            />
-          </TouchableOpacity>
-        </View>
-        {!!passErr && <Text style={styles.fieldError}>{passErr}</Text>}
+        <PasswordInput
+          placeholder="Mật khẩu"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            clearFieldError('password');
+            clearError();
+          }}
+          error={errors.password}
+          editable={!authLoading}
+          returnKeyType="done"
+          onSubmitEditing={handleLogin}
+        />
 
-        {!!errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+        {authError && (
+          <Animated.Text entering={FadeInDown.duration(300)} style={styles.globalError}>
+            {authError}
+          </Animated.Text>
+        )}
 
-        <TouchableOpacity
-          style={[styles.button, loading && { opacity: 0.8 }]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Đăng nhập</Text>
-          )}
-        </TouchableOpacity>
+        <Button title="Đăng nhập" onPress={handleLogin} loading={authLoading} disabled={authLoading} fullWidth size="large" />
 
-        <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-          <Text style={styles.link}>Chưa có tài khoản? Đăng ký ngay</Text>
-        </TouchableOpacity>
+        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.footer}>
+          <Text style={styles.footerText}>Chưa có tài khoản? </Text>
+          <Text style={styles.link} onPress={() => !authLoading && router.push('/(auth)/register')}>
+            Đăng ký ngay
+          </Text>
+        </Animated.View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9F9FB',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-  header: { alignItems: 'center', marginBottom: 30 },
-  title: { fontSize: 30, fontWeight: '800', color: '#1e293b' },
-  subtitle: {
-    fontSize: 15,
-    color: '#64748b',
-    marginTop: 6,
-    textAlign: 'center',
-  },
-  form: { gap: 12 },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    height: 54,
-  },
-  inputContainerError: {
-    borderColor: '#ef4444',
-  },
-  input: { flex: 1, fontSize: 16, color: '#0f172a' },
-  icon: { marginRight: 10 },
-  fieldError: {
-    color: '#ef4444',
-    fontSize: 12,
-    marginTop: -6,
-    marginBottom: 4,
-    marginLeft: 6,
-  },
-  button: {
-    backgroundColor: '#4A80F0',
-    height: 52,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
-    elevation: 2,
-  },
-  buttonText: { fontSize: 17, color: '#fff', fontWeight: '700' },
-  link: {
-    color: '#4A80F0',
-    textAlign: 'center',
-    fontWeight: '600',
-    marginTop: 15,
-  },
-  errorText: {
-    color: '#ef4444',
-    textAlign: 'center',
+  container: { flex: 1, backgroundColor: '#F9FAFB', justifyContent: 'center', paddingHorizontal: 24 },
+  header: { marginBottom: 32 },
+  title: { fontSize: 32, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  subtitle: { fontSize: 16, color: '#64748b', lineHeight: 24 },
+  form: { gap: 4 },
+  globalError: {
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
     fontSize: 14,
-    marginTop: 2,
+    color: '#991b1b',
   },
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24 },
+  footerText: { fontSize: 15, color: '#64748b' },
+  link: { fontSize: 15, fontWeight: '700', color: '#4A80F0' },
 });

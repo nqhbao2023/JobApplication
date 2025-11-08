@@ -15,7 +15,7 @@ import {
 import DropDownPicker from 'react-native-dropdown-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAddJobForm } from '@/hooks/addJob/useAddJobForm';
-import { SectionCard, AITemplateModal } from '@/components/addJob/AddJobSections';
+import { SectionCard, AITemplateModal } from '@/components/employer/AddJobSections';
 
 const AddJob = () => {
   const scrollRef = useRef<ScrollView>(null);
@@ -212,10 +212,16 @@ const AddJob = () => {
                 items={jobTypeItems}
                 setItems={setJobTypeItems}
                 placeholder="Chọn loại công việc"
-                listMode="SCROLLVIEW"
+                listMode="MODAL"
+                searchable={true}
+                searchPlaceholder="Tìm loại công việc..."
+                modalTitle="Chọn loại công việc"
+                modalAnimationType="slide"
                 style={styles.dropdown}
                 dropDownContainerStyle={styles.dropdownMenu}
                 placeholderStyle={styles.dropdownPlaceholder}
+                searchTextInputStyle={styles.searchInput}
+                modalContentContainerStyle={styles.modalContent}
                 zIndex={3000}
               />
             </View>
@@ -242,10 +248,16 @@ const AddJob = () => {
                 items={jobCategoryItems}
                 setItems={setJobCategoryItems}
                 placeholder="Chọn danh mục"
-                listMode="SCROLLVIEW"
+                listMode="MODAL"
+                searchable={true}
+                searchPlaceholder="Tìm danh mục..."
+                modalTitle="Chọn danh mục công việc"
+                modalAnimationType="slide"
                 style={styles.dropdown}
                 dropDownContainerStyle={styles.dropdownMenu}
                 placeholderStyle={styles.dropdownPlaceholder}
+                searchTextInputStyle={styles.searchInput}
+                modalContentContainerStyle={styles.modalContent}
                 zIndex={2000}
               />
             </View>
@@ -282,10 +294,16 @@ const AddJob = () => {
                   items={companyItems}
                   setItems={setCompanyItems}
                   placeholder="Chọn công ty"
-                  listMode="SCROLLVIEW"
+                  listMode="MODAL"
+                  searchable={true}
+                  searchPlaceholder="Tìm công ty..."
+                  modalTitle="Chọn công ty"
+                  modalAnimationType="slide"
                   style={styles.dropdown}
                   dropDownContainerStyle={styles.dropdownMenu}
                   placeholderStyle={styles.dropdownPlaceholder}
+                  searchTextInputStyle={styles.searchInput}
+                  modalContentContainerStyle={styles.modalContent}
                   zIndex={1000}
                 />
               </View>
@@ -494,11 +512,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
+    padding: 14,
+    fontSize: 15,
     marginBottom: 12,
     backgroundColor: '#fff',
     color: '#1a1a1a',
+    minHeight: 50,
   },
   textArea: { minHeight: 100, textAlignVertical: 'top' },
   row: {
@@ -508,30 +527,54 @@ const styles = StyleSheet.create({
   halfInput: { flex: 1 },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#4b5563',
-    marginBottom: 6,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+    letterSpacing: 0.2,
   },
   dropdown: {
     borderColor: '#e0e0e0',
     borderRadius: 12,
-    minHeight: 48,
+    minHeight: 50,
+    backgroundColor: '#fff',
   },
   dropdownMenu: {
     borderColor: '#e0e0e0',
     borderRadius: 12,
     marginTop: 4,
+    maxHeight: 300,
   },
-  dropdownPlaceholder: { color: '#999' },
+  dropdownPlaceholder: { 
+    color: '#999',
+    fontSize: 15,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  searchInput: {
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 15,
+  },
   toggleCompanyBtn: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderStyle: 'dashed',
   },
   toggleCompanyText: {
     color: '#7c3aed',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   imageBtn: {
     backgroundColor: '#eff6ff',

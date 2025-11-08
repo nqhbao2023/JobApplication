@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { db } from "@/config/firebase";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
-import { router } from "expo-router";
+import React, { useState } from 'react';
+import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
+import { router } from 'expo-router';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { Button } from '@/components/base/Button';
+import { SearchBar } from '@/components/base/SearchBar';
+import { EmptyState } from '@/components/base/EmptyState';
+import { LoadingSpinner } from '@/components/base/LoadingSpinner';
+import { UserCard } from '@/components/admin/UserCard';
+import { FilterTabs } from '@/components/admin/FilterTabs';
+import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
+import { useSearch } from '@/hooks/useSearch';
+import { useFilter } from '@/hooks/useFilter';
 
 type User = {
   $id: string;
@@ -19,163 +19,106 @@ type User = {
   email?: string;
   role?: string;
   isAdmin?: boolean;
+  phone?: string;
+  created_at?: string;
 };
 
+type RoleFilter = 'all' | 'admin' | 'employer' | 'candidate';
+
 const UsersScreen = () => {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      const data = snap.docs.map(d => ({ $id: d.id, ...d.data() })) as User[];
-      setUsers(data);
-    } catch (error) {
-      console.error("Error loading users:", error);
-      Alert.alert("Lỗi", "Không thể tải danh sách users");
-    } finally {
-      setLoading(false);
+  const { data: users, loading, reload } = useFirestoreCollection<User>('users');
+  const { query, setQuery, filtered: searchResults } = useSearch(users, ['name', 'email', 'phone']);
+  
+  const { filter: roleFilter, setFilter: setRoleFilter, filtered: filteredUsers } = useFilter<User, RoleFilter>(
+    searchResults,
+    (user, filter) => {
+      if (filter === 'admin') return user.isAdmin === true;
+      return user.role === filter;
     }
+  );
+
+  const handleEdit = (userId: string) => {
+    router.push({ pathname: '/(admin)/user-detail', params: { userId } } as any);
   };
 
-  const handleDelete = (id: string) => {
-    Alert.alert("Xác nhận", "Bạn có chắc muốn xóa user này?", [
-      { text: "Hủy", style: "cancel" },
+  const handleDelete = (userId: string, name: string) => {
+    Alert.alert('Xác nhận', `Bạn có chắc muốn xóa user "${name}"?`, [
+      { text: 'Hủy', style: 'cancel' },
       {
-        text: "Xóa",
-        style: "destructive",
+        text: 'Xóa',
+        style: 'destructive',
         onPress: async () => {
           try {
-            await deleteDoc(doc(db, "users", id));
-            setUsers(prev => prev.filter(u => u.$id !== id));
-            Alert.alert("Thành công", "Đã xóa user");
+            await deleteDoc(doc(db, 'users', userId));
+            await reload();
+            Alert.alert('Thành công', 'Đã xóa user');
           } catch (error) {
-            Alert.alert("Lỗi", "Không thể xóa user");
+            Alert.alert('Lỗi', 'Không thể xóa user');
           }
         },
       },
     ]);
   };
 
-  const renderUser = ({ item }: { item: User }) => (
-    <View style={styles.userCard}>
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name || "N/A"}</Text>
-        <Text style={styles.userEmail}>{item.email}</Text>
-        <View style={styles.badges}>
-          <View style={[styles.badge, { backgroundColor: getRoleBadgeColor(item.role) }]}>
-            <Text style={styles.badgeText}>{item.role || "candidate"}</Text>
-          </View>
-          {item.isAdmin && (
-            <View style={[styles.badge, { backgroundColor: "#ef4444" }]}>
-              <Text style={styles.badgeText}>Admin</Text>
-            </View>
-          )}
-        </View>
-      </View>
-      <View style={styles.actions}>
-        <TouchableOpacity 
-          onPress={() => router.push({ pathname: "/(admin)/user-detail", params: { userId: item.$id } } as any)}
-        >
-          <Ionicons name="pencil" size={22} color="#3b82f6" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDelete(item.$id)}>
-          <Ionicons name="trash-outline" size={22} color="#ef4444" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
+  if (loading) return <LoadingSpinner text="Đang tải danh sách users..." />;
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.createBtn}
-        onPress={() => router.push("/(admin)/user-create")}
-      >
-        <Ionicons name="person-add" size={20} color="#fff" />
-        <Text style={styles.createBtnText}>Tạo User Mới</Text>
-      </TouchableOpacity>
-  
+      <View style={styles.header}>
+        <Button
+          title="Tạo User"
+          icon="person-add"
+          variant="success"
+          onPress={() => router.push('/(admin)/user-create')}
+          fullWidth
+        />
+      </View>
+
+      <SearchBar
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Tìm theo tên, email, sđt..."
+      />
+
+      <FilterTabs
+        options={['all', 'admin', 'employer', 'candidate'] as const}
+        active={roleFilter}
+        onChange={setRoleFilter}
+        labels={{
+          all: 'Tất cả',
+          admin: 'Admin',
+          employer: 'Employer',
+          candidate: 'Candidate',
+        }}
+      />
+
+      <View style={styles.stats}>
+        <Text style={styles.statsText}>
+          Hiển thị {filteredUsers.length} / {users.length} users
+        </Text>
+      </View>
+
       <FlatList
-        data={users}
-        renderItem={renderUser}
-        keyExtractor={item => item.$id}
+        data={filteredUsers}
+        renderItem={({ item }) => (
+          <UserCard user={item} onEdit={handleEdit} onDelete={handleDelete} />
+        )}
+        keyExtractor={(item) => item.$id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Không có users</Text>
+          <EmptyState icon="people-outline" message="Không tìm thấy users" />
         }
       />
     </View>
   );
 };
 
-const getRoleBadgeColor = (role?: string) => {
-  switch (role) {
-    case "admin": return "#ef4444";
-    case "employer": return "#f59e0b";
-    case "candidate": return "#3b82f6";
-    default: return "#64748b";
-  }
-};
-
 export default UsersScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8f9fa" },
-  centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  list: { padding: 16 },
-  userCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  userInfo: { flex: 1 },
-  userName: { fontSize: 16, fontWeight: "700", color: "#1a1a1a", marginBottom: 4 },
-  userEmail: { fontSize: 14, color: "#64748b", marginBottom: 8 },
-  badges: { flexDirection: "row", gap: 8 },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: { fontSize: 12, fontWeight: "600", color: "#fff" },
-  emptyText: { textAlign: "center", marginTop: 40, fontSize: 15, color: "#64748b" },
-  actions: { flexDirection: "row", gap: 16, alignItems: "center" },
-  createBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#10b981",
-    margin: 16,
-    marginBottom: 0,
-    padding: 14,
-    borderRadius: 12,
-  },
-  createBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
+  container: { flex: 1, backgroundColor: '#f1f5f9' },
+  header: { padding: 16, paddingBottom: 0 },
+  stats: { paddingHorizontal: 16, paddingVertical: 12 },
+  statsText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
 });

@@ -63,8 +63,6 @@ export default function AdminLayout() {
     // ép kiểu về Href để TypeScript chấp nhận chuỗi động
     return <Redirect href={nextRoute as any} />;
   }
-  
-
   // Có quyền admin -> render Stack admin
   return (
     <Stack

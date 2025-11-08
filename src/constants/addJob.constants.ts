@@ -45,6 +45,7 @@ export type JobFormData = {
   contactPhone: string;
   imageUri: string | null;
   image: string;
+  
 };
 
 export type NewCompanyData = {

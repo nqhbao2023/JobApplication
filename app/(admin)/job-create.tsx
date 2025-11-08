@@ -1,18 +1,10 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-} from "react-native";
-import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { db, auth } from "@/config/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { router } from 'expo-router';
+import { collection, addDoc } from 'firebase/firestore';
+import { db, auth } from '@/config/firebase';
+import { Button } from '@/components/base/Button';
+import { FormInput } from '@/components/admin/FormInput';
 
 type Job = {
   title: string;
@@ -25,18 +17,18 @@ type Job = {
 
 const JobCreateScreen = () => {
   const [job, setJob] = useState<Job>({
-    title: "",
-    job_Description: "",
-    salary: "",
-    location: "",
-    skills_required: "",
-    responsibilities: "",
+    title: '',
+    job_Description: '',
+    salary: '',
+    location: '',
+    skills_required: '',
+    responsibilities: '',
   });
   const [saving, setSaving] = useState(false);
 
   const handleCreate = async () => {
     if (!job.title?.trim()) {
-      Alert.alert("Lỗi", "Tiêu đề không được để trống");
+      Alert.alert('Lỗi', 'Tiêu đề không được để trống');
       return;
     }
 
@@ -45,23 +37,24 @@ const JobCreateScreen = () => {
 
       const jobData = {
         title: job.title.trim(),
-        job_Description: job.job_Description.trim() || "",
-        salary: job.salary.trim() || "",
-        location: job.location.trim() || "",
-        skills_required: job.skills_required.trim() || "",
-        responsibilities: job.responsibilities.trim() || "",
+        job_Description: job.job_Description.trim() || '',
+        salary: job.salary.trim() || '',
+        location: job.location.trim() || '',
+        skills_required: job.skills_required.trim() || '',
+        responsibilities: job.responsibilities.trim() || '',
         created_at: new Date().toISOString(),
-        ownerId: auth.currentUser?.uid || "",
+        ownerId: auth.currentUser?.uid || '',
+        status: 'active',
       };
 
-      await addDoc(collection(db, "jobs"), jobData);
+      await addDoc(collection(db, 'jobs'), jobData);
 
-      Alert.alert("Thành công", "Đã tạo job mới", [
-        { text: "OK", onPress: () => router.back() },
+      Alert.alert('Thành công', 'Đã tạo job mới', [
+        { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (error) {
-      console.error("❌ Error creating job:", error);
-      Alert.alert("Lỗi", "Không thể tạo job");
+      console.error('Error creating job:', error);
+      Alert.alert('Lỗi', 'Không thể tạo job');
     } finally {
       setSaving(false);
     }
@@ -70,80 +63,66 @@ const JobCreateScreen = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.label}>Tiêu đề *</Text>
-        <TextInput
-          style={styles.input}
+        <FormInput
+          label="Tiêu đề"
+          required
           value={job.title}
           onChangeText={(text) => setJob({ ...job, title: text })}
           placeholder="Nhập tiêu đề"
-          placeholderTextColor="#999"
         />
 
-        <Text style={styles.label}>Mô tả công việc</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
+        <FormInput
+          label="Mô tả công việc"
           value={job.job_Description}
           onChangeText={(text) => setJob({ ...job, job_Description: text })}
           placeholder="Nhập mô tả"
           multiline
           numberOfLines={4}
-          placeholderTextColor="#999"
+          style={styles.textArea}
         />
 
-        <Text style={styles.label}>Lương</Text>
-        <TextInput
-          style={styles.input}
+        <FormInput
+          label="Lương"
           value={job.salary}
           onChangeText={(text) => setJob({ ...job, salary: text })}
           placeholder="VD: 10-15 triệu"
-          placeholderTextColor="#999"
         />
 
-        <Text style={styles.label}>Địa điểm</Text>
-        <TextInput
-          style={styles.input}
+        <FormInput
+          label="Địa điểm"
           value={job.location}
           onChangeText={(text) => setJob({ ...job, location: text })}
           placeholder="Nhập địa điểm"
-          placeholderTextColor="#999"
         />
 
-        <Text style={styles.label}>Kỹ năng yêu cầu</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
+        <FormInput
+          label="Kỹ năng yêu cầu"
           value={job.skills_required}
           onChangeText={(text) => setJob({ ...job, skills_required: text })}
           placeholder="Nhập kỹ năng"
           multiline
           numberOfLines={3}
-          placeholderTextColor="#999"
+          style={styles.textArea}
         />
 
-        <Text style={styles.label}>Trách nhiệm</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
+        <FormInput
+          label="Trách nhiệm"
           value={job.responsibilities}
           onChangeText={(text) => setJob({ ...job, responsibilities: text })}
           placeholder="Nhập trách nhiệm"
           multiline
           numberOfLines={3}
-          placeholderTextColor="#999"
+          style={styles.textArea}
         />
 
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+        <Button
+          title="Tạo Job"
+          icon="add"
+          variant="success"
           onPress={handleCreate}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="add" size={20} color="#fff" />
-              <Text style={styles.saveBtnText}>Tạo Job</Text>
-            </>
-          )}
-        </TouchableOpacity>
+          loading={saving}
+          fullWidth
+        />
       </View>
     </ScrollView>
   );
@@ -152,45 +131,7 @@ const JobCreateScreen = () => {
 export default JobCreateScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8f9fa" },
-  content: { padding: 16 },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    backgroundColor: "#fff",
-    color: "#1a1a1a",
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: "top",
-  },
-  saveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#10b981",
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 32,
-    marginBottom: 40,
-  },
-  saveBtnDisabled: {
-    opacity: 0.6,
-  },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-  },
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
+  content: { padding: 16, paddingBottom: 40 },
+  textArea: { minHeight: 100, textAlignVertical: 'top' },
 });

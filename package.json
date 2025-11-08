@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "seed:categories": "node src/scripts/admin/seedCategories.js"
   },
   "jest": {
     "preset": "jest-expo"
@@ -77,7 +78,8 @@
     "jest": "^29.2.1",
     "jest-expo": "~54.0.0",
     "react-test-renderer": "19.1.0",
-    "typescript": "^5.3.3"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   },
   "private": true
 }

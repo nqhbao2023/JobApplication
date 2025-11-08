@@ -2,16 +2,18 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",                // ✅ baseUrl là gốc dự án (nơi chứa folder "src")
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]             // ✅ alias @ trỏ về "src/*"
-    }
+      "@/*": ["src/*"]
+    },
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
+    "app",
+    "src",
     ".expo/types/**/*.ts",
-    "src/types/**/*.d.ts",
     "expo-env.d.ts"
   ]
 }

@@ -1,156 +1,163 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { db } from "@/config/firebase";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
-import { useRouter } from "expo-router";
+import React from 'react';
+import { View, FlatList, StyleSheet, Alert, Text } from 'react-native';
+import { router } from 'expo-router';
+import { deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { Button } from '@/components/base/Button';
+import { SearchBar } from '@/components/base/SearchBar';
+import { EmptyState } from '@/components/base/EmptyState';
+import { LoadingSpinner } from '@/components/base/LoadingSpinner';
+import { JobCard } from '@/components/admin/JobCard';
+import { FilterTabs } from '@/components/admin/FilterTabs';
+import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
+import { useSearch } from '@/hooks/useSearch';
+import { useFilter } from '@/hooks/useFilter';
+
 type Job = {
   $id: string;
   title?: string;
-  company?: string;
   location?: string;
   salary?: string;
-  type?: string;
+  status?: string;
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  created_at?: string;
 };
 
+type StatusFilter = 'all' | 'active' | 'pending' | 'closed';
+
 const JobsScreen = () => {
-  const router = useRouter();
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: rawJobs, loading, reload } = useFirestoreCollection<Job>('jobs');
+  
+  const [jobs, setJobs] = React.useState<Job[]>([]);
+  const [loadingOwners, setLoadingOwners] = React.useState(true);
 
-  useEffect(() => {
-    loadJobs();
-  }, []);
+  React.useEffect(() => {
+    const loadOwners = async () => {
+      if (rawJobs.length === 0) {
+        setLoadingOwners(false);
+        return;
+      }
 
-  const loadJobs = async () => {
-    try {
-      const snap = await getDocs(collection(db, "jobs"));
-      const data = snap.docs.map(d => ({ $id: d.id, ...d.data() })) as Job[];
-      setJobs(data);
-    } catch (error) {
-      console.error("Error loading jobs:", error);
-      Alert.alert("Lỗi", "Không thể tải danh sách jobs");
-    } finally {
-      setLoading(false);
+      const enriched = await Promise.all(
+        rawJobs.map(async (job) => {
+          if (!job.ownerId) return { ...job, ownerName: 'N/A', ownerEmail: 'N/A' };
+          
+          try {
+            const userSnap = await getDoc(doc(db, 'users', job.ownerId));
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              return {
+                ...job,
+                ownerName: userData.name || 'N/A',
+                ownerEmail: userData.email || 'N/A',
+              };
+            }
+          } catch (error) {
+            console.error('Error loading owner:', error);
+          }
+          return { ...job, ownerName: 'N/A', ownerEmail: 'N/A' };
+        })
+      );
+      setJobs(enriched);
+      setLoadingOwners(false);
+    };
+
+    if (!loading) {
+      loadOwners();
     }
+  }, [rawJobs, loading]);
+
+  const { query, setQuery, filtered: searchResults } = useSearch(jobs, ['title', 'ownerName', 'ownerEmail', 'location']);
+  
+  const { filter: statusFilter, setFilter: setStatusFilter, filtered: filteredJobs } = useFilter<Job, StatusFilter>(
+    searchResults,
+    (job, filter) => job.status === filter
+  );
+
+  const handleEdit = (jobId: string) => {
+    router.push({ pathname: '/(admin)/job-detail', params: { jobId } } as any);
   };
 
-  const handleDelete = (id: string) => {
-    Alert.alert("Xác nhận", "Bạn có chắc muốn xóa job này?", [
-      { text: "Hủy", style: "cancel" },
+  const handleDelete = (jobId: string, title: string) => {
+    Alert.alert('Xác nhận', `Bạn có chắc muốn xóa job "${title}"?`, [
+      { text: 'Hủy', style: 'cancel' },
       {
-        text: "Xóa",
-        style: "destructive",
+        text: 'Xóa',
+        style: 'destructive',
         onPress: async () => {
           try {
-            await deleteDoc(doc(db, "jobs", id));
-            setJobs(prev => prev.filter(j => j.$id !== id));
-            Alert.alert("Thành công", "Đã xóa job");
+            await deleteDoc(doc(db, 'jobs', jobId));
+            await reload();
+            Alert.alert('Thành công', 'Đã xóa job');
           } catch (error) {
-            Alert.alert("Lỗi", "Không thể xóa job");
+            Alert.alert('Lỗi', 'Không thể xóa job');
           }
         },
       },
     ]);
   };
 
-  const renderJob = ({ item }: { item: Job }) => (
-    <View style={styles.jobCard}>
-      <View style={styles.jobInfo}>
-        <Text style={styles.jobTitle}>{item.title || "N/A"}</Text>
-        <Text style={styles.jobDetail}>📍 {item.location || "Chưa có"}</Text>
-        <Text style={styles.jobDetail}>💰 {item.salary || "Thỏa thuận"}</Text>
-        <View style={styles.badges}>
-          <View style={[styles.badge, { backgroundColor: getTypeBadgeColor(item.type) }]}>
-            <Text style={styles.badgeText}>{item.type || "full-time"}</Text>
-          </View>
-        </View>
-      </View>
-      <View style={styles.actions}>
-        <TouchableOpacity 
-          onPress={() => router.push({ pathname: "/(admin)/job-detail", params: { jobId: item.$id } } as any)}
-        >
-          <Ionicons name="pencil" size={22} color="#3b82f6" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => handleDelete(item.$id)}>
-          <Ionicons name="trash-outline" size={22} color="#ef4444" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
+  if (loading || loadingOwners) return <LoadingSpinner text="Đang tải danh sách jobs..." />;
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Button
+          title="Tạo Job"
+          icon="add-circle"
+          variant="success"
+          onPress={() => router.push('/(admin)/job-create')}
+          fullWidth
+        />
+      </View>
+
+      <SearchBar
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Tìm theo tên job, người đăng..."
+      />
+
+      <FilterTabs
+        options={['all', 'active', 'pending', 'closed'] as const}
+        active={statusFilter}
+        onChange={setStatusFilter}
+        labels={{
+          all: 'Tất cả',
+          active: 'Đang tuyển',
+          pending: 'Chờ duyệt',
+          closed: 'Đã đóng',
+        }}
+      />
+
+      <View style={styles.stats}>
+        <Text style={styles.statsText}>
+          Hiển thị {filteredJobs.length} / {jobs.length} jobs
+        </Text>
+      </View>
+
       <FlatList
-        data={jobs}
-        renderItem={renderJob}
-        keyExtractor={item => item.$id}
+        data={filteredJobs}
+        renderItem={({ item }) => (
+          <JobCard job={item} onEdit={handleEdit} onDelete={handleDelete} />
+        )}
+        keyExtractor={(item) => item.$id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Không có jobs</Text>
+          <EmptyState icon="briefcase-outline" message="Không tìm thấy jobs" />
         }
       />
     </View>
   );
 };
 
-const getTypeBadgeColor = (type?: string) => {
-  switch (type?.toLowerCase()) {
-    case "full-time": return "#10b981";
-    case "part-time": return "#f59e0b";
-    case "intern": return "#3b82f6";
-    case "remote": return "#8b5cf6";
-    default: return "#64748b";
-  }
-};
-
 export default JobsScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8f9fa" },
-  centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  list: { padding: 16 },
-  jobCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  jobInfo: { flex: 1 },
-  jobTitle: { fontSize: 16, fontWeight: "700", color: "#1a1a1a", marginBottom: 6 },
-  jobDetail: { fontSize: 14, color: "#64748b", marginBottom: 4 },
-  badges: { flexDirection: "row", gap: 8, marginTop: 8 },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: { fontSize: 12, fontWeight: "600", color: "#fff" },
-  emptyText: { textAlign: "center", marginTop: 40, fontSize: 15, color: "#64748b" },
-  actions: { flexDirection: "row", gap: 16, alignItems: "center" },
+  container: { flex: 1, backgroundColor: '#f1f5f9' },
+  header: { padding: 16, paddingBottom: 0 },
+  stats: { paddingHorizontal: 16, paddingVertical: 12 },
+  statsText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
 });
-

@@ -18,20 +18,20 @@ export const useAddJobForm = () => {
     skillsRequired: '',
     salaryMin: '',
     salaryMax: '',
-    workingType: 'Full-time',
     experience: '',
     quantity: '1',
     deadline: '',
     selectedJobType: null,
     selectedJobCategory: null,
     selectedCompany: null,
-    customJobType: '',
     customJobCategory: '',
     contactName: '',
     contactEmail: '',
     contactPhone: '',
     imageUri: null,
     image: '',
+    workingType: '',
+    customJobType: '',
   });
 
   const [newCompany, setNewCompany] = useState<NewCompanyData>({
@@ -74,12 +74,6 @@ export const useAddJobForm = () => {
   }, [openTypeDD, openCategoryDD, openCompanyDD]);
 
   useEffect(() => {
-    if (formData.selectedJobType !== 'other') {
-      setFormData(prev => ({ ...prev, customJobType: '' }));
-    }
-  }, [formData.selectedJobType]);
-
-  useEffect(() => {
     if (formData.selectedJobCategory !== 'other') {
       setFormData(prev => ({ ...prev, customJobCategory: '' }));
     }
@@ -119,7 +113,6 @@ export const useAddJobForm = () => {
           skillsRequired: data.skillsRequired || '',
           salaryMin: data.salaryMin || '',
           salaryMax: data.salaryMax || '',
-          workingType: data.workingType || 'Full-time',
           experience: data.experience || '',
           quantity: data.quantity || '1',
           deadline: data.deadline || '',
@@ -147,7 +140,6 @@ export const useAddJobForm = () => {
         skillsRequired: formData.skillsRequired,
         salaryMin: formData.salaryMin,
         salaryMax: formData.salaryMax,
-        workingType: formData.workingType,
         experience: formData.experience,
         quantity: formData.quantity,
         deadline: formData.deadline,
@@ -181,14 +173,29 @@ export const useAddJobForm = () => {
         getDocs(collection(db, 'companies')),
       ]);
 
-      setJobTypeItems([
-        ...typesSnap.docs.map(d => ({ label: d.data().type_name, value: d.id })),
-        { label: 'Khác', value: 'other' },
-      ]);
-
+      setJobTypeItems(
+        typesSnap.docs.map(d => {
+          const data = d.data();
+          const icon = data.icon || '';
+          const name = data.type_name || 'Chưa có tên';
+          return { 
+            label: icon ? `${icon} ${name}` : name, 
+            value: d.id 
+          };
+        })
+      );
+      
       setJobCategoryItems([
-        ...categoriesSnap.docs.map(d => ({ label: d.data().category_name, value: d.id })),
-        { label: 'Khác', value: 'other' },
+        ...categoriesSnap.docs.map(d => {
+          const data = d.data();
+          const icon = data.icon || '';
+          const name = data.category_name || data.name || 'Chưa có tên';
+          return { 
+            label: icon ? `${icon} ${name}` : name, 
+            value: d.id 
+          };
+        }),
+        { label: '📦 Khác', value: 'other' },
       ]);
 
       setCompanyItems(companiesSnap.docs.map(d => ({ label: d.data().corp_name, value: d.id })));
@@ -264,8 +271,8 @@ export const useAddJobForm = () => {
       return { valid: false, msg: 'Lương tối đa phải ≥ lương tối thiểu' };
     }
 
-    if (!formData.selectedJobType || (formData.selectedJobType === 'other' && !formData.customJobType.trim())) {
-      return { valid: false, msg: 'Vui lòng chọn loại công việc' };
+    if (!formData.selectedJobType) {
+      return { valid: false, msg: 'Vui lòng chọn hình thức làm việc' };
     }
 
     if (!formData.selectedJobCategory || (formData.selectedJobCategory === 'other' && !formData.customJobCategory.trim())) {
@@ -326,15 +333,15 @@ export const useAddJobForm = () => {
         companyId = companyDoc.id;
       }
 
-      let jobTypeObj: { id: string | null; type_name: string } = { id: null, type_name: "" };
-      if (formData.selectedJobType === "other") {
-        jobTypeObj = { id: null, type_name: formData.customJobType.trim() };
-      } else if (formData.selectedJobType) {
+      let jobTypeObj: { id: string; type_name: string } = { id: '', type_name: '' };
+      if (formData.selectedJobType) {
         const typeSnap = await getDoc(doc(db, "job_types", formData.selectedJobType));
-        jobTypeObj = {
-          id: typeSnap.exists() ? typeSnap.id : formData.selectedJobType,
-          type_name: typeSnap.exists() ? typeSnap.data()?.type_name || "" : formData.selectedJobType,
-        };
+        if (typeSnap.exists()) {
+          jobTypeObj = {
+            id: typeSnap.id,
+            type_name: typeSnap.data()?.type_name || '',
+          };
+        }
       }
 
       let jobCategoryObj: { id: string | null; category_name: string } = { id: null, category_name: "" };
@@ -358,7 +365,6 @@ export const useAddJobForm = () => {
         skills_required: formData.skillsRequired,
         salaryMin: min,
         salaryMax: max,
-        workingType: formData.workingType,
         experience: formData.experience,
         quantity: qty,
         deadline: formData.deadline || null,
@@ -366,7 +372,6 @@ export const useAddJobForm = () => {
         jobCategories: jobCategoryObj,
         jobTypeId: jobTypeObj.id,
         jobCategoryId: jobCategoryObj.id,
-        isCustomType: formData.selectedJobType === "other",
         isCustomCategory: formData.selectedJobCategory === "other",
         contact_name: formData.contactName || "",
         contact_email: formData.contactEmail || "",

@@ -1,0 +1,510 @@
+{
+  "info": {
+    "name": "Job4S API",
+    "description": "Job4S Backend API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Verify Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "verify"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Get All Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs?status=active&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "category",
+                  "value": "IT",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Job By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "job_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Senior Frontend Developer\",\n  \"company\": \"Tech Innovation Corp\",\n  \"companyId\": \"company123\",\n  \"description\": \"We are seeking a talented Senior Frontend Developer to join our dynamic team. You will be responsible for developing and maintaining web applications using React and TypeScript.\",\n  \"requirements\": [\n    \"5+ years of experience in frontend development\",\n    \"Strong knowledge of React and TypeScript\",\n    \"Experience with state management (Redux, Zustand)\",\n    \"Good understanding of responsive design\"\n  ],\n  \"skills\": [\n    \"React\",\n    \"TypeScript\",\n    \"CSS\",\n    \"Redux\",\n    \"Git\"\n  ],\n  \"salary\": {\n    \"min\": 25000000,\n    \"max\": 40000000,\n    \"currency\": \"VND\"\n  },\n  \"location\": \"Ho Chi Minh City\",\n  \"type\": \"full-time\",\n  \"category\": \"IT\",\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs"]
+            }
+          }
+        },
+        {
+          "name": "Update Job",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Job Title\",\n  \"status\": \"inactive\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "job_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Job",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "job_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Jobs (Employer)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/jobs/my-jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "jobs", "my-jobs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI",
+      "item": [
+        {
+          "name": "Get Job Recommendations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/recommend?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "recommend"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Enhance Job Description",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"We need a developer who knows React and can work on our website.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/enhance-description",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "enhance-description"]
+            }
+          }
+        },
+        {
+          "name": "Extract Skills",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"I have 5 years experience with React, TypeScript, Node.js, Express, MongoDB, and AWS. I also know Docker and Kubernetes.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/extract-skills",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "extract-skills"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "Create Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobId\": \"job_id_here\",\n  \"employerId\": \"employer_id_here\",\n  \"cvUrl\": \"https://example.com/cv.pdf\",\n  \"coverLetter\": \"I am very interested in this position...\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "applications"]
+            }
+          }
+        },
+        {
+          "name": "Get My Applications (Candidate)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/my-applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "applications", "my-applications"]
+            }
+          }
+        },
+        {
+          "name": "Get Employer Applications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/employer-applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "applications", "employer-applications"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Applications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/job/:jobId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "applications", "job", ":jobId"],
+              "variable": [
+                {
+                  "key": "jobId",
+                  "value": "job_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Application Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"accepted\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/:id/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "applications", ":id", "status"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "application_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Withdraw Application",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "applications", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "application_id_here"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "News",
+      "item": [
+        {
+          "name": "Get News",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/news?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "news"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "category",
+                  "value": "career-advice",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh News (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/news/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "news", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Scrape News (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/news/scrape",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "news", "scrape"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

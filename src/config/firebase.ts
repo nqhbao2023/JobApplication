@@ -8,7 +8,12 @@ import {
   // @ts-ignore
   getReactNativePersistence,
 } from "firebase/auth";
-import { initializeFirestore, getFirestore, memoryLocalCache } from "firebase/firestore";
+import {
+  initializeFirestore,
+  getFirestore,
+  memoryLocalCache,
+  type Firestore,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -39,10 +44,10 @@ try {
 }
 
 // ✅ Firestore với memory cache cho React Native (không dùng IndexedDB)
-let db;
+let db: Firestore;
 try {
   db = initializeFirestore(app, {
-    localCache: memoryLocalCache()
+    localCache: memoryLocalCache(),
   });
 } catch {
   db = getFirestore(app);

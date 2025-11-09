@@ -33,13 +33,12 @@ export class ApplicationService {
 
       await appRef.set(newApplication);
 
-      await db
-        .collection('jobs')
-        .doc(applicationData.jobId)
-        .update({
-          applicantCount: (await db.collection('jobs').doc(applicationData.jobId).get()).data()
-            ?.applicantCount || 0 + 1,
-        });
+      const jobRef = db.collection('jobs').doc(applicationData.jobId);
+      const jobDoc = await jobRef.get();
+      const currentApplicantCount = jobDoc.data()?.applicantCount || 0;
+      await jobRef.update({
+        applicantCount: currentApplicantCount + 1,
+      });
 
       return newApplication;
     } catch (error: any) {

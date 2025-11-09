@@ -121,8 +121,10 @@ export class JobService {
   async incrementViewCount(jobId: string): Promise<void> {
     try {
       const jobRef = db.collection(JOBS_COLLECTION).doc(jobId);
+      const jobDoc = await jobRef.get();
+      const currentViewCount = jobDoc.data()?.viewCount || 0;
       await jobRef.update({
-        viewCount: (await jobRef.get()).data()?.viewCount || 0 + 1,
+        viewCount: currentViewCount + 1,
         updatedAt: new Date(),
       });
     } catch (error: any) {

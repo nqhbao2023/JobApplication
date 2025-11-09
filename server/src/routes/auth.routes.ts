@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, AuthRequest } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-router.get('/verify', authLimiter, authenticate, (req, res) => {
+router.get('/verify', authLimiter, authenticate, (req: AuthRequest, res) => {
   res.json({ user: req.user, message: 'Token is valid' });
 });
 

@@ -46,7 +46,7 @@ export class AIService {
           return {
             jobId: job.id!,
             score,
-            reason: this.generateReason(matchedSkills, job),
+            reason: this.generateReason(matchedSkills),
             matchedSkills,
           };
         })
@@ -126,7 +126,6 @@ export class AIService {
 
   private calculateMatchedSkills(userSkills: string[], jobSkills: string[]): string[] {
     const userSkillsLower = userSkills.map((s) => s.toLowerCase());
-    const jobSkillsLower = jobSkills.map((s) => s.toLowerCase());
 
     return jobSkills.filter((skill) =>
       userSkillsLower.includes(skill.toLowerCase())
@@ -138,7 +137,7 @@ export class AIService {
     return Math.round((matchedSkills.length / jobSkills.length) * 100);
   }
 
-  private generateReason(matchedSkills: string[], job: Job): string {
+  private generateReason(matchedSkills: string[]): string {
     if (matchedSkills.length === 0) {
       return 'Bạn có thể học thêm kỹ năng cần thiết cho công việc này.';
     }
@@ -152,4 +151,3 @@ export class AIService {
 }
 
 export default new AIService();
-

@@ -16,7 +16,7 @@ export const errorHandler = (
   err: Error | AppError,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   const statusCode = (err as AppError).statusCode || 500;
   const isOperational = (err as AppError).isOperational !== false;
@@ -33,4 +33,3 @@ export const errorHandler = (
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };
-

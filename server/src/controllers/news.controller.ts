@@ -22,7 +22,7 @@ export const getNews = async (
 };
 
 export const refreshNews = async (
-  req: AuthRequest,
+  _req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
@@ -35,7 +35,7 @@ export const refreshNews = async (
 };
 
 export const scrapeNews = async (
-  req: AuthRequest,
+  _req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {

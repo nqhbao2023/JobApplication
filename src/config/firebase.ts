@@ -43,11 +43,13 @@ try {
   auth = getAuth(app);
 }
 
-// ✅ Firestore với memory cache cho React Native (không dùng IndexedDB)
+// ✅ Firestore với cấu hình tối ưu cho React Native
 let db: Firestore;
 try {
   db = initializeFirestore(app, {
     localCache: memoryLocalCache(),
+    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
   });
 } catch {
   db = getFirestore(app);

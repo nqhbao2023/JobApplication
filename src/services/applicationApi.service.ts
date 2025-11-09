@@ -9,8 +9,8 @@ export interface Application {
   status: 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'withdrawn';
   cvUrl?: string;
   coverLetter?: string;
-  appliedAt: any;
-  updatedAt: any;
+  appliedAt: Date | string | number;
+  updatedAt: Date | string | number;
 }
 
 interface CreateApplicationData {

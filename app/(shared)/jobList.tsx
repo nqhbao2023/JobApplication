@@ -35,6 +35,8 @@ type JobType = {
 };
 
 const AllJobs = () => {
+  console.log('🟡 AllJobs component mounted');
+  
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
@@ -46,7 +48,11 @@ const AllJobs = () => {
 
   const fetchData = async () => {
     try {
+      console.log('🔵 [1] Bắt đầu fetch...');
+      
       const jobsSnap = await getDocs(collection(db, "jobs"));
+      console.log('🔵 [2] Firebase jobs count:', jobsSnap.docs.length);
+      
       const categoriesSnap = await getDocs(collection(db, "job_categories"));
       const typesSnap = await getDocs(collection(db, "job_types"));
 
@@ -54,6 +60,7 @@ const AllJobs = () => {
         await Promise.all(
           jobsSnap.docs.map(async (jobDoc) => {
             const jobData = jobDoc.data();
+            console.log('🔵 [3] Processing job:', jobDoc.id, jobData.title);
             if (!jobData.title) return null;
 
             let companyData = {};
@@ -108,6 +115,8 @@ const AllJobs = () => {
         )
       ).filter((job): job is Job => job !== null);
 
+      console.log('✅ [4] Final jobsData:', jobsData.length);
+
       const categoriesData: JobCategory[] = categoriesSnap.docs.map((cat) => ({
         $id: cat.id,
         ...cat.data(),
@@ -154,6 +163,7 @@ const AllJobs = () => {
   };
 
   useEffect(() => {
+    console.log('🟢 useEffect triggered - calling fetchData()');
     fetchData();
   }, []);
 

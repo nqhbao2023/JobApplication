@@ -10,7 +10,7 @@ export interface AIRecommendation {
 
 export const aiApiService = {
   async getRecommendations(limit: number = 10): Promise<AIRecommendation[]> {
-    return apiClient.get<AIRecommendation[]>(API_ENDPOINTS.ai.recommend, { limit });
+    return apiClient.get<AIRecommendation[]>(`${API_ENDPOINTS.ai.recommend}?limit=${limit}`);
   },
 
   async enhanceDescription(description: string): Promise<string> {

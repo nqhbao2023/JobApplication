@@ -8,13 +8,16 @@ export interface NewsArticle {
   url: string;
   source: string;
   category: string;
-  publishedAt: any;
-  createdAt: any;
+  publishedAt: Date | string | number;
+  createdAt: Date | string | number;
 }
 
 export const newsApiService = {
   async getNews(limit: number = 20, category?: string): Promise<NewsArticle[]> {
-    return apiClient.get<NewsArticle[]>(API_ENDPOINTS.news, { limit, category });
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (category) params.append('category', category);
+    return apiClient.get<NewsArticle[]>(`${API_ENDPOINTS.news}?${params.toString()}`);
   },
 
   async refreshNews(): Promise<{ total: number; saved: number }> {

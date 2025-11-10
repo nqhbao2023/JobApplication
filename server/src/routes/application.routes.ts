@@ -7,6 +7,7 @@ import {
   getCandidateApplications,
   getEmployerApplications,
   getJobApplications,
+  updateApplication,
   updateApplicationStatus,
   withdrawApplication,
 } from '../controllers/application.controller';
@@ -18,6 +19,7 @@ router.post('/', authenticate, authorize('candidate'), validate(createApplicatio
 router.get('/my-applications', authenticate, authorize('candidate'), getCandidateApplications);
 router.get('/employer-applications', authenticate, authorize('employer', 'admin'), getEmployerApplications);
 router.get('/job/:jobId', authenticate, authorize('employer', 'admin'), getJobApplications);
+router.patch('/:id', authenticate, authorize('candidate'), updateApplication);
 router.patch('/:id/status', authenticate, authorize('employer', 'admin'), updateApplicationStatus);
 router.delete('/:id', authenticate, authorize('candidate'), withdrawApplication);
 

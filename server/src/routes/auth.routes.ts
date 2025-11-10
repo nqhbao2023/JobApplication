@@ -5,6 +5,21 @@ import { Response } from 'express';
 
 const router = Router();
 
+const buildProfileResponse = (
+  uid: string,
+  userData: any,
+  fallbackEmail?: string
+) => ({
+  uid,
+  email: userData?.email || fallbackEmail || null,
+  name: userData?.name || null,
+  phone: userData?.phone || null,
+  photoURL: userData?.photoURL || null,
+  role: userData?.role || 'candidate',
+  createdAt: userData?.createdAt || null,
+  updatedAt: userData?.updatedAt || null,
+});
+
 /**
  * GET /api/auth/verify
  * Xác thực token hiện tại
@@ -74,18 +89,7 @@ router.get('/profile', authenticate, async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    // Filter sensitive data
-    const profile = {
-      uid: req.user!.uid,
-      email: userData?.email || req.user!.email,
-      name: userData?.name || null,
-      phone: userData?.phone || null,
-      photoURL: userData?.photoURL || null,
-      role: userData?.role || 'candidate',
-      createdAt: userData?.createdAt,
-      updatedAt: userData?.updatedAt,
-    };
-
+    const profile = buildProfileResponse(req.user!.uid, userData, req.user!.email);
     res.json(profile);
   } catch (error: any) {
     console.error('Get profile error:', error);
@@ -111,8 +115,10 @@ router.patch('/profile', authenticate, async (req: AuthRequest, res: Response): 
     if (photoURL !== undefined) updates.photoURL = photoURL;
 
     await db.collection('users').doc(req.user!.uid).update(updates);
+    const updatedDoc = await db.collection('users').doc(req.user!.uid).get();
+    const profile = buildProfileResponse(req.user!.uid, updatedDoc.data(), req.user!.email);
 
-    res.json({ message: 'Profile updated successfully', updates });
+    res.json(profile);
   } catch (error: any) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });

@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import { db, storage, auth } from "@/config/firebase";
+import { applicationApiService } from "@/services/applicationApi.service";
 import {
   ref,
   uploadBytesResumable,
@@ -40,7 +41,11 @@ const ALLOW_TYPES = [
 ];
 
 export default function Submit() {
-  const { jobId, userId } = useLocalSearchParams<{ jobId: string; userId: string }>();
+  const { jobId, userId, applyDocId } = useLocalSearchParams<{
+    jobId: string;
+    userId: string;
+    applyDocId?: string;
+  }>();
 
   const [cvFile, setCvFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [progress, setProgress] = useState<number>(0);
@@ -103,6 +108,14 @@ export default function Submit() {
     if (!cvFile) {
       isSubmittingRef.current = false;
       return Alert.alert("Chưa chọn file", "Hãy chọn CV trước khi nộp.");
+    }
+
+    if (!applyDocId) {
+      isSubmittingRef.current = false;
+      return Alert.alert(
+        "Thiếu hồ sơ",
+        "Không tìm thấy thông tin đơn ứng tuyển. Vui lòng quay lại và ứng tuyển lại công việc."
+      );
     }
 
     try {
@@ -171,16 +184,20 @@ export default function Submit() {
       } else {
         await updateDoc(snap.docs[0].ref, payload);
       }
-Alert.alert("🎉 Thành công", "Bạn đã nộp CV thành công!");
-await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-await new Promise(r => setTimeout(r, 400));
 
-router.dismiss(1); // 👈 Đóng màn hình JobDescription cũ phía dưới Submit
-router.replace({
-  pathname: "/(shared)/jobDescription",
-  params: { jobId, success: "true" },
-});
+      await applicationApiService.updateApplication(applyDocId, {
+        cvUrl: url,
+      });
 
+      Alert.alert("🎉 Thành công", "Bạn đã nộp CV thành công!");
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await new Promise((r) => setTimeout(r, 400));
+
+      router.dismiss(1); // 👈 Đóng màn hình JobDescription cũ phía dưới Submit
+      router.replace({
+        pathname: "/(shared)/jobDescription",
+        params: { jobId, success: "true" },
+      });
 
     } catch (e: any) {
       console.error("❌ Upload CV error:", e);

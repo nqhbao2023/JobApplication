@@ -76,16 +76,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           throw apiError;
         }
       } catch (err: any) {
-        console.error('❌ Sign in error:', err);
-
-        const errorMessages: Record<string, string> = {
-          'deleted-user': 'Tài khoản của bạn đã bị xóa. Liên hệ admin để biết thêm chi tiết.',
-          'session-expired': 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.',
-          'network-request-failed': 'Không thể kết nối server. Kiểm tra internet và thử lại.',
-        };
-
-        setError(errorMessages[err.message] || mapAuthError(err?.code));
-        throw err;
+        // ✅ Extract error code từ Firebase Auth error
+        // Firebase v9+ error structure: { code: 'auth/...', message: '...' }
+        const errorCode = err?.code || '';
+        let errorMessage = '';
+        
+        // ✅ Handle custom errors (từ backend API)
+        if (err?.message === 'deleted-user') {
+          errorMessage = 'Tài khoản của bạn đã bị xóa. Liên hệ admin để biết thêm chi tiết.';
+        } else if (err?.message === 'session-expired') {
+          errorMessage = 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.';
+        } else if (errorCode) {
+          // ✅ Use mapAuthError for Firebase Auth errors (có error code)
+          errorMessage = mapAuthError(errorCode);
+        } else {
+          // ✅ Fallback: dùng error message nếu không có code
+          errorMessage = err?.message || 'Đã xảy ra lỗi. Vui lòng thử lại';
+        }
+        
+        // ✅ Set error state để hiển thị trên UI
+        setError(errorMessage);
+        
+        // ✅ Log error một lần với format đơn giản (tránh log nhiều lần)
+        // User errors (invalid-credential, wrong-password) dùng warn level
+        const isUserError = errorCode?.includes('invalid-credential') || 
+                           errorCode?.includes('wrong-password') || 
+                           errorCode?.includes('user-not-found');
+        
+        if (isUserError) {
+          // User error: chỉ log nhẹ nhàng, không throw
+          console.warn(`⚠️ Sign in failed: ${errorMessage} (${errorCode})`);
+        } else {
+          // System error: log đầy đủ để debug
+          console.error(`❌ Sign in error [${errorCode}]:`, errorMessage);
+        }
+        
+        // ✅ Không throw error lại - error đã được handle và hiển thị trên UI
+        // Chỉ throw cho các lỗi nghiêm trọng cần propagate (nếu có)
       } finally {
         setLoading(false);
       }
@@ -148,9 +175,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           throw new Error('Backend sync failed. Account creation rolled back.');
         }
       } catch (err: any) {
-        console.error('❌ Sign up error:', err);
-
-        // Cleanup on error
+        // ✅ Cleanup on error
         if (userCreated && auth.currentUser) {
           try {
             await auth.currentUser.delete();
@@ -160,12 +185,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
         }
 
+        // ✅ Extract và set error message
+        const errorCode = err?.code || '';
+        let errorMessage = '';
+        
         if (err?.message?.includes('Backend sync failed')) {
-          setError('Không thể đồng bộ dữ liệu. Vui lòng thử lại.');
+          errorMessage = 'Không thể đồng bộ dữ liệu. Vui lòng thử lại.';
+        } else if (errorCode) {
+          errorMessage = mapAuthError(errorCode);
         } else {
-          setError(mapAuthError(err?.code));
+          errorMessage = err?.message || 'Đã xảy ra lỗi. Vui lòng thử lại';
         }
-        throw err;
+        
+        setError(errorMessage);
+        
+        // ✅ Log error một lần với format đơn giản
+        const isUserError = errorCode?.includes('email-already-in-use') || 
+                           errorCode?.includes('weak-password');
+        
+        if (isUserError) {
+          console.warn(`⚠️ Sign up failed: ${errorMessage} (${errorCode})`);
+        } else {
+          console.error(`❌ Sign up error [${errorCode}]:`, errorMessage);
+        }
+        
+        // ✅ Không throw error lại - error đã được handle và hiển thị trên UI
       } finally {
         setLoading(false);
       }

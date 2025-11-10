@@ -2,15 +2,17 @@ import { Platform } from 'react-native';
 
 const getBaseURL = (): string => {
   const isDev = process.env.NODE_ENV === 'development';
-  
+
   if (!isDev) {
     return 'https://job4s-api.onrender.com';
   }
 
+  // ✅ Đảm bảo emulator truy cập được backend
   if (Platform.OS === 'android') {
-    return 'http://192.168.1.58:3000';
+    return 'http://10.0.2.2:3000'; // Android emulator loopback
   }
-  
+
+  // ✅ Nếu chạy trên iOS simulator hoặc web dev
   return 'http://localhost:3000';
 };
 

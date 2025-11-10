@@ -22,7 +22,7 @@ export type SalaryValue = string | SalaryObject | null | undefined;
 
 // Enhanced Job type with SalaryValue
 export interface Job {
-  $id?: string;
+  $id: string;  // ✅ Required: normalizeJob always provides this
   id?: string;
   title?: string;
   image?: string;

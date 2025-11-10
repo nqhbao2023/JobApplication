@@ -1,11 +1,12 @@
 import apiClient from './apiClient';
+import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
+import { auth } from '@/config/firebase';
 import { AppRole, AppRoleOrNull } from '@/types';
 
-/**
- * 🔐 Auth API Service
- * Xử lý toàn bộ authentication qua backend API thay vì Firebase client SDK
- */
+/* -------------------------------------------------------------------------- */
+/*                       🔐  Auth API service – Job4S                         */
+/* -------------------------------------------------------------------------- */
 
 export interface LoginRequest {
   email: string;
@@ -36,6 +37,7 @@ export interface RoleResponse {
   role: AppRoleOrNull;
   isAdmin: boolean;
 }
+
 export interface UserProfile {
   uid: string;
   email: string | null;
@@ -46,27 +48,57 @@ export interface UserProfile {
   createdAt: string | null;
   updatedAt: string | null;
 }
+
 export const authApiService = {
-  /**
-   * Xác thực token hiện tại với backend
-   * Backend sẽ verify Firebase token và trả về thông tin user
-   */
-  async verifyToken(): Promise<AuthResponse> {
-    return apiClient.get<AuthResponse>(API_ENDPOINTS.auth.verify);
+  /* ---------------------------------------------------------------------- */
+  /* 🔑  Verify Firebase token với backend                                  */
+  /* ---------------------------------------------------------------------- */
+  async verifyToken(): Promise<AuthResponse | null> {
+    try {
+      const res = await apiClient.get<AuthResponse>(API_ENDPOINTS.auth.verify);
+      return res; // apiClient đã unwrap .data
+    } catch (err: any) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        console.warn('⚠️ verifyToken: user not found → return null');
+        return null;
+      }
+      console.error('❌ verifyToken error:', err.message);
+      throw err;
+    }
   },
 
-  /**
-   * Lấy thông tin role của user hiện tại từ backend
-   * Backend đọc từ Firestore và normalize role
-   */
+  /* ---------------------------------------------------------------------- */
+  /* 🛂  Lấy role hiện tại của user                                          */
+  /* ---------------------------------------------------------------------- */
   async getCurrentRole(): Promise<RoleResponse> {
-    return apiClient.get<RoleResponse>('/api/auth/role');
+    try {
+      const res = await apiClient.get<RoleResponse>(API_ENDPOINTS.auth.role);
+      return res;
+    } catch (err: any) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        console.warn('⚠️ getCurrentRole: user not found → creating default profile');
+
+        const firebaseUser = auth.currentUser;
+        if (firebaseUser) {
+          apiClient
+            .post(API_ENDPOINTS.auth.sync, {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              role: 'candidate',
+            })
+            .catch(console.error);
+        }
+
+        return { role: 'candidate', isAdmin: false };
+      }
+      console.error('❌ getCurrentRole error:', err.message);
+      throw err;
+    }
   },
 
-  /**
-   * Đồng bộ thông tin user lên backend sau khi đăng ký/đăng nhập
-   * Backend sẽ lưu/update vào Firestore
-   */
+  /* ---------------------------------------------------------------------- */
+  /* 🔄  Đồng bộ user sau đăng ký / đăng nhập                                */
+  /* ---------------------------------------------------------------------- */
   async syncUser(userData: {
     uid: string;
     email: string;
@@ -75,31 +107,30 @@ export const authApiService = {
     role?: AppRole;
     photoURL?: string;
   }): Promise<void> {
-    return apiClient.post<void>('/api/auth/sync', userData);
+    await apiClient.post<void>(API_ENDPOINTS.auth.sync, userData);
   },
 
-  /**
-   * Update role của user (chỉ admin có thể gọi)
-   */
+  /* ---------------------------------------------------------------------- */
+  /* 📝  Update role (admin)                                                 */
+  /* ---------------------------------------------------------------------- */
   async updateRole(userId: string, role: AppRole): Promise<void> {
-    return apiClient.patch<void>(`/api/auth/users/${userId}/role`, { role });
-  },
-  /**
-   * Xóa tài khoản user (soft delete)
-   */
-  async deleteAccount(userId: string): Promise<void> {
-    return apiClient.delete<void>(`/api/auth/users/${userId}`);
+    await apiClient.patch<void>(`/api/auth/users/${userId}/role`, { role });
   },
 
-  /**
-  * Get user profile trực tiếp từ backend
-   */
+  /* ---------------------------------------------------------------------- */
+  /* 🗑   Xoá (soft-delete) tài khoản                                        */
+  /* ---------------------------------------------------------------------- */
+  async deleteAccount(userId: string): Promise<void> {
+    await apiClient.delete<void>(`/api/auth/users/${userId}`);
+  },
+
+  /* ---------------------------------------------------------------------- */
+  /* 👤  Lấy & cập nhật profile                                              */
+  /* ---------------------------------------------------------------------- */
   async getProfile(): Promise<UserProfile> {
     return apiClient.get<UserProfile>(API_ENDPOINTS.auth.profile);
   },
-  /**
-   * Update user profile và trả về dữ liệu mới nhất
-   */
+
   async updateProfile(updates: {
     name?: string;
     phone?: string;

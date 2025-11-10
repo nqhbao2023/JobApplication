@@ -15,16 +15,36 @@ interface GetJobsResponse {
   total: number;
 }
 
+// ✅ CreateJobPayload: Format dữ liệu để tạo job mới (theo API schema)
+interface CreateJobPayload {
+  title: string;
+  company: string;
+  companyId: string;
+  description: string;
+  requirements: string[];
+  skills: string[];
+  salary: {
+    min: number;
+    max: number;
+    currency: 'VND' | 'USD';
+  };
+  location: string;
+  type: 'full-time' | 'part-time' | 'contract' | 'internship';
+  category: string;
+  status?: 'active' | 'inactive' | 'closed';
+  expiresAt?: string;
+}
+
 export const jobApiService = {
   async getAllJobs(params?: GetJobsParams): Promise<GetJobsResponse> {
-    return apiClient.get<GetJobsResponse>(API_ENDPOINTS.jobs, params);
+    return apiClient.get<GetJobsResponse>(API_ENDPOINTS.jobs, { params });
   },
 
   async getJobById(id: string): Promise<Job> {
     return apiClient.get<Job>(`${API_ENDPOINTS.jobs}/${id}`);
   },
 
-  async createJob(jobData: Omit<Job, 'id' | 'createdAt' | 'updatedAt'>): Promise<Job> {
+  async createJob(jobData: CreateJobPayload): Promise<Job> {
     return apiClient.post<Job>(API_ENDPOINTS.jobs, jobData);
   },
 

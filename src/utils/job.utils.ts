@@ -2,9 +2,15 @@ import { Job } from '@/types';
 import { normalizeSalary } from './salary.utils';
 
 export const normalizeJob = (job: any): Job => {
+  // ✅ Ensure $id is always a non-empty string
+  const jobId = job.$id || job.id;
+  if (!jobId || typeof jobId !== 'string') {
+    throw new Error('Job must have a valid id or $id');
+  }
+  
   return {
     ...job,
-    $id: job.$id || job.id || '',
+    $id: jobId,
     created_at: job.created_at || job.createdAt || new Date().toISOString(),
     salary: normalizeSalary(job.salary),
   };

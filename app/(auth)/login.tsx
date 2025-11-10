@@ -21,11 +21,11 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     if (!validateLoginForm(email, password)) return;
 
-    try {
-      await signIn(email, password);
-    } catch (err) {
-      // Error handled by AuthContext
-    }
+    // ✅ Error được handle trong AuthContext, không cần catch lại
+    // AuthContext sẽ set error state và hiển thị trên UI
+    await signIn(email, password).catch(() => {
+      // Silently handle - error already shown in UI via authError state
+    });
   };
 
   return (

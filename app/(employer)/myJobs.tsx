@@ -5,7 +5,7 @@ import {
   View, Text, FlatList, TouchableOpacity, Image, 
   StyleSheet, RefreshControl, Alert, ActivityIndicator 
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { jobApiService } from '@/services/jobApi.service';
@@ -45,9 +45,17 @@ export default function MyJobs() {
     }
   }, []);
 
+  // ✅ Load jobs khi component mount
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
+
+  // ✅ Refresh jobs khi screen được focus (sau khi tạo job mới)
+  useFocusEffect(
+    useCallback(() => {
+      fetchJobs();
+    }, [fetchJobs])
+  );
 
   /**
    * Xóa job qua API

@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { db, auth, storage } from '@/config/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, getDocs, serverTimestamp, getDoc, doc } from 'firebase/firestore';
+import { jobApiService } from '@/services/jobApi.service';
+import { handleApiError, handleSuccess } from '@/utils/errorHandler';
 import { DRAFT_KEY, AI_TEMPLATES, type JobFormData, type NewCompanyData, type ExpandedSections } from '@/constants/addJob.constants';
 
 export const useAddJobForm = () => {
@@ -355,47 +357,96 @@ export const useAddJobForm = () => {
         };
       }
 
-      const min = parseFloat(formData.salaryMin);
-      const max = formData.salaryMax.trim() ? parseFloat(formData.salaryMax) : null;
+      // ✅ Get company name and location
+      let companyName = '';
+      let location = 'Không xác định';
+      
+      if (isAddingNewCompany) {
+        companyName = newCompany.corp_name.trim();
+        location = newCompany.city?.trim() || 'Không xác định';
+      } else if (companyId) {
+        const companyDoc = await getDoc(doc(db, "companies", companyId));
+        if (companyDoc.exists()) {
+          const companyData = companyDoc.data();
+          companyName = companyData?.corp_name || companyId;
+          location = companyData?.city?.trim() || companyData?.nation?.trim() || 'Không xác định';
+        } else {
+          companyName = companyId; // Fallback
+        }
+      }
 
-      const jobPayload = {
-        title: formData.title,
-        job_Description: formData.jobDescription,
-        responsibilities: formData.responsibilities,
-        skills_required: formData.skillsRequired,
-        salaryMin: min,
-        salaryMax: max,
-        experience: formData.experience,
-        quantity: qty,
-        deadline: formData.deadline || null,
-        jobTypes: jobTypeObj,
-        jobCategories: jobCategoryObj,
-        jobTypeId: jobTypeObj.id,
-        jobCategoryId: jobCategoryObj.id,
-        isCustomCategory: formData.selectedJobCategory === "other",
-        contact_name: formData.contactName || "",
-        contact_email: formData.contactEmail || "",
-        contact_phone: formData.contactPhone || "",
-        company: companyId,
-        image: jobImageUrl,
-        ownerId: userId,
-        users: userId,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
+      // ✅ Parse salary
+      const min = parseFloat(formData.salaryMin);
+      const max = formData.salaryMax.trim() ? parseFloat(formData.salaryMax) : min; // Nếu không có max, dùng min
+
+      // ✅ Parse requirements và skills từ string sang array
+      const requirements = formData.responsibilities
+        .split('\n')
+        .map(r => r.trim())
+        .filter(r => r.length > 0);
+      
+      const skills = formData.skillsRequired
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+      // ✅ Map job type từ form sang API format
+      const jobTypeMap: Record<string, 'full-time' | 'part-time' | 'contract' | 'internship'> = {
+        'full-time': 'full-time',
+        'part-time': 'part-time',
+        'contract': 'contract',
+        'internship': 'internship',
+        'thực tập': 'internship',
+        'bán thời gian': 'part-time',
+        'toàn thời gian': 'full-time',
+        'hợp đồng': 'contract',
+      };
+      
+      const jobTypeName = jobTypeObj.type_name?.toLowerCase() || formData.workingType?.toLowerCase() || 'full-time';
+      const mappedType = jobTypeMap[jobTypeName] || 'full-time';
+
+      // ✅ Get category name or ID
+      const categoryName = jobCategoryObj.category_name || jobCategoryObj.id || '';
+
+      // ✅ Build API payload
+      const apiPayload = {
+        title: formData.title.trim(),
+        company: companyName,
+        companyId: companyId || '',
+        description: formData.jobDescription.trim(),
+        requirements: requirements.length > 0 ? requirements : [formData.jobDescription.trim()], // Fallback to description
+        skills: skills.length > 0 ? skills : ['Không yêu cầu'], // Fallback
+        salary: {
+          min: min,
+          max: max,
+          currency: 'VND' as const,
+        },
+        location: location,
+        type: mappedType,
+        category: categoryName,
+        status: 'active' as const,
       };
 
-      await addDoc(collection(db, "jobs"), jobPayload);
+      // ✅ Create job via API
+      const createdJob = await jobApiService.createJob(apiPayload);
+      
       await clearDraft();
 
-      Alert.alert("✅ Thành công", "Đã đăng công việc mới!");
-      router.back();
-    } catch (e) {
+      // ✅ Success notification
+      handleSuccess('Đã đăng công việc mới thành công!', {
+        callback: () => {
+          router.back();
+        },
+      });
+    } catch (e: any) {
       console.error("❌ Lỗi thêm công việc:", e);
-      Alert.alert("Lỗi", "Không thể thêm công việc");
+      handleApiError(e, 'create_job', {
+        silent: false,
+      });
     } finally {
       setLoading(false);
     }
-  }, [formData, isAddingNewCompany, newCompany, newCompanyImageUri, userId, validateForm, router]);
+  }, [formData, isAddingNewCompany, newCompany, newCompanyImageUri, userId, validateForm, router, clearDraft]);
 
   const isBasicComplete = !!(formData.title.trim() && formData.jobDescription.trim());
   const isDetailsComplete = !!formData.salaryMin.trim();

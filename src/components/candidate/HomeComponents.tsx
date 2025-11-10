@@ -24,6 +24,7 @@ import {
   getContrastColor,
   CARD_GAP,
 } from '@/constants/candidate_Home.constants';
+import { formatSalary } from '@/utils/salary.utils';
 
 export const LoadingScreen = memo(() => (
   <View style={styles.loadingContainer}>
@@ -176,7 +177,7 @@ export const JobCard = memo(({
         <View style={styles.jobInfoRow}>
           <Ionicons name="cash-outline" size={14} color="#10b981" />
           <Text style={[styles.jobInfo, { color: '#10b981', fontWeight: '600' }]} numberOfLines={1}>
-            {item.salary}
+            {formatSalary(item.salary)}
           </Text>
         </View>
       )}

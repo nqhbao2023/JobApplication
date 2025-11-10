@@ -6,17 +6,9 @@ export const SCROLL_THRESHOLD = 80;
 export const CARD_GAP = 14;
 export const HORIZONTAL_PADDING = 20;
 
-export type Job = {
-  $id: string;
-  title?: string;
-  image?: string;
-  created_at?: string;
-  company?: string | { $id?: string; corp_name?: string; nation?: string };
-  jobCategories?: any;
-  type?: string;
-  salary?: string;
-  location?: string;
-};
+// ✅ Import and re-export Job type from @/types to avoid duplication
+import type { Job } from '@/types';
+export type { Job } from '@/types';
 
 export type Company = {
   $id: string;

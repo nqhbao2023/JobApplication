@@ -1,6 +1,6 @@
 // app/(shared)/jobDescription.tsx
 import React, { useState } from "react";
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -43,13 +43,13 @@ const JobDescription = () => {
     refresh,
     hasDraft,
   } = useJobDescription(jobId);
-// ✅ Re-fetch lại khi màn hình JobDescription được focus lại
-useFocusEffect(
-  React.useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    refresh(); // luôn đồng bộ khi focus lại
-  }, [refresh])
-);
+  // ✅ Re-fetch lại khi màn hình JobDescription được focus lại
+  useFocusEffect(
+    React.useCallback(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      refresh(); // luôn đồng bộ khi focus lại
+    }, [refresh])
+  );
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
 
   const showCandidateUI = userRole === "candidate";
@@ -95,10 +95,13 @@ useFocusEffect(
       >
         {/* Header */}
         <View style={styles.topView}>
-<TouchableOpacity style={styles.buttons} onPress={() => smartBack()}>
-  <Ionicons name="arrow-back" size={24} />
-</TouchableOpacity>
-          <TouchableOpacity style={styles.buttons} onPress={() => router.push("/")}>
+          <TouchableOpacity style={styles.buttons} onPress={() => smartBack()}>
+            <Ionicons name="arrow-back" size={24} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.buttons}
+            onPress={() => router.push("/")}
+          >
             <Ionicons name="share-social" size={24} />
           </TouchableOpacity>
         </View>
@@ -108,13 +111,17 @@ useFocusEffect(
           <View style={styles.jobImageContainer}>
             <Image
               style={styles.jobImage}
-              source={{ uri: jobData?.image || "https://via.placeholder.com/100" }}
+              source={{
+                uri: jobData?.image || "https://via.placeholder.com/100",
+              }}
             />
           </View>
 
           <View style={styles.companyName}>
             <Text style={styles.companyNameText}>{jobData?.title}</Text>
-            <Text style={[styles.companyNameText, { fontSize: 16, color: "#555" }]}>
+            <Text
+              style={[styles.companyNameText, { fontSize: 16, color: "#555" }]}
+            >
               {jobData?.company?.corp_name ?? "Đang tải..."}
             </Text>
           </View>
@@ -160,7 +167,8 @@ useFocusEffect(
           )}
           {selected === 1 && (
             <Text style={styles.descriptionContent}>
-              {jobData?.skills_required || "Không có thông tin kỹ năng yêu cầu."}
+              {jobData?.skills_required ||
+                "Không có thông tin kỹ năng yêu cầu."}
             </Text>
           )}
           {selected === 2 && (
@@ -193,7 +201,10 @@ useFocusEffect(
 
             {/* Nút Ứng tuyển */}
             {applyLoading ? (
-              <TouchableOpacity style={[styles.actionBtn, styles.disabledBtn]} disabled>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.disabledBtn]}
+                disabled
+              >
                 <ActivityIndicator size="small" color="#F97459" />
               </TouchableOpacity>
             ) : isApplied ? (
@@ -266,7 +277,6 @@ useFocusEffect(
       </View>
     </View>
   );
-  
 };
 
 export default JobDescription;

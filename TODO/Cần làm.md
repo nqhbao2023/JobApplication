@@ -138,3 +138,36 @@ có đầy đủ:
 - ✅ Slide thuyết trình và file backup  
 
 → **Sẵn sàng bảo vệ đồ án ngày 15/12/2025**.
+-----------------------------------------------
+Vấn đề chưa khắc phục ở tuần 1:
+Mô tả vấn đề
+Ứng dụng đang ở trạng thái “nửa vời”: phần server Express + service layer đã dựng, nhưng phần lớn màn hình React Native và context vẫn gọi thẳng Firestore client SDK, làm gián đoạn mục tiêu chuẩn hóa API và tách backend riêng.
+
+Giải pháp (ưu tiên)
+
+Ưu tiên 1 – Chuẩn hóa lớp nền tảng người dùng: thay AuthContext, RoleContext, utils/roles và mọi logic xác thực/sync hồ sơ đang đọc/ghi Firestore trực tiếp bằng lời gọi API (sign-in/up, role sync).
+Ưu tiên 1 – Candidate flows: chuyển các màn AppliedJob, SavedJobs, Person profile, Job detail/shared hook sang gọi applicationApiService, jobApiService, notificationApiService thay vì firebase/firestore (đồng bộ với service layer hiện có).
+Ưu tiên 1 – Employer flows: refactor màn Applications, MyJobs, job management để dùng API /api/applications, /api/jobs (server đã hỗ trợ) thay vì truy vấn collections trực tiếp.
+Ưu tiên 2 – Admin portal: chuyển các màn quản trị (job-create, job-categories, users, analytics…) sang API; bổ sung endpoint tương ứng nếu thiếu.
+Ưu tiên 2 – Shared utilities & hooks: chuẩn hóa các hook (useFirestoreCollection, useJobStatus, scripts seeding) để đọc qua backend (REST hoặc batch endpoints) nhằm loại bỏ phụ thuộc Firestore client trong app code.
+Ưu tiên 3 – Background scripts & automation: cập nhật script seeding, notification cleanup để gọi API hoặc chuyển sang chạy ở server (Cloud Task/cron) tránh dùng SDK trực tiếp trong môi trường client.
+Giải thích (đã làm & lý do giữ lại)
+
+Backend Express đã dựng với middleware bảo mật, CORS, và route cấu trúc chuẩn, nên có nền tảng để chuyển front-end sang dùng API.
+Service layer cho jobs, notifications, applications, v.v. đã tồn tại, thao tác với Firestore Admin – chỉ cần expose thêm endpoint khi refactor front-end.
+Front-end có apiClient (axios + interceptor) và các service wrapper (jobApiService, applicationApiService, notificationApiService) đã sẵn sàng; một số hook như useCandidateHome đã bắt đầu dùng API cho jobs/categories/notifications (cần hoàn thiện nốt phần user profile).
+2 câu hỏi học tập
+
+Tại sao nên chuyển mọi truy cập Firestore ở client sang gọi API Gateway trong bối cảnh cần kiểm soát phân quyền và audit?
+Khi refactor một màn hình từ Firestore SDK sang REST API, bạn sẽ thiết kế interface dữ liệu và xử lý lỗi thế nào để không phá vỡ UX hiện tại?
+Vị trí chèn mã / cách tích hợp
+
+Refactor context & hooks trong src/contexts, src/hooks, src/utils.
+Thay thế logic màn hình trong app/(candidate), app/(employer), app/(shared), app/(admin) bằng lời gọi service API tương ứng.
+Nếu thiếu endpoint, bổ sung controller/service/route trong server/src/controllers, server/src/services, server/src/routes.
+Định hướng bước tiếp theo
+
+Bắt đầu với AuthContext + RoleContext vì ảnh hưởng toàn ứng dụng, sau đó xử lý các luồng candidate/employer quan trọng nhất, cuối cùng mới dọn dẹp admin & scripts. Việc này đảm bảo mọi người dùng đi qua API thống nhất trước khi mở rộng thêm tính năng.
+Mục tiêu dài hạn
+
+Hoàn toàn loại bỏ Firestore client SDK khỏi ứng dụng di động, chuẩn hóa mọi truy cập dữ liệu qua backend Node/Express để dễ kiểm soát bảo mật, logging, và mở rộng các dịch vụ AI/ElasticSearch sau này.

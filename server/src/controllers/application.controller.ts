@@ -8,6 +8,15 @@ export const createApplication = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    // ✅ Validate employerId is not empty
+    if (!req.body.employerId || req.body.employerId.trim() === '') {
+      res.status(400).json({
+        error: 'Validation Error',
+        message: 'employerId is required and cannot be empty',
+      });
+      return;
+    }
+
     const applicationData = {
       ...req.body,
       candidateId: req.user!.uid,

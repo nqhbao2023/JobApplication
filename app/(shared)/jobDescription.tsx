@@ -22,6 +22,8 @@ import { useJobStatus } from "@/hooks/useJobStatus";
 import { smartBack } from "@/utils/navigation";
 import ContactEmployerButton from "@/components/ContactEmployerButton";
 import * as Haptics from "expo-haptics";
+import { formatSalary } from "@/utils/salary.utils";
+import { Job } from "@/types";
 
 const JobDescription = () => {
   const [selected, setSelected] = useState(0);
@@ -53,7 +55,8 @@ const JobDescription = () => {
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
 
   const showCandidateUI = userRole === "candidate";
-  const showEmployerUI = userRole === "employer" && jobData?.users?.id;
+  // ✅ Check if user is employer and owns this job
+  const showEmployerUI = userRole === "employer" && (jobData as Job)?.employerId;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -122,13 +125,19 @@ const JobDescription = () => {
             <Text
               style={[styles.companyNameText, { fontSize: 16, color: "#555" }]}
             >
-              {jobData?.company?.corp_name ?? "Đang tải..."}
+              {(() => {
+                // ✅ Type-safe company name extraction
+                const company = (jobData as Job)?.company;
+                if (!company) return "Đang tải...";
+                if (typeof company === 'string') return company;
+                return company.corp_name || "Không rõ công ty";
+              })()}
             </Text>
           </View>
 
           <View style={styles.companyInfoBox}>
             <Text style={styles.companyInfoText}>
-              💰 Lương: {jobData?.salary || "Thoả thuận"}
+              💰 Lương: {formatSalary((jobData as Job)?.salary) || "Thoả thuận"}
             </Text>
           </View>
         </View>
@@ -162,18 +171,25 @@ const JobDescription = () => {
           </Text>
           {selected === 0 && (
             <Text style={styles.descriptionContent}>
-              {jobData?.job_Description || "Không có mô tả công việc."}
+              {(jobData as Job)?.description || "Không có mô tả công việc."}
             </Text>
           )}
           {selected === 1 && (
             <Text style={styles.descriptionContent}>
-              {jobData?.skills_required ||
-                "Không có thông tin kỹ năng yêu cầu."}
+              {(() => {
+                // ✅ Format requirements array hoặc string
+                const requirements = (jobData as Job)?.requirements;
+                if (!requirements) return "Không có thông tin kỹ năng yêu cầu.";
+                if (Array.isArray(requirements)) {
+                  return requirements.map((req, idx) => `• ${req}`).join('\n');
+                }
+                return requirements;
+              })()}
             </Text>
           )}
           {selected === 2 && (
             <Text style={styles.descriptionContent}>
-              {jobData?.responsibilities || "Không có trách nhiệm công việc."}
+              {(jobData as Job)?.benefits || "Không có quyền lợi công việc."}
             </Text>
           )}
         </View>
@@ -231,14 +247,14 @@ const JobDescription = () => {
             )}
 
             {/* Liên hệ nhà tuyển dụng */}
-            {jobData?.ownerId && (
+            {((jobData as Job)?.employerId || (jobData as Job)?.ownerId) && (
               <TouchableOpacity
                 style={styles.chatBtn}
                 activeOpacity={0.8}
                 onPress={() =>
                   router.push({
                     pathname: "/chat",
-                    params: { employerId: jobData.ownerId },
+                    params: { employerId: (jobData as Job)?.employerId || (jobData as Job)?.ownerId },
                   })
                 }
               >

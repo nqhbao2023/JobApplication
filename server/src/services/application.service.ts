@@ -49,51 +49,84 @@ export class ApplicationService {
 
   async getApplicationsByCandidate(candidateId: string): Promise<Application[]> {
     try {
+      // ✅ Query without orderBy first (avoid index requirement)
       const snapshot = await db
         .collection(APPLICATIONS_COLLECTION)
         .where('candidateId', '==', candidateId)
-        .orderBy('appliedAt', 'desc')
         .get();
 
-      return snapshot.docs.map((doc) => ({
+      // ✅ Sort in memory by appliedAt
+      const applications = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Application[];
+
+      // Sort by appliedAt descending
+      applications.sort((a, b) => {
+        const aDate = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
+        const bDate = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
+        return bDate - aDate;
+      });
+
+      return applications;
     } catch (error: any) {
+      console.error('Error fetching candidate applications:', error);
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }
   }
 
   async getApplicationsByEmployer(employerId: string): Promise<Application[]> {
     try {
+      // ✅ Query without orderBy first (avoid index requirement)
       const snapshot = await db
         .collection(APPLICATIONS_COLLECTION)
         .where('employerId', '==', employerId)
-        .orderBy('appliedAt', 'desc')
         .get();
 
-      return snapshot.docs.map((doc) => ({
+      // ✅ Sort in memory by appliedAt
+      const applications = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Application[];
+
+      // Sort by appliedAt descending
+      applications.sort((a, b) => {
+        const aDate = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
+        const bDate = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
+        return bDate - aDate;
+      });
+
+      return applications;
     } catch (error: any) {
+      console.error('Error fetching employer applications:', error);
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }
   }
 
   async getApplicationsByJob(jobId: string): Promise<Application[]> {
     try {
+      // ✅ Query without orderBy first (avoid index requirement)
       const snapshot = await db
         .collection(APPLICATIONS_COLLECTION)
         .where('jobId', '==', jobId)
-        .orderBy('appliedAt', 'desc')
         .get();
 
-      return snapshot.docs.map((doc) => ({
+      // ✅ Sort in memory by appliedAt
+      const applications = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Application[];
+
+      // Sort by appliedAt descending
+      applications.sort((a, b) => {
+        const aDate = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
+        const bDate = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
+        return bDate - aDate;
+      });
+
+      return applications;
     } catch (error: any) {
+      console.error('Error fetching job applications:', error);
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }
   }

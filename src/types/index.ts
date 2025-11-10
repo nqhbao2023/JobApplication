@@ -22,13 +22,13 @@ export type SalaryValue = string | SalaryObject | null | undefined;
 
 // Enhanced Job type with SalaryValue
 export interface Job {
-  $id: string;
+  $id?: string;
   id?: string;
   title?: string;
   image?: string;
   created_at?: string;
   createdAt?: string;
-  company?: string | { $id?: string; corp_name?: string; nation?: string };
+  company?: string | { $id?: string; corp_name?: string; nation?: string; city?: string; email?: string };
   jobCategories?: any;
   type?: string;
   salary?: SalaryValue;
@@ -36,7 +36,11 @@ export interface Job {
   description?: string;
   requirements?: string;
   benefits?: string;
-  status?: 'active' | 'closed' | 'draft';
+  status?: 'active' | 'closed' | 'draft' | 'inactive';
+  employerId?: string;  // ✅ Added to match server type
+  ownerId?: string;     // ✅ Legacy field support (some jobs might use this)
+  applicantCount?: number;
+  viewCount?: number;
 }
 
 // Enhanced Company type

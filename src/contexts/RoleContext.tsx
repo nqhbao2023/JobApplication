@@ -1,10 +1,6 @@
-// src/contexts/RoleContext.tsx
-// ✅ Provider role toàn cục (API + cache local + auto redirect)
-// Refactored: Sử dụng authApiService thay vì Firestore trực tiếp
-
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { auth } from '@/config/firebase';
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppRoleOrNull } from '@/types';
 import { authApiService } from '@/services/authApi.service';
@@ -21,85 +17,126 @@ const RoleContext = createContext<RoleContextType>({
   refresh: async () => {},
 });
 
+const CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
+const ROLE_CACHE_KEY = 'userRole';
+const ROLE_TIMESTAMP_KEY = 'roleTimestamp';
+
 export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRoleOrNull>(null);
   const [loading, setLoading] = useState(true);
 
   /**
-   * Load role từ API backend
-   * Flow: Cache local → API call → Update cache
+   * Load role with cache invalidation
    */
-  const loadRole = async () => {
+  const loadRole = useCallback(async () => {
     setLoading(true);
+    
     try {
       const user = auth.currentUser;
+      
       if (!user) {
         setRole(null);
-        await AsyncStorage.removeItem('userRole');
+        await AsyncStorage.multiRemove([ROLE_CACHE_KEY, ROLE_TIMESTAMP_KEY]);
         return;
       }
 
-      // ✅ B1: Đọc cache trước để hiển thị ngay (offline-first)
-      const cached = await AsyncStorage.getItem('userRole');
-      if (cached && !role) {
-        setRole(cached as AppRoleOrNull);
+      // Check cache age
+      const [cached, timestamp] = await AsyncStorage.multiGet([
+        ROLE_CACHE_KEY,
+        ROLE_TIMESTAMP_KEY,
+      ]);
+
+      const cachedRole = cached[1];
+      const cacheTimestamp = timestamp[1];
+      const cacheAge = cacheTimestamp
+        ? Date.now() - parseInt(cacheTimestamp)
+        : Infinity;
+
+      // Use cache if fresh and available
+      if (cachedRole && cacheAge < CACHE_MAX_AGE && !role) {
+        setRole(cachedRole as AppRoleOrNull);
       }
 
-      // ✅ B2: Gọi API để lấy role mới nhất từ backend
+      // Always fetch from backend to check for updates
       try {
         const roleData = await authApiService.getCurrentRole();
-        
-        // Backend đã normalize role (student → candidate, isAdmin → admin)
-        const normalizedRole = roleData.role;
-        
-        if (normalizedRole && ['candidate', 'employer', 'admin'].includes(normalizedRole.toLowerCase())) {
-          const finalRole = normalizedRole.toLowerCase() as AppRoleOrNull;
-          setRole(finalRole);
-          await AsyncStorage.setItem('userRole', finalRole ?? '');
+        const normalizedRole = roleData.role?.toLowerCase() as AppRoleOrNull;
+
+        // Detect role change
+        if (normalizedRole !== cachedRole) {
+          console.log('🔄 Role changed:', cachedRole, '→', normalizedRole);
+        }
+
+        if (normalizedRole && ['candidate', 'employer', 'admin'].includes(normalizedRole)) {
+          setRole(normalizedRole);
+          await AsyncStorage.multiSet([
+            [ROLE_CACHE_KEY, normalizedRole],
+            [ROLE_TIMESTAMP_KEY, Date.now().toString()],
+          ]);
         } else {
-          // User không có role hoặc bị xóa
+          // No role or deleted user
           setRole(null);
-          await AsyncStorage.removeItem('userRole');
+          await AsyncStorage.multiRemove([ROLE_CACHE_KEY, ROLE_TIMESTAMP_KEY]);
         }
       } catch (apiError: any) {
         console.error('❌ Load role from API failed:', apiError);
-        
-        // Nếu API fail (network error, 401, etc.), dùng cache nếu có
-        if (cached) {
-          setRole(cached as AppRoleOrNull);
+
+        // Use cache only if fresh
+        if (cachedRole && cacheAge < CACHE_MAX_AGE) {
+          console.log('📦 Using cached role due to API error');
+          setRole(cachedRole as AppRoleOrNull);
         } else {
-          // Không có cache và API fail → set null
           setRole(null);
         }
       }
     } catch (e: any) {
       console.error('❌ Load role error:', e);
-      // Fallback: dùng cache nếu có
-      const cached = await AsyncStorage.getItem('userRole');
-      if (cached) {
-        setRole(cached as AppRoleOrNull);
-      }
+      
+      // Final fallback
+      try {
+        const cached = await AsyncStorage.getItem(ROLE_CACHE_KEY);
+        if (cached) setRole(cached as AppRoleOrNull);
+      } catch {}
     } finally {
       setLoading(false);
     }
-  };
+  }, [role]);
 
-  // 🔁 mount
+  // Initial mount
   useEffect(() => {
     loadRole();
   }, []);
 
-  // 🔁 khi login/logout
+  // Listen to auth state changes
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, () => {
-      loadRole();
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadRole();
+      } else {
+        setRole(null);
+        setLoading(false);
+        AsyncStorage.multiRemove([ROLE_CACHE_KEY, ROLE_TIMESTAMP_KEY]);
+      }
     });
+    
     return unsub;
   }, []);
 
-  // ✅ Auto redirect removed - handled by app/_layout.tsx to avoid conflicts
+  // Background refresh every 5 minutes if user is active
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (auth.currentUser) {
+        loadRole();
+      }
+    }, CACHE_MAX_AGE);
 
-  const value = useMemo(() => ({ role, loading, refresh: loadRole }), [role, loading]);
+    return () => clearInterval(interval);
+  }, []);
+
+  const value = useMemo(
+    () => ({ role, loading, refresh: loadRole }),
+    [role, loading, loadRole]
+  );
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 };

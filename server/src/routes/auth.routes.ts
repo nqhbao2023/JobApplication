@@ -10,9 +10,9 @@ const router = Router();
  * Xác thực token hiện tại
  */
 router.get('/verify', authLimiter, authenticate, (req: AuthRequest, res: Response) => {
-  res.json({ 
-    user: req.user, 
-    message: 'Token is valid' 
+  res.json({
+    user: req.user,
+    message: 'Token is valid',
   });
 });
 
@@ -24,7 +24,7 @@ router.get('/role', authenticate, async (req: AuthRequest, res: Response): Promi
   try {
     const { db } = await import('../config/firebase');
     const userDoc = await db.collection('users').doc(req.user!.uid).get();
-    
+
     if (!userDoc.exists) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -49,6 +49,73 @@ router.get('/role', authenticate, async (req: AuthRequest, res: Response): Promi
   } catch (error: any) {
     console.error('Get role error:', error);
     res.status(500).json({ error: 'Failed to get user role' });
+  }
+});
+
+/**
+ * GET /api/auth/profile
+ * Lấy thông tin profile của user hiện tại
+ */
+router.get('/profile', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { db } = await import('../config/firebase');
+    const userDoc = await db.collection('users').doc(req.user!.uid).get();
+
+    if (!userDoc.exists) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const userData = userDoc.data();
+
+    // Check if user is soft-deleted
+    if (userData?.deleted === true) {
+      res.status(410).json({ error: 'User has been deleted' });
+      return;
+    }
+
+    // Filter sensitive data
+    const profile = {
+      uid: req.user!.uid,
+      email: userData?.email || req.user!.email,
+      name: userData?.name || null,
+      phone: userData?.phone || null,
+      photoURL: userData?.photoURL || null,
+      role: userData?.role || 'candidate',
+      createdAt: userData?.createdAt,
+      updatedAt: userData?.updatedAt,
+    };
+
+    res.json(profile);
+  } catch (error: any) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: 'Failed to get user profile' });
+  }
+});
+
+/**
+ * PATCH /api/auth/profile
+ * Update thông tin profile của user hiện tại
+ */
+router.patch('/profile', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, phone, photoURL } = req.body;
+    const { db } = await import('../config/firebase');
+
+    const updates: any = {
+      updatedAt: new Date(),
+    };
+
+    if (name !== undefined) updates.name = name;
+    if (phone !== undefined) updates.phone = phone;
+    if (photoURL !== undefined) updates.photoURL = photoURL;
+
+    await db.collection('users').doc(req.user!.uid).update(updates);
+
+    res.json({ message: 'Profile updated successfully', updates });
+  } catch (error: any) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
@@ -118,9 +185,9 @@ router.patch('/users/:userId/role', authenticate, async (req: AuthRequest, res: 
     }
 
     const { db } = await import('../config/firebase');
-    await db.collection('users').doc(userId).update({ 
+    await db.collection('users').doc(userId).update({
       role,
-      updatedAt: new Date() 
+      updatedAt: new Date(),
     });
 
     res.json({ message: 'Role updated successfully' });

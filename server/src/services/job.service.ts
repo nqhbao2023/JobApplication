@@ -41,7 +41,8 @@ function mapDocToJob(doc: FirebaseFirestore.DocumentSnapshot): Job {
     type: data.type || 'full-time',
     category: data.category || '',
     status: data.status || 'active',
-    employerId: data.employerId || '',
+    // ✅ Priority: employerId > ownerId > users.id (legacy field)
+    employerId: data.employerId || data.ownerId || data.users?.id || '',
     applicantCount: data.applicantCount || 0,
     viewCount: data.viewCount || 0,
     created_at: toISOString(data.created_at || data.createdAt),
@@ -112,7 +113,26 @@ export class JobService {
         throw new AppError('Job not found', 404);
       }
 
-      return mapDocToJob(doc);
+      const job = mapDocToJob(doc);
+      
+      // ✅ If employerId is missing, try to get it from company
+      if (!job.employerId && job.companyId) {
+        try {
+          const companyDoc = await db.collection('companies').doc(job.companyId).get();
+          if (companyDoc.exists) {
+            const companyData = companyDoc.data();
+            // Try to get ownerId from company
+            if (companyData?.ownerId) {
+              job.employerId = companyData.ownerId;
+            }
+          }
+        } catch (companyError) {
+          // If company doesn't exist or error, just log and continue
+          console.warn('⚠️ Could not fetch company for employerId:', companyError);
+        }
+      }
+
+      return job;
     } catch (error: any) {
       if (error instanceof AppError) throw error;
       console.error('❌ JobService.getJobById error:', error);

@@ -1,7 +1,8 @@
 // src/utils/roles.ts
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { auth, db } from "@/config/firebase";
-import { AppRole, AppRoleOrNull } from "@/types";
+import axios from 'axios';
+import { auth } from '@/config/firebase';
+import { AppRole, AppRoleOrNull } from '@/types';
+import { userApiService } from '@/services/userApi.service';
 
 // Map các role cũ về role chuẩn
 export function normalizeRole(raw?: string | null): AppRoleOrNull {
@@ -19,25 +20,19 @@ export const isAdmin     = (r?: AppRoleOrNull) => r === "admin";
 export async function getCurrentUserRole(): Promise<AppRoleOrNull> {
   const user = auth.currentUser;
   if (!user) return null;
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
 
-  const data = snap.data() as any;
-  const normalized = normalizeRole(data.role);
-
-  // Nếu thấy role cũ (student) → update 1 lần về candidate để sạch dữ liệu
-  if (data.role === "student") {
-    try {
-      await updateDoc(ref, { role: "candidate" });
-      console.log("🧹 Migrated role student → candidate for", user.email);
-    } catch (e) {
-      console.warn("⚠️ Cannot update role automatically:", e);
+  try {
+    const profile = await userApiService.getCurrentUser();
+    if (profile.shouldRefreshToken) {
+      await user.getIdToken(true);
     }
+    return normalizeRole(profile.role);
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+    }
+    throw error;
   }
-
-  // Nếu có cờ isAdmin=true → ép role = admin (ưu tiên admin)
-  if (data.isAdmin === true) return "admin";
-
-  return normalized;
 }

@@ -1,13 +1,14 @@
 // src/contexts/RoleContext.tsx
-// ✅ Provider role toàn cục (Firestore + cache local + auto redirect)
+// ✅ Provider role toàn cục (REST API + cache local)
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { auth, db } from '@/config/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from "firebase/auth";
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { auth } from '@/config/firebase';
 import { AppRoleOrNull } from '@/types';
-import { isOfflineError } from '@/utils/firebaseErrorHandler';
+import { userApiService } from '@/services/userApi.service';
+import { normalizeRole } from '@/utils/roles';
 
 type RoleContextType = {
   role: AppRoleOrNull;
@@ -25,8 +26,14 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRoleOrNull>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadRole = async () => {
+  const loadRole = useCallback(async () => {
     setLoading(true);
+    const cached = await AsyncStorage.getItem('userRole');
+
+    if (cached) {
+      setRole(normalizeRole(cached));
+    }
+
     try {
       const user = auth.currentUser;
       if (!user) {
@@ -35,58 +42,50 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      // ✅ B1: đọc cache trước
-      const cached = await AsyncStorage.getItem('userRole');
-      if (cached && !role) {
-        setRole(cached as AppRoleOrNull);
+      const profile = await userApiService.getCurrentUser();
+      const normalizedRole = normalizeRole(profile.role);
+
+      if (profile.shouldRefreshToken) {
+        await user.getIdToken(true);
       }
 
-      // ✅ B2: fetch Firestore với getDocFromCache trước
-      try {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        if (!snap.exists()) {
-          setRole(null);
-          await AsyncStorage.removeItem('userRole');
-          return;
-        }
-
-        let r = (snap.data()?.role as string) || null;
-        if (r === 'student') {
-          await updateDoc(doc(db, 'users', user.uid), { role: 'candidate' });
-          r = 'candidate';
-        }
-
-        if (r && ['candidate', 'employer', 'admin'].includes(r.toLowerCase())) {
-          const normalized = r.toLowerCase() as AppRoleOrNull;
-          setRole(normalized);
-          await AsyncStorage.setItem('userRole', normalized ?? '');
-        } else {
-          setRole(null);
-          await AsyncStorage.removeItem('userRole');
-        }
-      } catch (firestoreError: any) {
-        if (isOfflineError(firestoreError)) {
+      if (normalizedRole) {
+        setRole(normalizedRole);
+        await AsyncStorage.setItem('userRole', normalizedRole);
+      } else {
+        setRole(null);
+        await AsyncStorage.removeItem('userRole');
+      }
+    } catch (error: any) {
+      if (axios.isAxiosError(error)) {
+        if (!error.response) {
           if (cached) {
-            setRole(cached as AppRoleOrNull);
+            setRole(normalizeRole(cached));
           }
+        } else if (error.response.status === 404) {
+          setRole(null);
+          await AsyncStorage.removeItem('userRole');
+        } else if (error.response.status === 401) {
+          setRole(null);
+          await AsyncStorage.removeItem('userRole');
         } else {
-          throw firestoreError;
+          console.error('[RoleContext] loadRole error', error.response.data);
         }
-      }
-    } catch (e: any) {
-      const cached = await AsyncStorage.getItem('userRole');
-      if (cached) {
-        setRole(cached as AppRoleOrNull);
+      } else {
+        console.error('[RoleContext] loadRole error', error);
+        if (cached) {
+          setRole(normalizeRole(cached));
+        }
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // 🔁 mount
   useEffect(() => {
     loadRole();
-  }, []);
+  }, [loadRole]);
 
   // 🔁 khi login/logout
   useEffect(() => {
@@ -94,11 +93,11 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
       loadRole();
     });
     return unsub;
-  }, []);
+  }, [loadRole]);
 
   // ✅ Auto redirect removed - handled by app/_layout.tsx to avoid conflicts
 
-  const value = useMemo(() => ({ role, loading, refresh: loadRole }), [role, loading]);
+  const value = useMemo(() => ({ role, loading, refresh: loadRole }), [role, loading, loadRole]);
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;
 };

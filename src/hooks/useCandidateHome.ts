@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
-import { getDoc, doc } from 'firebase/firestore';
-import { db, auth } from '@/config/firebase';
+import { auth } from '@/config/firebase';
 import * as Haptics from 'expo-haptics';
 import { handleFirestoreError } from '@/utils/firebaseErrorHandler';
 import { jobApiService } from '@/services/jobApi.service';
 import { companyApiService } from '@/services/companyApi.service';
 import { categoryApiService } from '@/services/categoryApi.service';
 import { notificationApiService } from '@/services/notificationApi.service';
+import { userApiService } from '@/services/userApi.service';
 import { Job, Company, Category } from '@/types';
 import { normalizeJob, sortJobsByDate } from '@/utils/job.utils';
 
@@ -44,13 +44,18 @@ export const useCandidateHome = () => {
   const load_data_user = useCallback(async () => {
     if (!userId) return;
     try {
-      const docRef = doc(db, 'users', userId);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        setDataUser({ $id: snap.id, ...snap.data() });
+      const profile = await userApiService.getCurrentUser();
+      if (profile.shouldRefreshToken) {
+        await auth.currentUser?.getIdToken(true);
       }
+      setDataUser({ $id: profile.uid, ...profile });
     } catch (e: any) {
-      handleFirestoreError(e, 'load_data_user');
+      if (e?.response?.status === 404) {
+        setDataUser(undefined);
+      }
+      if (__DEV__) {
+        console.error('load_data_user error:', e);
+      }
     }
   }, [userId]);
 

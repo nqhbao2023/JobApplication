@@ -1,6 +1,7 @@
 import { db } from '../config/firebase';
-import { Application } from '../types';
+import { Application, ApplicationWithJob } from '../types';
 import { AppError } from '../middleware/errorHandler';
+import jobService from './job.service';
 
 const APPLICATIONS_COLLECTION = 'applications';
 
@@ -47,7 +48,35 @@ export class ApplicationService {
     }
   }
 
-  async getApplicationsByCandidate(candidateId: string): Promise<Application[]> {
+  private async enrichApplications(applications: Application[]): Promise<ApplicationWithJob[]> {
+    if (!applications.length) return [];
+
+    const jobEntries = await Promise.all(
+      applications.map(async (application) => {
+        try {
+          const job = await jobService.getJobById(application.jobId);
+          return [application.jobId, job] as const;
+        } catch (error) {
+          console.warn('⚠️ Missing job for application:', application.jobId, error);
+          return null;
+        }
+      })
+    );
+
+    const jobMap = new Map<string, any>();
+    for (const entry of jobEntries) {
+      if (entry) {
+        jobMap.set(entry[0], entry[1]);
+      }
+    }
+
+    return applications.map((application) => ({
+      ...application,
+      job: jobMap.get(application.jobId),
+    }));
+  }
+
+  async getApplicationsByCandidate(candidateId: string): Promise<ApplicationWithJob[]> {
     try {
       const snapshot = await db
         .collection(APPLICATIONS_COLLECTION)
@@ -55,16 +84,18 @@ export class ApplicationService {
         .orderBy('appliedAt', 'desc')
         .get();
 
-      return snapshot.docs.map((doc) => ({
+      const applications = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Application[];
+
+      return this.enrichApplications(applications);
     } catch (error: any) {
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }
   }
 
-  async getApplicationsByEmployer(employerId: string): Promise<Application[]> {
+  async getApplicationsByEmployer(employerId: string): Promise<ApplicationWithJob[]> {
     try {
       const snapshot = await db
         .collection(APPLICATIONS_COLLECTION)
@@ -72,16 +103,18 @@ export class ApplicationService {
         .orderBy('appliedAt', 'desc')
         .get();
 
-      return snapshot.docs.map((doc) => ({
+      const applications = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Application[];
+
+      return this.enrichApplications(applications);
     } catch (error: any) {
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }
   }
 
-  async getApplicationsByJob(jobId: string): Promise<Application[]> {
+  async getApplicationsByJob(jobId: string): Promise<ApplicationWithJob[]> {
     try {
       const snapshot = await db
         .collection(APPLICATIONS_COLLECTION)
@@ -89,10 +122,12 @@ export class ApplicationService {
         .orderBy('appliedAt', 'desc')
         .get();
 
-      return snapshot.docs.map((doc) => ({
+      const applications = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Application[];
+
+      return this.enrichApplications(applications);
     } catch (error: any) {
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }

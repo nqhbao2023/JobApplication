@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, updateProfile } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { auth, db } from '@/config/firebase';
-import { AppRole, AppRoleOrNull } from '@/types';
+import axios from 'axios';
+import { auth } from '@/config/firebase';
+import { AppRole } from '@/types';
 import { mapAuthError } from '@/utils/validation/auth';
 import { useRole } from './RoleContext';
-import { getCurrentUserRole } from '@/utils/roles';
+import { userApiService } from '@/services/userApi.service';
 
 type AuthContextType = {
   loading: boolean;
@@ -32,15 +32,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      
-      const role = await getCurrentUserRole();
-      if (!role) {
+
+      const profile = await userApiService.getCurrentUser();
+      if (profile.shouldRefreshToken) {
+        await auth.currentUser?.getIdToken(true);
+      }
+
+      if (!profile.role) {
         await firebaseSignOut(auth);
         await AsyncStorage.removeItem('userRole');
         throw new Error('deleted-user');
       }
 
-      await AsyncStorage.setItem('userRole', role);
+      await AsyncStorage.setItem('userRole', profile.role);
       await refreshRole();
     } catch (err: any) {
       if (err.message === 'deleted-user') {
@@ -50,7 +54,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           await firebaseSignOut(auth);
           await AsyncStorage.removeItem('userRole');
         }
-        setError(mapAuthError(err?.code));
+
+        if (axios.isAxiosError(err)) {
+          setError(err.response?.data?.message || 'Không thể đăng nhập. Vui lòng thử lại.');
+        } else {
+          setError(mapAuthError(err?.code));
+        }
       }
       throw err;
     } finally {
@@ -74,24 +83,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       userCreated = true;
 
       await updateProfile(userCredential.user, { displayName: name.trim() });
+      await auth.currentUser?.getIdToken(true);
 
-      const writeUserDoc = setDoc(doc(db, 'users', userCredential.user.uid), {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
+      const profile = await userApiService.bootstrapProfile({
         name: name.trim(),
         phone: phone.trim(),
         role,
-        skills: [],
-        savedJobIds: [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
 
-      const timeout = new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 15000)
-      );
+      if (profile.shouldRefreshToken) {
+        await auth.currentUser?.getIdToken(true);
+      }
 
-      await Promise.race([writeUserDoc, timeout]);
+      await AsyncStorage.setItem('userRole', profile.role);
       await refreshRole();
     } catch (err: any) {
       if (userCreated) {
@@ -103,10 +107,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-      if (err?.message === 'timeout') {
-        setError('Ghi dữ liệu quá lâu (timeout 15s). Kiểm tra mạng và thử lại.');
-      } else if (err?.code === 'permission-denied') {
-        setError('Không có quyền ghi dữ liệu. Vui lòng liên hệ hỗ trợ.');
+      if (axios.isAxiosError(err)) {
+        setError(err.response?.data?.message || 'Không thể tạo tài khoản. Vui lòng thử lại.');
       } else {
         setError(mapAuthError(err?.code));
       }

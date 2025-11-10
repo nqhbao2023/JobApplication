@@ -1,127 +1,179 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
+  ActivityIndicator,
   FlatList,
   Image,
-  TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { db, auth } from '../../src/config/firebase';
-import { collection, doc, getDocs, getDoc, query, where, addDoc, deleteDoc } from 'firebase/firestore';
+import { auth } from '@/config/firebase';
+import { categoryApiService } from '@/services/categoryApi.service';
+import { savedJobApiService, SavedJob } from '@/services/savedJobApi.service';
+import { Category, Job } from '@/types';
 
 const Job = () => {
   const [selectedTab, setSelectedTab] = useState(0);
-  const [savedJobs, setSavedJobs] = useState<any[]>([]);
+  const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string>('');
-  const [categories, setCategories] = useState<any[]>([]); 
+  const [syncing, setSyncing] = useState(false);
 
-
-  useEffect(() => {
-    if (userId) {
-      fetchSavedJobs();
-      fetchCategories();
+  const loadInitialData = useCallback(async () => {
+    if (!auth.currentUser) {
+      setSavedJobs([]);
+      setLoading(false);
+      return;
     }
-  }, [userId]);
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (user) setUserId(user.uid);
-  }, []);
 
-  const fetchSavedJobs = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId));
-      const savedSnap = await getDocs(q);
-      const jobIds = savedSnap.docs.map(doc => doc.data().jobId);
-      const jobPromises = jobIds.map(async (jobId: string) => {
-        const jobSnap = await getDoc(doc(db, 'jobs', jobId));
-        return { $id: jobId, ...jobSnap.data() };
-      });
-      const jobDetails = await Promise.all(jobPromises);
-      setSavedJobs(jobDetails);
+      const [jobs, cats] = await Promise.all([
+        savedJobApiService.getSavedJobs(),
+        categoryApiService.getAllCategories(20),
+      ]);
+      setSavedJobs(jobs);
+      setCategories(cats);
     } catch (error) {
-      console.log('Lỗi khi load saved jobs:', error);
+      console.error('loadInitialData error:', error);
     } finally {
       setLoading(false);
     }
-  };
-  const fetchCategories = async () => {
-    try {
-      const catSnap = await getDocs(collection(db, 'job_categories'));
-      setCategories(catSnap.docs.map(doc => ({ $id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error('Lỗi khi load category:', err);
-    }
-  };
+  }, []);
 
-  // Get saved jobs
-  const savedJobsList = savedJobs;
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
 
+  const toggleSaveJob = useCallback(
+    async (jobId: string, isSaved: boolean) => {
+      if (!auth.currentUser) return;
 
-  // Filter jobs based on selected tab
-  const filteredJobs =
-  selectedTab === 0
-    ? savedJobsList
-    : savedJobsList.filter((job) =>
-        job.jobCategories?.$id === categories[selectedTab - 1]?.$id
-      );
+      setSyncing(true);
+      try {
+        if (isSaved) {
+          await savedJobApiService.removeJob(jobId);
+          setSavedJobs((prev) => prev.filter((item) => item.jobId !== jobId));
+        } else {
+          const saved = await savedJobApiService.saveJob(jobId);
+          setSavedJobs((prev) => [saved, ...prev]);
+        }
+      } catch (error) {
+        console.error('toggleSaveJob error:', error);
+      } finally {
+        setSyncing(false);
+      }
+    },
+    []
+  );
 
-  const renderJobItem = ({ item }: { item: any }) => {
-    const isSaved = savedJobs.some(job => job.$id === item.$id);
+  const jobMatchesCategory = useCallback(
+    (job: Job | undefined, categoryId: string) => {
+      if (!job) return false;
+      const normalizedCategoryId = categoryId.toLowerCase();
+
+      const jobCategory = (job as any).category;
+      if (typeof jobCategory === 'string') {
+        return jobCategory.toLowerCase() === normalizedCategoryId;
+      }
+
+      const jobCategories = (job as any).jobCategories;
+      if (typeof jobCategories === 'string') {
+        return jobCategories.toLowerCase() === normalizedCategoryId;
+      }
+      if (Array.isArray(jobCategories)) {
+        return jobCategories.some((cat: any) => {
+          if (typeof cat === 'string') {
+            return cat.toLowerCase() === normalizedCategoryId;
+          }
+          if (cat && typeof cat === 'object') {
+            return (
+              cat?.$id?.toLowerCase() === normalizedCategoryId ||
+              cat?.category_name?.toLowerCase() === normalizedCategoryId
+            );
+          }
+          return false;
+        });
+      }
+
+      return false;
+    },
+    []
+  );
+
+  const filteredJobs = useMemo(() => {
+    if (selectedTab === 0) return savedJobs;
+    const category = categories[selectedTab - 1];
+    if (!category) return savedJobs;
+    return savedJobs.filter((item) => jobMatchesCategory(item.job, category.$id));
+  }, [savedJobs, categories, selectedTab, jobMatchesCategory]);
+
+  const renderJobItem = ({ item }: { item: SavedJob }) => {
+    const job = item.job;
+    const company = job?.company as any;
+    const companyName = typeof company === 'string' ? company : company?.corp_name || 'Ẩn danh';
+    const city = company?.city || job?.location || 'Không rõ địa điểm';
+    const nation = company?.nation ? `, ${company.nation}` : '';
+    const imageSource = job?.image || company?.image || 'https://placehold.co/80x80?text=Job';
+    const isSaved = savedJobs.some((saved) => saved.jobId === item.jobId);
+    const salary = (() => {
+      if (!job?.salary) return 'Negotiable';
+      if (typeof job.salary === 'string') return job.salary;
+      const min = job.salary.min ? job.salary.min.toLocaleString('vi-VN') : '';
+      const max = job.salary.max ? job.salary.max.toLocaleString('vi-VN') : '';
+      if (min && max) return `${min} - ${max}`;
+      if (min) return `Từ ${min}`;
+      if (max) return `Đến ${max}`;
+      return 'Negotiable';
+    })();
+    const jobType = (job as any)?.type || (job as any)?.jobTypes?.type_name || 'Unknown';
 
     return (
       <TouchableOpacity
         style={styles.jobItem}
-        onPress={() => router.push(`/jobDescription?jobId=${item.$id}`)}
+        onPress={() =>
+          router.push({
+            pathname: '/(shared)/jobDescription',
+            params: { jobId: job?.id || job?.$id || item.jobId },
+          })
+        }
       >
-        <Image source={{ uri: item.image }} style={styles.jobImage} />
+        <Image source={{ uri: imageSource }} style={styles.jobImage} />
         <View style={styles.jobInfo}>
-          <Text style={styles.jobTitle}>{item.title}</Text>
-          <Text style={styles.jobCompany}>{item.company?.corp_name}</Text>
-          <Text style={styles.jobLocation}>{item.company?.city}, {item.company?.nation}</Text>
+          <Text style={styles.jobTitle} numberOfLines={1}>
+            {job?.title || 'Không rõ tiêu đề'}
+          </Text>
+          <Text style={styles.jobCompany} numberOfLines={1}>
+            {companyName}
+          </Text>
+          <Text style={styles.jobLocation} numberOfLines={1}>
+            {city}
+            {nation}
+          </Text>
         </View>
         <View style={styles.jobRight}>
-          <Text style={styles.jobSalary}>$ {item.salary}</Text>
-          <Text style={styles.jobType}>{item.jobTypes?.type_name}</Text>
-          <TouchableOpacity onPress={() => handleSaveJob(item.$id)} style={{ padding: 4 }}>
-  <Ionicons
-    name={savedJobs.some(job => job.$id === item.$id) ? 'heart' : 'heart-outline'}
-    size={24}
-    color={savedJobs.some(job => job.$id === item.$id) ? '#FF3B30' : '#999'}
-  />
-</TouchableOpacity>
-
+          <Text style={styles.jobSalary}>{salary}</Text>
+          <Text style={styles.jobType}>{jobType}</Text>
+          <TouchableOpacity
+            onPress={() => toggleSaveJob(item.jobId, isSaved)}
+            style={{ padding: 4 }}
+            disabled={syncing}
+          >
+            <Ionicons
+              name={isSaved ? 'heart' : 'heart-outline'}
+              size={24}
+              color={isSaved ? '#FF3B30' : '#999'}
+            />
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
   };
-  const handleSaveJob = async (jobId: string) => {
-    if (!userId) return;
-    const isJobSaved = savedJobs.some(job => job.$id === jobId);
-    try {
-      if (isJobSaved) {
-        // Find the saved job document
-        const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId), where('jobId', '==', jobId));
-        const res = await getDocs(q);
-        if (!res.empty) {
-          await deleteDoc(doc(db, 'saved_jobs', res.docs[0].id));
-        }
-      } else {
-        await addDoc(collection(db, 'saved_jobs'), { userId, jobId, created_at: new Date().toISOString() });
-      }
-      fetchSavedJobs();
-    } catch (err) {
-      console.error('Lỗi xử lý trái tim:', err);
-    }
-  };
-  
 
   return (
     <SafeAreaView style={styles.container}>
@@ -138,34 +190,33 @@ const Job = () => {
       </View>
 
       <View style={styles.tabsWrapper}>
-  <ScrollView
-    horizontal
-    showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.tabScroll}
-  >
-    <TouchableOpacity
-      style={[styles.tabButton, selectedTab === 0 && styles.tabButtonActive]}
-      onPress={() => setSelectedTab(0)}
-    >
-      <Text style={[styles.tabText, selectedTab === 0 && styles.tabTextActive]}>
-        All
-      </Text>
-    </TouchableOpacity>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabScroll}
+        >
+          <TouchableOpacity
+            style={[styles.tabButton, selectedTab === 0 && styles.tabButtonActive]}
+            onPress={() => setSelectedTab(0)}
+          >
+            <Text style={[styles.tabText, selectedTab === 0 && styles.tabTextActive]}>
+              All
+            </Text>
+          </TouchableOpacity>
 
-    {categories.map((cat, index) => (
-      <TouchableOpacity
-        key={cat.$id}
-        style={[styles.tabButton, selectedTab === index + 1 && styles.tabButtonActive]}
-        onPress={() => setSelectedTab(index + 1)}
-      >
-        <Text style={[styles.tabText, selectedTab === index + 1 && styles.tabTextActive]}>
-          {cat.category_name}
-        </Text>
-      </TouchableOpacity>
-    ))}
-  </ScrollView>
-</View>
-
+          {categories.map((cat, index) => (
+            <TouchableOpacity
+              key={cat.$id}
+              style={[styles.tabButton, selectedTab === index + 1 && styles.tabButtonActive]}
+              onPress={() => setSelectedTab(index + 1)}
+            >
+              <Text style={[styles.tabText, selectedTab === index + 1 && styles.tabTextActive]}>
+                {cat.category_name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -180,14 +231,13 @@ const Job = () => {
         <FlatList
           data={filteredJobs}
           renderItem={renderJobItem}
-          keyExtractor={(item) => item.$id}
+          keyExtractor={(item) => `${item.id}-${item.jobId}`}
           contentContainerStyle={{ padding: 16 }}
         />
       )}
     </SafeAreaView>
   );
 };
-
 
 export default Job;
 
@@ -199,55 +249,47 @@ const styles = StyleSheet.create({
   header: {
     paddingVertical: 24,
     paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#34C759',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   headerText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#111827',
   },
   subHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   savedText: {
     fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
-    flex: 1,
+    fontWeight: '600',
+    color: '#111827',
   },
   subHeaderIcon: {
     width: 30,
     height: 30,
+    borderRadius: 15,
+    backgroundColor: '#E5E7EB',
   },
   tabsWrapper: {
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   tabScroll: {
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   tabButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: '#fff',
-    marginRight: 10,
+    marginRight: 12,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#E5E7EB',
   },
   tabButtonActive: {
     backgroundColor: '#34C759',
@@ -255,57 +297,12 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    color: '#333',
+    color: '#6B7280',
+    fontWeight: '600',
   },
   tabTextActive: {
     color: '#fff',
-    fontWeight: 'bold',
   },
-  jobItem: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-    elevation: 2,
-  },
-  jobImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  jobInfo: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  jobCompany: {
-    fontSize: 14,
-    color: '#666',
-  },
-  jobLocation: {
-    fontSize: 12,
-    color: '#aaa',
-  },
-  jobRight: {
-    alignItems: 'flex-end',
-  },
-  jobSalary: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  jobType: {
-    fontSize: 12,
-    color: '#666',
-    marginVertical: 4,
-  },
-
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -315,12 +312,60 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 32,
   },
   emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginTop: 16,
-    textAlign: 'center',
+    marginTop: 12,
+    fontSize: 16,
+    color: '#9CA3AF',
+  },
+  jobItem: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  jobImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    marginRight: 16,
+  },
+  jobInfo: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  jobTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  jobCompany: {
+    fontSize: 14,
+    color: '#4B5563',
+    marginTop: 4,
+  },
+  jobLocation: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  jobRight: {
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  jobSalary: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  jobType: {
+    fontSize: 12,
+    color: '#6B7280',
   },
 });

@@ -14,14 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
-import { db, auth } from "@/config/firebase";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-} from "firebase/firestore";
+import { auth } from "@/config/firebase";
+import { applicationApiService } from "@/services/applicationApi.service";
+import { Job } from "@/types";
 
 /* -------------------------------------------------------------------------- */
 /*                                 MAIN PAGE                                  */
@@ -39,20 +34,23 @@ export default function AppliedJob() {
     if (!uid) return;
     setRefreshing(true);
 
-    const q = query(
-      collection(db, "applied_jobs"),
-      where("userId", "==", uid),
-      orderBy("applied_at", "desc")
-    );
-    const snap = await getDocs(q);
-    setJobs(
-      snap.docs.map((d) => ({
-        $id: d.id,
-        ...d.data(),
-      }))
-    );
-    setLoading(false);
-    setRefreshing(false);
+    try {
+      const applications = await applicationApiService.getMyApplications();
+      setJobs(
+        applications.map((application) => ({
+          $id: application.id || application.jobId,
+          jobId: application.jobId,
+          status: application.status,
+          appliedAt: application.appliedAt,
+          job: application.job as Job | undefined,
+        }))
+      );
+    } catch (error) {
+      console.error("fetchJobs error:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [uid]);
 
   useEffect(() => {
@@ -119,14 +117,15 @@ const JobRow = React.memo(
       onPress={() =>
         onPress.navigate({
           pathname: "/(shared)/jobDescription",
-          params: { jobId: item.jobId, fromApplied: "true" },
+          params: { jobId: item.job?.id || item.job?.$id || item.jobId, fromApplied: "true" },
         })
       }
     >
       <Image
         source={{
           uri:
-            item.jobInfo?.image ??
+            item.job?.image ??
+            item.job?.companyLogo ??
             "https://placehold.co/60x60?text=Job",
         }}
         style={styles.logo}
@@ -134,13 +133,13 @@ const JobRow = React.memo(
 
       <View style={{ flex: 1, marginLeft: 12 }}>
         <Text style={styles.title} numberOfLines={1}>
-          {item.jobInfo?.title ?? "Không rõ tiêu đề"}
+          {item.job?.title ?? "Không rõ tiêu đề"}
         </Text>
         <Text style={styles.company} numberOfLines={1}>
-          {item.jobInfo?.company ?? "Ẩn danh"}
+          {item.job?.company ?? "Ẩn danh"}
         </Text>
         <Text style={styles.location} numberOfLines={1}>
-          {item.jobInfo?.location ?? "Không rõ địa điểm"}
+          {item.job?.location ?? "Không rõ địa điểm"}
         </Text>
 
         <Text style={[styles.status, { color: statusColor(item.status) }]}>

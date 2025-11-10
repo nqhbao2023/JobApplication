@@ -51,6 +51,10 @@ export interface Application {
   updatedAt: any;
 }
 
+export interface ApplicationWithJob extends Application {
+  job?: Job;
+}
+
 export interface NewsArticle {
   id?: string;
   title: string;

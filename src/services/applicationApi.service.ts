@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { API_ENDPOINTS } from '@/config/api';
+import { Job } from '@/types';
 
 export interface Application {
   id?: string;
@@ -11,6 +12,7 @@ export interface Application {
   coverLetter?: string;
   appliedAt: Date | string | number;
   updatedAt: Date | string | number;
+  job?: Job;
 }
 
 interface CreateApplicationData {

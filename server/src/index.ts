@@ -14,6 +14,8 @@ import applicationRoutes from './routes/application.routes';
 import companyRoutes from './routes/company.routes';
 import categoryRoutes from './routes/category.routes';
 import notificationRoutes from './routes/notification.routes';
+import userRoutes from './routes/user.routes';
+import savedJobRoutes from './routes/savedJob.routes';
 
 dotenv.config();
 
@@ -65,6 +67,8 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/saved-jobs', savedJobRoutes);
 
 // Error Handlers
 app.use(notFoundHandler);

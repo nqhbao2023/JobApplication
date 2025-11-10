@@ -43,4 +43,13 @@ export const API_ENDPOINTS = {
   auth: {
     verify: '/api/auth/verify',
   },
+  users: {
+    me: '/api/users/me',
+    bootstrap: '/api/users/bootstrap',
+  },
+  savedJobs: {
+    list: '/api/saved-jobs',
+    save: (jobId: string) => `/api/saved-jobs/${jobId}`,
+    remove: (jobId: string) => `/api/saved-jobs/${jobId}`,
+  },
 };

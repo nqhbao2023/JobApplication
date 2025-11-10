@@ -36,7 +36,16 @@ export interface RoleResponse {
   role: AppRoleOrNull;
   isAdmin: boolean;
 }
-
+export interface UserProfile {
+  uid: string;
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+  photoURL: string | null;
+  role: AppRoleOrNull;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
 export const authApiService = {
   /**
    * Xác thực token hiện tại với backend
@@ -75,7 +84,6 @@ export const authApiService = {
   async updateRole(userId: string, role: AppRole): Promise<void> {
     return apiClient.patch<void>(`/api/auth/users/${userId}/role`, { role });
   },
-
   /**
    * Xóa tài khoản user (soft delete)
    */
@@ -84,31 +92,19 @@ export const authApiService = {
   },
 
   /**
-   * Get user profile (TODO: Needs backend endpoint)
-   * Currently uses verifyToken as workaround
+  * Get user profile trực tiếp từ backend
    */
-  async getProfile(): Promise<AuthResponse['user']> {
-    const response = await this.verifyToken();
-    return response.user;
+  async getProfile(): Promise<UserProfile> {
+    return apiClient.get<UserProfile>(API_ENDPOINTS.auth.profile);
   },
-
   /**
-   * Update user profile
-   * Uses syncUser to update Firestore data
+   * Update user profile và trả về dữ liệu mới nhất
    */
   async updateProfile(updates: {
     name?: string;
     phone?: string;
     photoURL?: string;
-  }): Promise<void> {
-    // Get current user data first
-    const profile = await this.getProfile();
-    await this.syncUser({
-      uid: profile.uid,
-      email: profile.email,
-      name: updates.name ?? profile.name,
-      phone: updates.phone ?? profile.phone,
-      photoURL: updates.photoURL ?? profile.photoURL,
-    });
+  }): Promise<UserProfile> {
+    return apiClient.patch<UserProfile>(API_ENDPOINTS.auth.profile, updates);
   },
 };

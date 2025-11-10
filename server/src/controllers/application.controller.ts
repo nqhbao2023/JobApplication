@@ -2,6 +2,26 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import applicationService from '../services/application.service';
 
+export const updateApplication = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const candidateId = req.user!.uid;
+    const { cvUrl, coverLetter } = req.body;
+
+    const application = await applicationService.updateApplication(id, candidateId, {
+      cvUrl,
+      coverLetter,
+    });
+
+    res.json(application);
+  } catch (error) {
+    next(error);
+  }
+};
 export const createApplication = async (
   req: AuthRequest,
   res: Response,

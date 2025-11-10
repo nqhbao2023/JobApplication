@@ -36,7 +36,12 @@ export const applicationApiService = {
   async getJobApplications(jobId: string): Promise<Application[]> {
     return apiClient.get<Application[]>(API_ENDPOINTS.applications.byJob(jobId));
   },
-
+  async updateApplication(
+    id: string,
+    data: Partial<Pick<Application, 'cvUrl' | 'coverLetter'>>
+  ): Promise<Application> {
+    return apiClient.patch<Application>(API_ENDPOINTS.applications.update(id), data);
+  },
   async updateApplicationStatus(
     id: string,
     status: Application['status']

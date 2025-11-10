@@ -31,7 +31,7 @@ import {
   getDocs,
   getDoc,
 } from "firebase/firestore";
-
+import { applicationApiService } from "@/services/applicationApi.service";
 const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
 const ALLOW_TYPES = [
   "application/pdf",
@@ -40,8 +40,11 @@ const ALLOW_TYPES = [
 ];
 
 export default function Submit() {
-  const { jobId, userId } = useLocalSearchParams<{ jobId: string; userId: string }>();
-
+  const { jobId, userId, applyDocId } = useLocalSearchParams<{
+    jobId: string;
+    userId: string;
+    applyDocId?: string;
+  }>();
   const [cvFile, setCvFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [progress, setProgress] = useState<number>(0);
   const [employerId, setEmployerId] = useState<string | null>(null);
@@ -104,7 +107,13 @@ export default function Submit() {
       isSubmittingRef.current = false;
       return Alert.alert("Chưa chọn file", "Hãy chọn CV trước khi nộp.");
     }
-
+    if (!applyDocId) {
+      isSubmittingRef.current = false;
+      return Alert.alert(
+        "Thiếu hồ sơ",
+        "Không tìm thấy thông tin đơn ứng tuyển. Vui lòng quay lại và ứng tuyển lại công việc."
+      );
+    }
     try {
       setIsUploading(true);
       setProgress(1);
@@ -171,16 +180,19 @@ export default function Submit() {
       } else {
         await updateDoc(snap.docs[0].ref, payload);
       }
+await applicationApiService.updateApplication(applyDocId, {
+  cvUrl: url,
+});
+
 Alert.alert("🎉 Thành công", "Bạn đã nộp CV thành công!");
 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-await new Promise(r => setTimeout(r, 400));
+await new Promise((r) => setTimeout(r, 400));
 
 router.dismiss(1); // 👈 Đóng màn hình JobDescription cũ phía dưới Submit
 router.replace({
   pathname: "/(shared)/jobDescription",
   params: { jobId, success: "true" },
 });
-
 
     } catch (e: any) {
       console.error("❌ Upload CV error:", e);

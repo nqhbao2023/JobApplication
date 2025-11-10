@@ -37,6 +37,7 @@ export const API_ENDPOINTS = {
     my: '/api/applications/my-applications',
     employer: '/api/applications/employer-applications',
     byJob: (jobId: string) => `/api/applications/job/${jobId}`,
+    update: (id: string) => `/api/applications/${id}`,
     updateStatus: (id: string) => `/api/applications/${id}/status`,
     withdraw: (id: string) => `/api/applications/${id}`,
   },
@@ -44,6 +45,6 @@ export const API_ENDPOINTS = {
     verify: '/api/auth/verify',
     role: '/api/auth/role',
     sync: '/api/auth/sync',
-    profile: '/api/auth/profile', // TODO: Needs to be implemented in backend
+    profile: '/api/auth/profile',
   },
 };

@@ -130,7 +130,49 @@ export class ApplicationService {
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }
   }
+  async updateApplication(
+    applicationId: string,
+    candidateId: string,
+    updates: Partial<Pick<Application, 'cvUrl' | 'coverLetter'>>
+  ): Promise<Application> {
+    try {
+      const appRef = db.collection(APPLICATIONS_COLLECTION).doc(applicationId);
+      const doc = await appRef.get();
 
+      if (!doc.exists) {
+        throw new AppError('Application not found', 404);
+      }
+
+      const data = doc.data() as Application;
+      if (data.candidateId !== candidateId) {
+        throw new AppError('Unauthorized to update this application', 403);
+      }
+
+      const updatePayload: Partial<Application> = {
+        updatedAt: new Date(),
+      };
+
+      if (updates.cvUrl !== undefined) {
+        updatePayload.cvUrl = updates.cvUrl;
+        updatePayload.status = 'pending';
+      }
+
+      if (updates.coverLetter !== undefined) {
+        updatePayload.coverLetter = updates.coverLetter;
+      }
+
+      if (Object.keys(updatePayload).length === 1) {
+        throw new AppError('No valid fields provided for update', 400);
+      }
+
+      await appRef.update(updatePayload);
+      const updatedDoc = await appRef.get();
+      return { id: updatedDoc.id, ...updatedDoc.data() } as Application;
+    } catch (error: any) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(`Failed to update application: ${error.message}`, 500);
+    }
+  }
   async updateApplicationStatus(
     applicationId: string,
     status: Application['status']

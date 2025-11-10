@@ -1,17 +1,18 @@
-import { updatePassword, updateEmail } from 'firebase/auth';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Alert, Modal, TextInput, ScrollView } from 'react-native'
+// app/(shared)/person.tsx
+// Refactored: Sử dụng authApiService cho profile data, Firebase Auth vẫn client-side
+import { updatePassword, updateEmail, updateProfile } from 'firebase/auth';
+import { StyleSheet, Text, View, TouchableOpacity, Image, Alert, Modal, TextInput, ScrollView, Pressable } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { RelativePathString, Stack } from 'expo-router'
 import { Feather, Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { auth, db, storage } from "@/config/firebase";
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import AsyncStorage from "@react-native-async-storage/async-storage"; // 👈 thêm import này ở đầu file
+import { auth, storage } from "@/config/firebase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { updateProfile } from "firebase/auth";
-import { Pressable } from "react-native"; 
+import { authApiService } from "@/services/authApi.service";
+import { useRole } from "@/contexts/RoleContext"; 
 
 const Person = () => {
   /* ——— nút dùng chung ——— */
@@ -42,38 +43,67 @@ const ActionBtn = ({
   const [userName, setUserName] = useState('');
   const [dataUser, setDataUser] = useState<any>();
   const [userId, setUserId] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const { role } = useRole();
+
+  /**
+   * Handle save profile updates
+   * Flow: Firebase Auth (email/password) → API sync (profile data)
+   */
   const handleSave = async () => {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('No user logged in');
+      
+      setLoading(true);
+
       if (editField === 'password') {
         if (passwords.new !== passwords.confirm) {
           Alert.alert('Error', 'Password does not match');
           return;
         }
-  await updatePassword(user, passwords.new);
+        // ✅ Update password via Firebase Auth (client-side)
+        await updatePassword(user, passwords.new);
         Alert.alert('Success', 'Password updated successfully');
         setPasswords({ current: '', new: '', confirm: '' });
       }
+      
       if (editField === 'phone') {
-        await updateDoc(doc(db, 'users', user.uid), { phone });
+        // ✅ Update phone via API
+        await authApiService.updateProfile({ phone });
         Alert.alert('Success', 'Phone number updated successfully');
+        load_data_user();
       }
+      
       if (editField === 'email') {
-  await updateEmail(user, email);
+        // ✅ Update email via Firebase Auth (client-side)
+        await updateEmail(user, email);
+        // ✅ Sync updated email to Firestore via API
+        await authApiService.syncUser({
+          uid: user.uid,
+          email: email,
+          name: dataUser?.name,
+          phone: dataUser?.phone,
+        });
         Alert.alert('Success', 'Email updated successfully');
-        await updateDoc(doc(db, 'users', user.uid), { email });
+        load_data_user();
       }
+      
       if (editField === 'name') {
-        await updateDoc(doc(db, 'users', user.uid), { name: userName });
+        // ✅ Update name via API
+        await authApiService.updateProfile({ name: userName });
+        // ✅ Also update Firebase Auth displayName
+        await updateProfile(user, { displayName: userName });
         Alert.alert('Success', 'Name updated successfully');
         load_data_user();
       }
     } catch (error: any) {
-      console.log('Update failed:', error);
+      console.error('❌ Update failed:', error);
       Alert.alert('Error', error.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+      setEditField(null);
     }
-    setEditField(null);
   };
 
 const handleLogout = async () => {
@@ -91,38 +121,60 @@ const handleLogout = async () => {
   }
 };
 
+  /**
+   * Load user ID from Firebase Auth
+   */
   const load_user_id = async () => {
     const user = auth.currentUser;
     if (user) setUserId(user.uid);
   };
 
+  /**
+   * Load user data from API
+   * Flow: API getProfile → Set state
+   */
   const load_data_user = async () => {
-    if (userId) {
-      try {
-        const userSnap = await getDoc(doc(db, 'users', userId));
-        if (userSnap.exists()) {
-          const result = userSnap.data();
-          setDataUser(result);
-          setUserName(result.name || '');
-          setPhone(result.phone || '');
-        }
-      } catch (error: any) {
-        if (error?.code !== 'unavailable' && !error?.message?.includes('offline')) {
-          console.error('load_data_user error:', error);
-        }
+    try {
+      // ✅ Load profile from API
+      const profile = await authApiService.getProfile();
+      setDataUser({
+        ...profile,
+        role: role, // Use role from RoleContext (already loaded)
+      });
+      setUserName(profile.name || '');
+      setPhone(profile.phone || '');
+      setEmail(profile.email || '');
+    } catch (error: any) {
+      console.error('❌ load_data_user error:', error);
+      // Fallback: Use Firebase Auth user data
+      const user = auth.currentUser;
+      if (user) {
+        setDataUser({
+          name: user.displayName || '',
+          email: user.email || '',
+          photoURL: user.photoURL || '',
+          role: role,
+        });
+        setUserName(user.displayName || '');
+        setEmail(user.email || '');
       }
     }
   };
 
   useEffect(() => {
     const user = auth.currentUser;
-    if (user) setUserName(user.displayName || '');
+    if (user) {
+      setUserId(user.uid);
+      setUserName(user.displayName || '');
+      setEmail(user.email || '');
+    }
   }, []);
 
   useEffect(() => {
-    load_user_id();
-    load_data_user();
-  }, [userId]);
+    if (userId) {
+      load_data_user();
+    }
+  }, [userId, role]); // Reload when role changes
 const pickAndUploadAvatar = async () => {
   console.log("⚡️ pick avatar pressed");
   try {
@@ -153,8 +205,11 @@ const res = await ImagePicker.launchImageLibraryAsync({
 
     const url = await getDownloadURL(fileRef);
 
+    // ✅ Update Firebase Auth profile
     await updateProfile(auth.currentUser!, { photoURL: url });
-    await updateDoc(doc(db, "users", uid), { photoURL: url, id_image: url });
+    
+    // ✅ Update Firestore via API
+    await authApiService.updateProfile({ photoURL: url });
 
     setDataUser((prev: any) => ({ ...prev, photoURL: url, id_image: url }));
     Alert.alert("✅ Thành công", "Ảnh đại diện đã được cập nhật!");

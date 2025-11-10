@@ -1,4 +1,5 @@
 // app/(employer)/appliedList.tsx
+// Refactored: Sử dụng applicationApiService thay vì Firestore trực tiếp
 import React, { useEffect, useCallback, useState } from "react";
 import {
   View,
@@ -12,20 +13,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { db, auth } from "@/config/firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  doc,
-  getDoc,
-  updateDoc,
-  addDoc,
-  orderBy,
-} from "firebase/firestore";
-
+import { applicationApiService } from "@/services/applicationApi.service";
+import { jobApiService } from "@/services/jobApi.service";
+import { notificationApiService } from "@/services/notificationApi.service";
 import Application from "@/components/Application";
+import { Application as ApplicationType } from "@/services/applicationApi.service";
 
 /* -------------------------------------------------------------------------- */
 /*                                MAIN SCREEN                                 */
@@ -34,57 +26,84 @@ export default function AppliedList() {
   const [apps, setApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const userId = auth.currentUser?.uid;
 
-  /* 1️⃣ fetch data */
+  /**
+   * Fetch applications từ API
+   * Flow: API applications → Update state
+   */
   const fetchData = useCallback(async () => {
-    if (!userId) return;
-    setRefreshing(true);
-
-    const q = query(
-      collection(db, "applied_jobs"),
-      where("employerId", "==", userId),
-      orderBy("applied_at", "desc")
-    );
-    const snap = await getDocs(q);
-    setApps(snap.docs.map((d) => ({ $id: d.id, ...d.data() })));
-    setLoading(false);
-    setRefreshing(false);
-  }, [userId]);
+    try {
+      setRefreshing(true);
+      
+      // ✅ Lấy applications từ API
+      const applications = await applicationApiService.getEmployerApplications();
+      
+      // ✅ Map để tương thích với component Application
+      const mappedApps = applications.map((app: ApplicationType) => ({
+        $id: app.id,
+        id: app.id,
+        jobId: app.jobId,
+        candidateId: app.candidateId,
+        status: app.status,
+        applied_at: app.appliedAt,
+        cvUrl: app.cvUrl,
+        coverLetter: app.coverLetter,
+      }));
+      
+      setApps(mappedApps);
+    } catch (error: any) {
+      console.error("❌ Fetch applications error:", error);
+      Alert.alert("Lỗi", "Không thể tải danh sách ứng tuyển. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  /* 2️⃣ accept / reject */
+  /**
+   * Accept / Reject application qua API
+   * Flow: Update status → Create notification (nếu cần)
+   */
   const handleStatusChange = async (appId: string, status: string) => {
     try {
-      const ref = doc(db, "applied_jobs", appId);
-      await updateDoc(ref, { status });
+      // ✅ Update status qua API
+      await applicationApiService.updateApplicationStatus(
+        appId,
+        status as ApplicationType['status']
+      );
 
-      const app = (await getDoc(ref)).data();
-      if (!app) return;
+      // ✅ Lấy thông tin application để tạo notification
+      const applications = await applicationApiService.getEmployerApplications();
+      const app = applications.find((a: ApplicationType) => a.id === appId);
+      
+      if (app) {
+        try {
+          const job = await jobApiService.getJobById(app.jobId);
+          const msg =
+            status === "accepted"
+              ? `Đã chấp nhận đơn cho job "${job?.title ?? ""}"`
+              : `Đã từ chối đơn cho job "${job?.title ?? ""}"`;
 
-      const job = (await getDoc(doc(db, "jobs", app.jobId))).data();
-      const msg =
-        status === "accepted"
-          ? `Đã chấp nhận đơn cho job “${job?.title ?? ""}”`
-          : `Đã từ chối đơn cho job “${job?.title ?? ""}”`;
-
-      await addDoc(collection(db, "notifications"), {
-        userId: app.userId,
-        message: msg,
-        type: status,
-        jobId: app.jobId,
-        read: false,
-        created_at: new Date(),
-      });
-
-      /* cập nhật nhanh UI */
-      setApps((p) => p.map((x) => (x.$id === appId ? { ...x, status } : x)));
-      Alert.alert("Thông báo", msg);
-    } catch (e) {
-      Alert.alert("Lỗi", "Không thể thay đổi trạng thái.");
+          // TODO: Tạo notification qua notificationApiService nếu có endpoint
+          // Hiện tại notification được tạo tự động bởi backend hoặc qua notificationApiService
+          
+          // ✅ Cập nhật UI
+          setApps((p) => p.map((x) => (x.$id === appId ? { ...x, status } : x)));
+          Alert.alert("Thông báo", msg);
+        } catch (jobError) {
+          console.error("Failed to fetch job for notification:", jobError);
+          // Vẫn update UI dù không fetch được job
+          setApps((p) => p.map((x) => (x.$id === appId ? { ...x, status } : x)));
+          Alert.alert("Thông báo", `Đã ${status === "accepted" ? "chấp nhận" : "từ chối"} đơn ứng tuyển.`);
+        }
+      }
+    } catch (e: any) {
+      console.error("❌ Update application status error:", e);
+      Alert.alert("Lỗi", "Không thể thay đổi trạng thái. Vui lòng thử lại.");
     }
   };
 

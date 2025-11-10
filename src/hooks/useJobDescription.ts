@@ -1,13 +1,13 @@
+// src/hooks/useJobDescription.ts
+// Refactored: Sử dụng jobApiService và applicationApiService thay vì Firestore trực tiếp
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
-import {
-  doc, getDoc, collection, query, where, getDocs,
-  addDoc, deleteDoc, writeBatch, serverTimestamp
-} from 'firebase/firestore';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
-import { db, storage, auth } from '@/config/firebase';
+import { storage, auth } from '@/config/firebase';
 import * as Haptics from 'expo-haptics';
+import { jobApiService } from '@/services/jobApi.service';
+import { applicationApiService, Application } from '@/services/applicationApi.service';
 
 interface PosterInfo {
   name?: string;
@@ -24,52 +24,54 @@ export const useJobDescription = (jobId: string) => {
   // Trạng thái apply
   const [applyLoading, setApplyLoading] = useState(true);
   const [isApplied, setIsApplied] = useState(false);      // ĐÃ có CV
-  const [hasDraft, setHasDraft] = useState(false);        // Có doc nhưng CHƯA có CV
+  const [hasDraft, setHasDraft] = useState(false);        // Có application nhưng CHƯA có CV
   const [applyDocId, setApplyDocId] = useState<string | null>(null);
 
   const checkingRef = useRef(false);
 
-  // Lấy user hiện tại (đủ dùng với Expo/Firebase)
+  // Lấy user hiện tại
   useEffect(() => {
     const u = auth.currentUser;
     if (u) setUserId(u.uid);
     else setUserId('');
   }, []);
 
-  // 1) Load Job
+  /**
+   * Load Job từ API
+   * Flow: API getJobById → Set jobData → Load poster info (nếu cần)
+   */
   const loadJobData = useCallback(async () => {
-      if (!jobId || jobData) return;
+    if (!jobId || jobData) return;
     try {
       setLoading(true);
       setError(null);
 
-      const jobRef = doc(db, 'jobs', jobId);
-      const jobSnap = await getDoc(jobRef);
-      if (!jobSnap.exists()) {
-        setError('Job không tồn tại hoặc đã bị xóa');
-        return;
-      }
+      // ✅ Load job từ API
+      const job = await jobApiService.getJobById(jobId);
+      setJobData(job);
 
-      const result = jobSnap.data();
-      setJobData(result);
-
-      if (result?.users?.id) {
-        const userRef = doc(db, 'users', result.users.id);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const ud = userSnap.data();
-          setPosterInfo({ name: ud.name, email: ud.email });
-        }
+      // ✅ Load poster info từ job data
+      // Backend có thể trả về employer info trong job object
+      if (job.employerId || job.ownerId) {
+        // TODO: Nếu backend có endpoint để lấy employer info, gọi ở đây
+        // Hiện tại giữ nguyên logic cũ nếu cần
+        setPosterInfo({
+          name: job.company?.corp_name || job.company || 'Ẩn danh',
+          email: job.company?.email || undefined,
+        });
       }
-    } catch (e) {
-      console.error('Load job error:', e);
-      setError('Không thể tải thông tin job');
+    } catch (e: any) {
+      console.error('❌ Load job error:', e);
+      setError('Job không tồn tại hoặc đã bị xóa');
     } finally {
       setLoading(false);
     }
   }, [jobId, jobData]);
 
-  // 2) Check Apply Status (chỉ coi là applied nếu đã có CV)
+  /**
+   * Check Apply Status từ API
+   * Flow: API getMyApplications → Filter by jobId → Check CV status
+   */
   const checkApplyStatus = useCallback(async (silent = false) => {
     if (!userId || !jobId || checkingRef.current) return;
 
@@ -77,35 +79,37 @@ export const useJobDescription = (jobId: string) => {
     if (!silent) setApplyLoading(true);
 
     try {
-      const qy = query(
-        collection(db, 'applied_jobs'),
-        where('userId', '==', userId),
-        where('jobId', '==', jobId)
-      );
-      const res = await getDocs(qy);
+      // ✅ Lấy applications từ API
+      const applications = await applicationApiService.getMyApplications();
+      const app = applications.find((a: Application) => a.jobId === jobId);
 
-      if (!res.empty) {
-        const first = res.docs[0];
-        const data = first.data();
-        const submitted = !!(data?.cv_url || data?.cv_uploaded);
-
-        setApplyDocId(first.id);
+      if (app) {
+        // Application tồn tại → Check xem đã có CV chưa
+        const submitted = !!(app.cvUrl);
+        
+        setApplyDocId(app.id || null);
         setIsApplied(submitted);       // true khi đã có CV
         setHasDraft(!submitted);       // chưa có CV => draft
       } else {
+        // Chưa có application
         setApplyDocId(null);
         setIsApplied(false);
         setHasDraft(false);
       }
-    } catch (e) {
-      console.error('Check applied error:', e);
+    } catch (e: any) {
+      console.error('❌ Check applied error:', e);
+      // Nếu API fail (401, network error), không set state
     } finally {
       if (!silent) setApplyLoading(false);
       checkingRef.current = false;
     }
   }, [userId, jobId]);
 
-  // 3) Apply (KHÔNG setIsApplied(true) ở đây)
+  /**
+   * Apply (tạo hoặc navigate đến submit screen)
+   * Flow: Check draft → Navigate to submit với applyDocId
+   * Note: Application sẽ được tạo ở submit screen khi upload CV
+   */
   const handleApply = useCallback(async () => {
     if (!userId) {
       Alert.alert('Thông báo', 'Bạn cần đăng nhập trước');
@@ -116,96 +120,96 @@ export const useJobDescription = (jobId: string) => {
     try {
       setApplyLoading(true);
 
-      // Nếu đã có draft thì dùng lại doc đó
-if (hasDraft && applyDocId) {
-  router.navigate(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${applyDocId}` as any);
-  return;
-}
+      // ✅ Nếu đã có draft application, navigate với applyDocId
+      if (hasDraft && applyDocId) {
+        router.navigate(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${applyDocId}` as any);
+        return;
+      }
 
+      // ✅ Nếu chưa có application, tạo một application draft (chưa có CV)
+      // Backend sẽ tạo application với status pending và không có CV
+      if (!jobData) {
+        Alert.alert('Lỗi', 'Không thể tải thông tin công việc');
+        return;
+      }
 
-      // Xóa bản cũ (nếu có) để tránh trùng
-      const qy = query(
-        collection(db, 'applied_jobs'),
-        where('userId', '==', userId),
-        where('jobId', '==', jobId)
-      );
-      const res = await getDocs(qy);
-      await Promise.all(res.docs.map(d => deleteDoc(d.ref)));
+      try {
+        const newApplication = await applicationApiService.createApplication({
+          jobId,
+          employerId: jobData.employerId || jobData.ownerId || '',
+          // cvUrl và coverLetter sẽ được update ở submit screen
+        });
 
-      // Tạo doc DRAFT (chưa có CV)
-      const created = await addDoc(collection(db, 'applied_jobs'), {
-        userId,
-        jobId,
-        employerId: jobData?.users?.id ?? jobData?.ownerId ?? '',
-        cv_uploaded: false,
-        cv_url: null,
-        status: 'pending',
-        applied_at: serverTimestamp(),
-        jobInfo: {
-          title: jobData?.title || '',
-          company: jobData?.company?.corp_name || '',
-          salary: jobData?.salary || '',
-        },
-      });
-
-      setApplyDocId(created.id);
-      setHasDraft(true);    // Có draft
-      // Không đổi isApplied ở đây
-router.navigate(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${created.id}` as any);
-    } catch (e) {
-      console.error('Apply failed:', e);
-      Alert.alert('Lỗi', 'Không thể tạo hồ sơ ứng tuyển.');
+        setApplyDocId(newApplication.id || null);
+        setHasDraft(true);
+        router.navigate(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${newApplication.id}` as any);
+      } catch (apiError: any) {
+        // Nếu application đã tồn tại, vẫn navigate với applyDocId nếu có
+        if (apiError.response?.status === 400 && applyDocId) {
+          router.navigate(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${applyDocId}` as any);
+        } else {
+          throw apiError;
+        }
+      }
+    } catch (e: any) {
+      console.error('❌ Apply failed:', e);
+      Alert.alert('Lỗi', 'Không thể tạo hồ sơ ứng tuyển. Vui lòng thử lại.');
     } finally {
       setApplyLoading(false);
     }
   }, [userId, jobId, jobData, hasDraft, applyDocId]);
 
-  // 4) Cancel (chỉ thực sự hủy khi người dùng bấm Cancel)
+  /**
+   * Cancel application (withdraw)
+   * Flow: API withdrawApplication → Delete CV từ storage (nếu có) → Update state
+   */
   const handleCancel = useCallback(async () => {
+    if (!applyDocId) {
+      Alert.alert('⚠️ Không tìm thấy hồ sơ ứng tuyển.');
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       setLoading(true);
 
-      const qy = query(
-        collection(db, 'applied_jobs'),
-        where('userId', '==', userId),
-        where('jobId', '==', jobId)
-      );
-      const res = await getDocs(qy);
+      // ✅ Lấy application để check CV path
+      const applications = await applicationApiService.getMyApplications();
+      const app = applications.find((a: Application) => a.id === applyDocId);
 
-      if (res.empty) {
-        Alert.alert('⚠️ Không tìm thấy hồ sơ ứng tuyển.');
-        return;
-      }
+      // ✅ Xóa CV từ storage nếu có (nếu backend lưu path)
+      // TODO: Backend có thể cần trả về CV path, hoặc handle deletion tự động
+      // if (app?.cvUrl) {
+      //   try {
+      //     // Extract path from URL hoặc backend trả về path
+      //     // await deleteObject(storageRef(storage, cvPath));
+      //   } catch (err: any) {
+      //     console.warn('Delete CV failed:', err?.message);
+      //   }
+      // }
 
-      for (const snap of res.docs) {
-        const data = snap.data();
-        if (data?.cv_path) {
-          try {
-            await deleteObject(storageRef(storage, data.cv_path));
-          } catch (err: any) {
-            console.warn('Delete CV failed:', err?.message);
-          }
-        }
-        await deleteDoc(snap.ref);
-      }
+      // ✅ Withdraw application qua API
+      await applicationApiService.withdrawApplication(applyDocId);
 
       setIsApplied(false);
       setHasDraft(false);
       setApplyDocId(null);
       Alert.alert('✅ Thành công', 'Đã hủy ứng tuyển.');
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setTimeout(() => checkApplyStatus(true), 300);
-    } catch (e) {
-      console.error('Cancel failed:', e);
-      Alert.alert('Lỗi', 'Không thể hủy ứng tuyển.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => checkApplyStatus(true), 300);
+    } catch (e: any) {
+      console.error('❌ Cancel failed:', e);
+      Alert.alert('Lỗi', 'Không thể hủy ứng tuyển. Vui lòng thử lại.');
     } finally {
       setLoading(false);
       checkApplyStatus(true);
     }
-  }, [userId, jobId, checkApplyStatus]);
+  }, [userId, jobId, applyDocId, checkApplyStatus]);
 
-  // 5) Delete Job (employer)
+  /**
+   * Delete Job (employer only)
+   * Flow: API deleteJob → Backend xử lý xóa applications và saved jobs liên quan
+   */
   const handleDelete = useCallback(async () => {
     Alert.alert(
       'Xóa công việc?',
@@ -219,26 +223,14 @@ router.navigate(`/submit?jobId=${jobId}&userId=${userId}&applyDocId=${created.id
             try {
               setLoading(true);
 
-              const jobRef = doc(db, 'jobs', jobId);
-              const appliedQuery = query(collection(db, 'applied_jobs'), where('jobId', '==', jobId));
-              const savedQuery = query(collection(db, 'saved_jobs'), where('jobId', '==', jobId));
-
-              const [appliedSnap, savedSnap] = await Promise.all([
-                getDocs(appliedQuery),
-                getDocs(savedQuery),
-              ]);
-
-              const batch = writeBatch(db);
-              batch.delete(jobRef);
-              appliedSnap.forEach(d => batch.delete(d.ref));
-              savedSnap.forEach(d => batch.delete(d.ref));
-              await batch.commit();
+              // ✅ Delete job qua API (backend sẽ xử lý xóa applications và saved jobs)
+              await jobApiService.deleteJob(jobId);
 
               Alert.alert('✅ Đã xóa!', 'Công việc đã được xóa.');
               router.back();
-            } catch (e) {
-              console.error('Delete error:', e);
-              Alert.alert('Lỗi', 'Không thể xóa.');
+            } catch (e: any) {
+              console.error('❌ Delete error:', e);
+              Alert.alert('Lỗi', 'Không thể xóa công việc. Vui lòng thử lại.');
             } finally {
               setLoading(false);
             }

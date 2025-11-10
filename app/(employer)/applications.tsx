@@ -1,4 +1,5 @@
-// app/(shared)/applications.tsx
+// app/(employer)/applications.tsx
+// Refactored: Sử dụng applicationApiService thay vì Firestore trực tiếp
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
@@ -9,54 +10,94 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
-import { auth, db } from "@/config/firebase";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import { applicationApiService } from "@/services/applicationApi.service";
+import { jobApiService } from "@/services/jobApi.service";
+import { useRole } from "@/contexts/RoleContext";
+import { Application } from "@/services/applicationApi.service";
 
 /* -------------------------------------------------------------------------- */
 export default function Applications() {
-  const uid = auth.currentUser?.uid;
   const router = useRouter();
+  const { role } = useRole();
 
-  const [role, setRole] = useState<"candidate" | "employer">("candidate");
   const [apps, setApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  /* 👉 fetch once + pull-to-refresh */
+  /**
+   * Fetch applications từ API
+   * Flow: API applications → Fetch job/user details → Map data
+   */
   const fetchData = useCallback(async () => {
-    if (!uid) return;
-    setRefreshing(true);
+    if (!role) return;
+    
+    try {
+      setRefreshing(true);
+      
+      // ✅ Lấy applications từ API (employer hoặc candidate)
+      const applications = role === "employer" 
+        ? await applicationApiService.getEmployerApplications()
+        : await applicationApiService.getMyApplications();
+      
+      // ✅ Helper: Extract company name từ Job.company (có thể là string hoặc object)
+      const getCompanyName = (company: string | { $id?: string; corp_name?: string; nation?: string } | undefined): string => {
+        if (!company) return "Ẩn danh";
+        if (typeof company === 'string') return company;
+        return company.corp_name || "Ẩn danh";
+      };
 
-    /* lấy role */
-    const me = await getDoc(doc(db, "users", uid));
-    const myRole = me.data()?.role === "employer" ? "employer" : "candidate";
-    setRole(myRole);
-
-    /* lấy applications */
-    const q = query(
-      collection(db, "applied_jobs"),
-      where(myRole === "employer" ? "employerId" : "userId", "==", uid),
-      orderBy("applied_at", "desc")
-    );
-    const snap = await getDocs(q);
-    setApps(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-
-    setLoading(false);
-    setRefreshing(false);
-  }, [uid]);
+      // ✅ Populate job và user details
+      const appsWithDetails = await Promise.all(
+        applications.map(async (app: Application) => {
+          try {
+            const job = await jobApiService.getJobById(app.jobId);
+            
+            // Nếu là employer, cần lấy thông tin candidate
+            // Nếu là candidate, chỉ cần job info
+            return {
+              id: app.id,
+              jobId: app.jobId,
+              status: app.status,
+              applied_at: app.appliedAt,
+              jobInfo: {
+                title: job.title,
+                company: getCompanyName(job.company),
+                image: job.image,
+              },
+              // TODO: Add userInfo nếu cần (candidate info cho employer view)
+            };
+          } catch (error) {
+            console.error(`Failed to fetch details for application ${app.id}:`, error);
+            return {
+              id: app.id,
+              jobId: app.jobId,
+              status: app.status,
+              applied_at: app.appliedAt,
+              jobInfo: {
+                title: "Không rõ",
+                company: "Ẩn danh",
+                image: undefined,
+              },
+            };
+          }
+        })
+      );
+      
+      setApps(appsWithDetails);
+    } catch (error: any) {
+      console.error("❌ Fetch applications error:", error);
+      Alert.alert("Lỗi", "Không thể tải danh sách ứng tuyển. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [role]);
 
   useEffect(() => {
     fetchData();
@@ -71,6 +112,17 @@ export default function Applications() {
     const isEmp = role === "employer";
     const job = item.jobInfo ?? {};
     const usr = item.userInfo ?? {};
+
+    // Convert applied_at từ Date/string/timestamp về Date object
+    const appliedDate = item.applied_at 
+      ? (typeof item.applied_at === 'string' 
+          ? new Date(item.applied_at) 
+          : item.applied_at instanceof Date 
+            ? item.applied_at 
+            : item.applied_at?.seconds 
+              ? new Date(item.applied_at.seconds * 1000)
+              : new Date(item.applied_at))
+      : null;
 
     return (
       <TouchableOpacity
@@ -109,6 +161,8 @@ export default function Applications() {
                   ? "checkmark-circle"
                   : item.status === "rejected"
                   ? "close-circle"
+                  : item.status === "withdrawn"
+                  ? "close-circle-outline"
                   : "time"
               }
               size={14}
@@ -119,13 +173,15 @@ export default function Applications() {
                 ? "Đã chấp nhận"
                 : item.status === "rejected"
                 ? "Đã từ chối"
+                : item.status === "withdrawn"
+                ? "Đã hủy"
                 : "Đang chờ duyệt"}
             </Text>
           </View>
 
-          {item.applied_at?.seconds && (
+          {appliedDate && (
             <Text style={styles.date}>
-              {new Date(item.applied_at.seconds * 1000).toLocaleDateString("vi-VN")}
+              {appliedDate.toLocaleDateString("vi-VN")}
             </Text>
           )}
         </View>

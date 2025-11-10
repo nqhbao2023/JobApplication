@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+// app/(employer)/myJobs.tsx
+// Refactored: Sử dụng jobApiService thay vì Firestore trực tiếp
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   View, Text, FlatList, TouchableOpacity, Image, 
   StyleSheet, RefreshControl, Alert, ActivityIndicator 
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { auth, db } from '@/config/firebase';
-import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+
+import { jobApiService } from '@/services/jobApi.service';
 
 export default function MyJobs() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -23,30 +25,33 @@ export default function MyJobs() {
     return '—';
   };
 
-  // Lấy job của user hiện tại
-  const fetchJobs = async () => {
+  /**
+   * Fetch jobs từ API
+   * Flow: API getMyJobs → Update state
+   */
+  const fetchJobs = useCallback(async () => {
     try {
       setLoading(true);
-      const user = auth.currentUser;
-      if (!user) return;
-      const q = query(collection(db, 'jobs'), where('users', '==', user.uid));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setJobs(data);
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Lỗi', 'Không thể tải danh sách công việc');
+      
+      // ✅ Lấy jobs từ API
+      const myJobs = await jobApiService.getMyJobs();
+      setJobs(myJobs);
+    } catch (error: any) {
+      console.error('❌ Fetch jobs error:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh sách công việc. Vui lòng thử lại.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchJobs();
-  }, []);
+  }, [fetchJobs]);
 
-  // Xóa job
+  /**
+   * Xóa job qua API
+   */
   const handleDelete = async (id: string) => {
     Alert.alert(
       'Xác nhận xóa',
@@ -58,11 +63,12 @@ export default function MyJobs() {
           style: 'destructive', 
           onPress: async () => {
             try {
-              await deleteDoc(doc(db, 'jobs', id));
+              await jobApiService.deleteJob(id);
               setJobs(prev => prev.filter(job => job.id !== id));
               Alert.alert('✅ Đã xóa công việc');
-            } catch (err) {
-              Alert.alert('Lỗi', 'Không thể xóa công việc');
+            } catch (err: any) {
+              console.error('❌ Delete job error:', err);
+              Alert.alert('Lỗi', 'Không thể xóa công việc. Vui lòng thử lại.');
             }
           } 
         }
@@ -71,47 +77,69 @@ export default function MyJobs() {
   };
 
   // Làm mới danh sách
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchJobs();
-  };
+  }, [fetchJobs]);
 
   // ✅ Dùng helper textify để tránh crash object
-  const renderJob = ({ item }: any) => (
-    <TouchableOpacity 
-      style={styles.card} 
-      onPress={() => router.push({ pathname: '/(shared)/jobDescription', params: { id: item.id } })}
-      activeOpacity={0.8}
-    >
-      {item.image ? (
-        <Image source={{ uri: item.image }} style={styles.image} />
-      ) : (
-        <View style={[styles.image, { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }]}>
-          <Ionicons name="briefcase-outline" size={30} color="#999" />
+  const renderJob = ({ item }: any) => {
+    // Convert created_at từ Date/string/timestamp về Date object
+    const createdDate = item.created_at || item.createdAt
+      ? (typeof (item.created_at || item.createdAt) === 'string' 
+          ? new Date(item.created_at || item.createdAt) 
+          : (item.created_at || item.createdAt) instanceof Date 
+            ? (item.created_at || item.createdAt)
+            : new Date(item.created_at || item.createdAt))
+      : null;
+
+    // Handle salary (có thể là number hoặc object với min/max)
+    const salaryText = item.salary 
+      ? (typeof item.salary === 'number' 
+          ? item.salary.toLocaleString('vi-VN') + ' đ/tháng'
+          : item.salary.min && item.salary.max
+            ? `${item.salary.min.toLocaleString('vi-VN')} - ${item.salary.max.toLocaleString('vi-VN')} ${item.salary.currency || 'đ'}/tháng`
+            : '—')
+      : '—';
+
+    return (
+      <TouchableOpacity 
+        style={styles.card} 
+        onPress={() => router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.id || item.$id } })}
+        activeOpacity={0.8}
+      >
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.image} />
+        ) : (
+          <View style={[styles.image, { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }]}>
+            <Ionicons name="briefcase-outline" size={30} color="#999" />
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.salary}>{salaryText}</Text>
+
+          {/* ✅ Fix crash ở đây */}
+          <Text style={styles.category}>
+            Danh mục: {textify(item.jobCategories, 'category')}
+          </Text>
+          <Text style={styles.category}>
+            Loại: {textify(item.jobTypes, 'type')}
+          </Text>
+
+          {createdDate && (
+            <Text style={styles.date}>
+              Đăng ngày: {createdDate.toLocaleDateString('vi-VN')}
+            </Text>
+          )}
         </View>
-      )}
-      <View style={{ flex: 1 }}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.salary}>{item.salary?.toLocaleString('vi-VN')} đ/tháng</Text>
 
-        {/* ✅ Fix crash ở đây */}
-        <Text style={styles.category}>
-          Danh mục: {textify(item.jobCategories, 'category')}
-        </Text>
-        <Text style={styles.category}>
-          Loại: {textify(item.jobTypes, 'type')}
-        </Text>
-
-        <Text style={styles.date}>
-          Đăng ngày: {new Date(item.created_at).toLocaleDateString('vi-VN')}
-        </Text>
-      </View>
-
-      <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-        <Ionicons name="trash-outline" size={22} color="#ff4444" />
+        <TouchableOpacity onPress={() => handleDelete(item.id || item.$id)} style={styles.deleteBtn}>
+          <Ionicons name="trash-outline" size={22} color="#ff4444" />
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>

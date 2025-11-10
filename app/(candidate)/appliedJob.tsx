@@ -1,4 +1,5 @@
 // app/(candidate)/appliedJob.tsx
+// Refactored: Sử dụng applicationApiService thay vì Firestore trực tiếp
 import React, { useCallback, useEffect, useState } from "react";
 import {
   StyleSheet,
@@ -9,55 +10,106 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
-import { db, auth } from "@/config/firebase";
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  getDocs,
-} from "firebase/firestore";
+import { applicationApiService } from "@/services/applicationApi.service";
+import { jobApiService } from "@/services/jobApi.service";
+import { Application } from "@/services/applicationApi.service";
 
 /* -------------------------------------------------------------------------- */
 /*                                 MAIN PAGE                                  */
 /* -------------------------------------------------------------------------- */
 export default function AppliedJob() {
   const router = useRouter();
-  const uid = auth.currentUser?.uid;
-
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  /* fetch once + on pull */
-  const fetchJobs = useCallback(async () => {
-    if (!uid) return;
-    setRefreshing(true);
+  /**
+   * Helper: Extract company name từ Job.company (có thể là string hoặc object)
+   * Type-safe handling cho company field
+   */
+  const getCompanyName = useCallback((company: string | { $id?: string; corp_name?: string; nation?: string; city?: string } | undefined): string => {
+    if (!company) return "Ẩn danh";
+    if (typeof company === 'string') return company;
+    return company.corp_name || "Ẩn danh";
+  }, []);
 
-    const q = query(
-      collection(db, "applied_jobs"),
-      where("userId", "==", uid),
-      orderBy("applied_at", "desc")
-    );
-    const snap = await getDocs(q);
-    setJobs(
-      snap.docs.map((d) => ({
-        $id: d.id,
-        ...d.data(),
-      }))
-    );
-    setLoading(false);
-    setRefreshing(false);
-  }, [uid]);
+  /**
+   * Helper: Extract company city từ Job.company (nếu là object)
+   */
+  const getCompanyCity = useCallback((company: string | { $id?: string; corp_name?: string; nation?: string; city?: string } | undefined): string | undefined => {
+    if (!company || typeof company === 'string') return undefined;
+    return company.city;
+  }, []);
+
+  /**
+   * Fetch applications từ API và populate job details
+   * Flow: API applications → Fetch job details → Map data
+   */
+  const fetchApplications = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      
+      // ✅ B1: Lấy applications từ API
+      const apps = await applicationApiService.getMyApplications();
+      
+      // ✅ B2: Fetch job details cho mỗi application
+      const applicationsWithJobs = await Promise.all(
+        apps.map(async (app: Application) => {
+          try {
+            const job = await jobApiService.getJobById(app.jobId);
+            const companyName = getCompanyName(job.company);
+            const companyCity = getCompanyCity(job.company);
+            
+            return {
+              $id: app.id,
+              jobId: app.jobId,
+              status: app.status,
+              applied_at: app.appliedAt,
+              jobInfo: {
+                title: job.title,
+                company: companyName,
+                location: job.location || companyCity || "Không rõ địa điểm",
+                image: job.image,
+              },
+            };
+          } catch (jobError) {
+            console.error(`Failed to fetch job ${app.jobId}:`, jobError);
+            // Nếu không fetch được job, vẫn hiển thị application với thông tin cơ bản
+            return {
+              $id: app.id,
+              jobId: app.jobId,
+              status: app.status,
+              applied_at: app.appliedAt,
+              jobInfo: {
+                title: "Không rõ tiêu đề",
+                company: "Ẩn danh",
+                location: "Không rõ địa điểm",
+                image: undefined,
+              },
+            };
+          }
+        })
+      );
+      
+      setApplications(applicationsWithJobs);
+    } catch (error: any) {
+      console.error("❌ Fetch applications error:", error);
+      Alert.alert("Lỗi", "Không thể tải danh sách ứng tuyển. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [getCompanyName, getCompanyCity]);
 
   useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+    fetchApplications();
+  }, [fetchApplications]);
 
   /* --------------------------------- UI ---------------------------------- */
   if (loading)
@@ -79,11 +131,11 @@ export default function AppliedJob() {
 
       {/* list */}
       <FlatList
-        data={jobs}
-        keyExtractor={(it) => it.$id}
+        data={applications}
+        keyExtractor={(it) => it.$id || it.jobId}
         renderItem={({ item }) => <JobRow item={item} onPress={router} />}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchJobs} />
+          <RefreshControl refreshing={refreshing} onRefresh={fetchApplications} />
         }
         ListEmptyComponent={
           <View style={styles.center}>
@@ -95,7 +147,7 @@ export default function AppliedJob() {
         }
         contentContainerStyle={[
           styles.listPad,
-          jobs.length === 0 && { flex: 1 },
+          applications.length === 0 && { flex: 1 },
         ]}
       />
     </SafeAreaView>
@@ -113,46 +165,65 @@ const statusColor = (s?: string) =>
     : "#FF9500";
 
 const JobRow = React.memo(
-  ({ item, onPress }: { item: any; onPress: any }) => (
-    <TouchableOpacity
-      style={styles.row}
-      onPress={() =>
-        onPress.navigate({
-          pathname: "/(shared)/jobDescription",
-          params: { jobId: item.jobId, fromApplied: "true" },
-        })
-      }
-    >
-      <Image
-        source={{
-          uri:
-            item.jobInfo?.image ??
-            "https://placehold.co/60x60?text=Job",
-        }}
-        style={styles.logo}
-      />
+  ({ item, onPress }: { item: any; onPress: any }) => {
+    // Convert applied_at từ Date/string/timestamp về Date object
+    const appliedDate = item.applied_at 
+      ? (typeof item.applied_at === 'string' 
+          ? new Date(item.applied_at) 
+          : item.applied_at instanceof Date 
+            ? item.applied_at 
+            : new Date(item.applied_at))
+      : null;
 
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={styles.title} numberOfLines={1}>
-          {item.jobInfo?.title ?? "Không rõ tiêu đề"}
-        </Text>
-        <Text style={styles.company} numberOfLines={1}>
-          {item.jobInfo?.company ?? "Ẩn danh"}
-        </Text>
-        <Text style={styles.location} numberOfLines={1}>
-          {item.jobInfo?.location ?? "Không rõ địa điểm"}
-        </Text>
+    return (
+      <TouchableOpacity
+        style={styles.row}
+        onPress={() =>
+          onPress.navigate({
+            pathname: "/(shared)/jobDescription",
+            params: { jobId: item.jobId, fromApplied: "true" },
+          })
+        }
+      >
+        <Image
+          source={{
+            uri:
+              item.jobInfo?.image ??
+              "https://placehold.co/60x60?text=Job",
+          }}
+          style={styles.logo}
+        />
 
-        <Text style={[styles.status, { color: statusColor(item.status) }]}>
-          {item.status === "accepted"
-            ? "Đã duyệt"
-            : item.status === "rejected"
-            ? "Từ chối"
-            : "Đang chờ"}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  )
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.title} numberOfLines={1}>
+            {item.jobInfo?.title ?? "Không rõ tiêu đề"}
+          </Text>
+          <Text style={styles.company} numberOfLines={1}>
+            {item.jobInfo?.company ?? "Ẩn danh"}
+          </Text>
+          <Text style={styles.location} numberOfLines={1}>
+            {item.jobInfo?.location ?? "Không rõ địa điểm"}
+          </Text>
+
+          <Text style={[styles.status, { color: statusColor(item.status) }]}>
+            {item.status === "accepted"
+              ? "Đã duyệt"
+              : item.status === "rejected"
+              ? "Từ chối"
+              : item.status === "withdrawn"
+              ? "Đã hủy"
+              : "Đang chờ"}
+          </Text>
+          
+          {appliedDate && (
+            <Text style={styles.date}>
+              Ứng tuyển: {appliedDate.toLocaleDateString("vi-VN")}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  }
 );
 
 /* -------------------------------------------------------------------------- */
@@ -193,6 +264,7 @@ const styles = StyleSheet.create({
   company: { fontSize: 14, color: "#555" },
   location: { fontSize: 12, color: "#888" },
   status: { marginTop: 4, fontSize: 12, fontWeight: "600" },
+  date: { fontSize: 11, color: "#999", marginTop: 2 },
 
   /* misc */
   center: { flex: 1, justifyContent: "center", alignItems: "center" },

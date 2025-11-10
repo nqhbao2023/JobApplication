@@ -42,5 +42,8 @@ export const API_ENDPOINTS = {
   },
   auth: {
     verify: '/api/auth/verify',
+    role: '/api/auth/role',
+    sync: '/api/auth/sync',
+    profile: '/api/auth/profile', // TODO: Needs to be implemented in backend
   },
 };

@@ -1,12 +1,31 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, updateProfile } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut as firebaseSignOut, 
+  updateProfile 
+} from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { auth, db } from '@/config/firebase';
-import { AppRole, AppRoleOrNull } from '@/types';
+import { auth } from '@/config/firebase';
+import { AppRole } from '@/types';
 import { mapAuthError } from '@/utils/validation/auth';
 import { useRole } from './RoleContext';
-import { getCurrentUserRole } from '@/utils/roles';
+import { authApiService } from '@/services/authApi.service';
+
+/**
+ * 🔐 AuthContext - Quản lý authentication
+ * 
+ * Luồng hoạt động:
+ * 1. Client đăng nhập/đăng ký qua Firebase Auth (client SDK)
+ * 2. Sau khi thành công, gọi API backend để sync thông tin user vào Firestore
+ * 3. Backend xử lý việc lưu/update user data, normalize role
+ * 4. Client lưu token và role vào AsyncStorage để offline-first
+ * 
+ * Lý do giữ Firebase Auth ở client:
+ * - Firebase Auth SDK có sẵn offline persistence tốt
+ * - Token refresh tự động
+ * - Không cần viết lại authentication flow phức tạp
+ */
 
 type AuthContextType = {
   loading: boolean;
@@ -26,26 +45,55 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const clearError = useCallback(() => setError(null), []);
 
+  /**
+   * 🔓 Đăng nhập
+   * Flow: Firebase Auth → Backend API sync → Lưu local cache
+   */
   const signIn = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      
-      const role = await getCurrentUserRole();
-      if (!role) {
+      // Bước 1: Đăng nhập Firebase
+      const userCredential = await signInWithEmailAndPassword(
+        auth, 
+        email.trim(), 
+        password
+      );
+
+      // Bước 2: Lấy token để gọi API
+      const token = await userCredential.user.getIdToken();
+
+      // Bước 3: Verify với backend và lấy role
+      try {
+        const roleData = await authApiService.getCurrentRole();
+        
+        // Bước 4: Kiểm tra user có bị xóa không
+        if (!roleData.role) {
+          await firebaseSignOut(auth);
+          await AsyncStorage.removeItem('userRole');
+          throw new Error('deleted-user');
+        }
+
+        // Bước 5: Lưu role vào local cache
+        await AsyncStorage.setItem('userRole', roleData.role);
+        await refreshRole();
+
+      } catch (apiError: any) {
+        // Nếu API fail, rollback authentication
+        console.error('❌ Backend verification failed:', apiError);
         await firebaseSignOut(auth);
         await AsyncStorage.removeItem('userRole');
-        throw new Error('deleted-user');
+        throw apiError;
       }
 
-      await AsyncStorage.setItem('userRole', role);
-      await refreshRole();
     } catch (err: any) {
+      console.error('❌ Sign in error:', err);
+      
       if (err.message === 'deleted-user') {
         setError('Tài khoản của bạn đã bị xóa khỏi hệ thống. Vui lòng liên hệ quản trị viên.');
       } else {
+        // Cleanup nếu có lỗi
         if (auth.currentUser) {
           await firebaseSignOut(auth);
           await AsyncStorage.removeItem('userRole');
@@ -58,6 +106,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [refreshRole]);
 
+  /**
+   * 📝 Đăng ký
+   * Flow: Firebase Auth → Update profile → Backend API sync → Lưu local cache
+   */
   const signUp = useCallback(async (
     name: string,
     phone: string,
@@ -70,43 +122,61 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let userCreated = false;
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      // Bước 1: Tạo account Firebase
+      const userCredential = await createUserWithEmailAndPassword(
+        auth, 
+        email.trim(), 
+        password
+      );
       userCreated = true;
 
-      await updateProfile(userCredential.user, { displayName: name.trim() });
-
-      const writeUserDoc = setDoc(doc(db, 'users', userCredential.user.uid), {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        name: name.trim(),
-        phone: phone.trim(),
-        role,
-        skills: [],
-        savedJobIds: [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      // Bước 2: Update display name
+      await updateProfile(userCredential.user, { 
+        displayName: name.trim() 
       });
 
-      const timeout = new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 15000)
-      );
+      // Bước 3: Sync với backend (backend sẽ lưu vào Firestore)
+      try {
+        await authApiService.syncUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email!,
+          name: name.trim(),
+          phone: phone.trim(),
+          role,
+        });
 
-      await Promise.race([writeUserDoc, timeout]);
-      await refreshRole();
+        // Bước 4: Refresh role từ backend
+        await refreshRole();
+
+      } catch (apiError: any) {
+        console.error('❌ Backend sync failed:', apiError);
+        
+        // Nếu backend fail, xóa user đã tạo để đảm bảo data consistency
+        try {
+          await auth.currentUser?.delete();
+          console.log('🧹 Cleaned up incomplete user account');
+        } catch (deleteErr) {
+          console.warn('⚠️ Failed to delete incomplete user:', deleteErr);
+        }
+        
+        throw new Error('Backend sync failed. Account creation rolled back.');
+      }
+
     } catch (err: any) {
+      console.error('❌ Sign up error:', err);
+      
+      // Cleanup nếu user đã tạo nhưng có lỗi
       if (userCreated) {
         try {
           await auth.currentUser?.delete();
-          if (__DEV__) console.log('🧹 Cleaned up incomplete user account');
+          console.log('🧹 Cleaned up incomplete user account');
         } catch (deleteErr) {
-          if (__DEV__) console.log('⚠️ Failed to delete incomplete user:', deleteErr);
+          console.warn('⚠️ Failed to delete incomplete user:', deleteErr);
         }
       }
 
-      if (err?.message === 'timeout') {
-        setError('Ghi dữ liệu quá lâu (timeout 15s). Kiểm tra mạng và thử lại.');
-      } else if (err?.code === 'permission-denied') {
-        setError('Không có quyền ghi dữ liệu. Vui lòng liên hệ hỗ trợ.');
+      if (err?.message?.includes('Backend sync failed')) {
+        setError('Không thể đồng bộ dữ liệu. Vui lòng thử lại.');
       } else {
         setError(mapAuthError(err?.code));
       }
@@ -116,13 +186,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [refreshRole]);
 
+  /**
+   * 🚪 Đăng xuất
+   * Flow: Clear local cache → Firebase signOut → Refresh role state
+   */
   const signOut = useCallback(async () => {
     setLoading(true);
     try {
-      await firebaseSignOut(auth);
+      // Bước 1: Clear local cache trước
       await AsyncStorage.removeItem('userRole');
+      
+      // Bước 2: Đăng xuất Firebase
+      await firebaseSignOut(auth);
+      
+      // Bước 3: Reset role state
       await refreshRole();
+      
     } catch (err: any) {
+      console.error('❌ Sign out error:', err);
       setError(mapAuthError(err?.code));
       throw err;
     } finally {
@@ -131,7 +212,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [refreshRole]);
 
   return (
-    <AuthContext.Provider value={{ loading, error, signIn, signUp, signOut, clearError }}>
+    <AuthContext.Provider value={{ 
+      loading, 
+      error, 
+      signIn, 
+      signUp, 
+      signOut, 
+      clearError 
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -139,6 +227,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
   return context;
 };

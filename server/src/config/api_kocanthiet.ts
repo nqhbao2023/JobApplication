@@ -1,20 +1,9 @@
-import { Platform } from 'react-native';
+//server/src/config/api.ts
+const isDev = process.env.NODE_ENV === 'development';
 
-const getBaseURL = (): string => {
-  const isDev = process.env.NODE_ENV === 'development';
-  
-  if (!isDev) {
-    return 'https://job4s-api.onrender.com';
-  }
-
-  if (Platform.OS === 'android') {
-    return 'http://192.168.1.58:3000';
-  }
-  
-  return 'http://localhost:3000';
-};
-
-export const API_BASE_URL = getBaseURL();
+export const API_BASE_URL = isDev
+  ? 'http://10.0.2.2:3000'
+  : 'https://job4s-api.onrender.com';
 
 export const API_ENDPOINTS = {
   health: '/health',

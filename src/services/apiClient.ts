@@ -6,6 +6,8 @@ class APIClient {
   private client: AxiosInstance;
 
   constructor() {
+    console.log('🌐 API_BASE_URL:', API_BASE_URL);
+    
     this.client = axios.create({
       baseURL: API_BASE_URL,
       timeout: 30000,
@@ -20,6 +22,9 @@ class APIClient {
   private setupInterceptors(): void {
     this.client.interceptors.request.use(
       async (config) => {
+        const url = `${config.baseURL || ''}${config.url || ''}`;
+        console.log('📤', config.method?.toUpperCase(), url);
+        
         try {
           const user = auth.currentUser;
           if (user) {
@@ -27,7 +32,7 @@ class APIClient {
             config.headers.Authorization = `Bearer ${token}`;
           }
         } catch (error) {
-          console.error('Failed to get auth token:', error);
+          console.error('❌ Auth token failed:', error);
         }
         return config;
       },
@@ -35,18 +40,18 @@ class APIClient {
     );
 
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.log('✅', response.status, response.config.url);
+        return response;
+      },
       (error: AxiosError) => {
         if (error.response) {
-          console.error('API Error:', {
-            status: error.response.status,
-            data: error.response.data,
-            url: error.config?.url,
-          });
+          console.error('❌ API Error:', error.response.status, error.config?.url);
         } else if (error.request) {
-          console.error('Network Error:', error.message);
+          const url = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
+          console.error('❌ Network Error:', url);
         } else {
-          console.error('Request Error:', error.message);
+          console.error('❌ Config Error:', error.message);
         }
         return Promise.reject(error);
       }
@@ -80,4 +85,3 @@ class APIClient {
 }
 
 export default new APIClient();
-

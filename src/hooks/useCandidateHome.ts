@@ -1,45 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
-import { collection, getDocs, getDoc, query, where, doc, limit } from 'firebase/firestore';
+import { getDoc, doc } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
 import * as Haptics from 'expo-haptics';
 import { handleFirestoreError } from '@/utils/firebaseErrorHandler';
-
-// ===== TYPES =====
-export type Job = {
-  $id: string;
-  title?: string;
-  image?: string;
-  created_at?: string;
-  company?: string | { $id?: string; corp_name?: string; nation?: string };
-  jobCategories?: any;
-  type?: string;
-  salary?: string;
-  location?: string;
-};
-
-export type Company = {
-  $id: string;
-  corp_name?: string;
-  nation?: string;
-  image?: string;
-  color?: string;
-};
-
-export type Category = {
-  $id: string;
-  category_name?: string;
-  icon_name?: string;
-  color?: string;
-};
+import { jobApiService } from '@/services/jobApi.service';
+import { companyApiService } from '@/services/companyApi.service';
+import { categoryApiService } from '@/services/categoryApi.service';
+import { notificationApiService } from '@/services/notificationApi.service';
+import { Job, Company, Category } from '@/types';
+import { normalizeJob, sortJobsByDate } from '@/utils/job.utils';
 
 export type QuickFilter = 'all' | 'intern' | 'part-time' | 'remote' | 'nearby';
 
 export type CategoryWithCount = Category & { jobCount: number };
 
-// ===== HOOK =====
 export const useCandidateHome = () => {
-  // ===== STATE =====
   const [userId, setUserId] = useState<string>('');
   const [dataJob, setDataJob] = useState<Job[]>([]);
   const [dataUser, setDataUser] = useState<any>();
@@ -51,11 +27,11 @@ export const useCandidateHome = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<QuickFilter>('all');
 
-  // ===== ANIMATION VALUES =====
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
+  
+  const isLoadingRef = useRef(false);
 
-  // ===== DATA LOADERS =====
   const load_user_id = useCallback(async () => {
     try {
       const user = auth.currentUser;
@@ -79,60 +55,81 @@ export const useCandidateHome = () => {
   }, [userId]);
 
   const load_data_job = useCallback(async () => {
+    console.log('🔵 load_data_job START');
     try {
-      const q = query(collection(db, 'jobs'), limit(30));
-      const snap = await getDocs(q);
-      let jobs = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Job));
-      // Sort by created_at descending
-      jobs.sort((a, b) => (Date.parse(b.created_at || '0') || 0) - (Date.parse(a.created_at || '0') || 0));
-      setDataJob(jobs);
+      const response = await jobApiService.getAllJobs({ limit: 30 });
+      console.log('🟢 load_data_job SUCCESS:', response.jobs.length, 'jobs');
+      
+      const normalizedJobs = response.jobs.map(normalizeJob);
+      const sortedJobs = sortJobsByDate(normalizedJobs);
+      
+      setDataJob(sortedJobs);
     } catch (e: any) {
+      console.error('🔴 load_data_job ERROR:', e.message);
+      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách việc làm';
+      setError(errorMessage);
       handleFirestoreError(e, 'load_data_job');
     }
   }, []);
 
   const load_data_company = useCallback(async () => {
+    console.log('🔵 load_data_company START');
     try {
-      const q = query(collection(db, 'companies'), limit(12));
-      const snap = await getDocs(q);
-      const companies = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Company));
+      const companies = await companyApiService.getAllCompanies(12);
+      console.log('🟢 load_data_company SUCCESS:', companies.length, 'companies');
       setDataCompany(companies);
     } catch (e: any) {
+      console.error('🔴 load_data_company ERROR:', e.message);
+      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách công ty';
+      setError(errorMessage);
       handleFirestoreError(e, 'load_data_company');
     }
   }, []);
 
   const load_data_categories = useCallback(async () => {
+    console.log('🔵 load_data_categories START');
     try {
-      const q = query(collection(db, 'job_categories'), limit(12));
-      const snap = await getDocs(q);
-      const categories = snap.docs.map(d => ({ $id: d.id, ...d.data() } as Category));
+      const categories = await categoryApiService.getAllCategories(12);
+      console.log('🟢 load_data_categories SUCCESS:', categories.length, 'categories');
       setDataCategories(categories);
     } catch (e: any) {
+      console.error('🔴 load_data_categories ERROR:', e.message);
+      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh mục việc làm';
+      setError(errorMessage);
       handleFirestoreError(e, 'load_data_categories');
     }
   }, []);
 
   const loadUnreadNotifications = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('⚠️ loadUnreadNotifications SKIP: no userId');
+      return;
+    }
+    console.log('🔵 loadUnreadNotifications START');
     try {
-      const q = query(
-        collection(db, 'notifications'),
-        where('userId', '==', userId),
-        where('read', '==', false),
-      );
-      const snap = await getDocs(q);
-      setUnreadCount(snap.size);
+      const count = await notificationApiService.getUnreadCount();
+      console.log('🟢 loadUnreadNotifications SUCCESS:', count);
+      setUnreadCount(count);
     } catch (e: any) {
+      console.error('🔴 loadUnreadNotifications ERROR:', e.message);
+      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải thông báo';
+      setError(errorMessage);
       handleFirestoreError(e, 'loadUnreadNotifications');
     }
   }, [userId]);
 
   const loadAllData = useCallback(async () => {
+    if (isLoadingRef.current) {
+      console.log('⚠️ Already loading, skipping...');
+      return;
+    }
+    
+    isLoadingRef.current = true;
     setLoading(true);
     setError(null);
+    
     try {
-      await Promise.all([
+      await Promise.allSettled([
         load_data_user(),
         load_data_job(),
         load_data_company(),
@@ -140,29 +137,29 @@ export const useCandidateHome = () => {
         loadUnreadNotifications(),
       ]);
     } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : 'Có lỗi xảy ra khi tải dữ liệu';
-      setError(errorMessage);
-      console.error('loadAllData error:', e);
+      console.error('[useCandidateHome] loadAllData error:', e);
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
   }, [load_data_user, load_data_job, load_data_company, load_data_categories, loadUnreadNotifications]);
 
-  // ===== EFFECTS =====
   useEffect(() => {
     load_user_id();
   }, [load_user_id]);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || isLoadingRef.current) return;
     loadAllData();
-  }, [userId, loadAllData]);
+  }, [userId]);
 
-  // ===== HANDLERS =====
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    isLoadingRef.current = false;
     await loadAllData();
+    
     setRefreshing(false);
   }, [loadAllData]);
 
@@ -179,7 +176,6 @@ export const useCandidateHome = () => {
     setUnreadCount(0);
   }, []);
 
-  // ===== COMPUTED DATA =====
   const companyMap = useMemo(() => {
     const m: Record<string, Company> = {};
     for (const c of dataCompany) {
@@ -232,7 +228,6 @@ export const useCandidateHome = () => {
       if (selectedFilter === 'remote') {
         return type.includes('remote') || type.includes('từ xa');
       }
-      // nearby filter not implemented yet
       return true;
     });
   }, [dataJob, selectedFilter]);
@@ -248,7 +243,6 @@ export const useCandidateHome = () => {
       .slice(0, 6);
   }, [dataCategories, categoryJobCounts]);
 
-  // ===== RETURN =====
   const data = useMemo(() => ({
     user: dataUser,
     jobs: dataJob,
@@ -258,7 +252,6 @@ export const useCandidateHome = () => {
   }), [dataUser, dataJob, dataCompany, dataCategories, unreadCount]);
 
   return {
-    // State
     userId,
     dataJob,
     dataUser,
@@ -270,20 +263,14 @@ export const useCandidateHome = () => {
     error,
     selectedFilter,
     data,
-    
-    // Animation values
     scrollY,
     hasTriggeredHaptic,
-    
-    // Computed data
     companyMap,
     categoryJobCounts,
     filteredJobs,
     forYouJobs,
     latestJobs,
     trendingCategories,
-    
-    // Methods
     getJobCompany,
     onRefresh,
     handleFilterChange,

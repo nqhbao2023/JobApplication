@@ -1,3 +1,4 @@
+// server/src/types/index.ts (ADD AIRecommendation export)
 export interface User {
   uid: string;
   email: string;
@@ -12,6 +13,7 @@ export interface User {
 
 export interface Job {
   id?: string;
+  $id?: string;
   title: string;
   company: string;
   companyId: string;
@@ -30,6 +32,8 @@ export interface Job {
   employerId: string;
   applicantCount?: number;
   viewCount?: number;
+  created_at?: string;
+  updated_at?: string;
   createdAt: any;
   updatedAt: any;
   expiresAt?: any;
@@ -58,10 +62,10 @@ export interface NewsArticle {
   createdAt: any;
 }
 
+// ✅ ADD THIS EXPORT
 export interface AIRecommendation {
   jobId: string;
   score: number;
   reason: string;
   matchedSkills: string[];
 }
-

@@ -59,7 +59,7 @@ try {
 const storage = getStorage(app, "gs://job4s-app.firebasestorage.app");
 
 // ✅ Log kiểm tra bucket thực tế
-console.log("🔥 STORAGE USED =", storage.app.options.storageBucket);
+console.log(" STORAGE USED =", storage.app.options.storageBucket);
 
 // ✅ Provider Google Auth
 const googleProvider = new GoogleAuthProvider();

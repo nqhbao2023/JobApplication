@@ -3,26 +3,26 @@ import { auth, db } from "@/config/firebase";
 import { getDoc, doc } from "firebase/firestore";
 
 /**
- * 🧭 smartBack v2.1 — Phiên bản an toàn và tối ưu hơn
+ * 🧭 smartBack v2.2 — Navigation với fallback thông minh
  *
  * Hành vi:
- * 1️⃣ Nếu có thể quay lại trong stack → back()
- * 2️⃣ Nếu có fallbackRoute được truyền → replace đến đó
- * 3️⃣ Nếu user chưa đăng nhập → chuyển đến trang login
- * 4️⃣ Nếu user là candidate → quay về trang ứng tuyển
- * 5️⃣ Nếu user là employer → quay về danh sách ứng viên
- * 6️⃣ Nếu không xác định → fallback về /(tabs)
+ * 1️⃣ Ưu tiên quay lại trang trước đó trong navigation stack
+ * 2️⃣ Nếu được truyền fallbackRoute → chuyển đến đó
+ * 3️⃣ Nếu không → tự động phát hiện role và chuyển về trang chính
  */
 export const smartBack = async (fallbackRoute?: string) => {
   try {
-    // ✅ Ưu tiên quay lại stack cũ nếu có
-    if (router.canGoBack?.()) {
+    // ✅ ALWAYS try to go back first (even if canGoBack is unreliable)
+    // This ensures proper navigation behavior in most cases
+    if (router.canGoBack && router.canGoBack()) {
+      console.log("📱 SmartBack: Going back in navigation stack");
       router.back();
       return;
     }
 
-    // ✅ Nếu được truyền fallbackRoute cụ thể
+    // ✅ Nếu được chỉ định fallback route cụ thể
     if (fallbackRoute) {
+      console.log("📱 SmartBack: Using provided fallback:", fallbackRoute);
       router.replace(fallbackRoute as never);
       return;
     }
@@ -30,6 +30,7 @@ export const smartBack = async (fallbackRoute?: string) => {
     // ✅ Kiểm tra đăng nhập
     const user = auth.currentUser;
     if (!user) {
+      console.log("📱 SmartBack: No user, redirecting to login");
       router.replace("/(auth)/login" as never);
       return;
     }
@@ -38,7 +39,9 @@ export const smartBack = async (fallbackRoute?: string) => {
     const snap = await getDoc(doc(db, "users", user.uid));
     const role = snap.exists() ? snap.data().role : "candidate";
 
-    // ✅ Điều hướng theo role
+    console.log("📱 SmartBack: User role detected:", role);
+
+    // ✅ Điều hướng về trang chính theo role
     switch (role) {
       case "candidate":
         router.replace("/(candidate)/appliedJob" as never);

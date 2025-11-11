@@ -192,7 +192,12 @@ const JobRow = React.memo(({ item, onPress }: { item: any; onPress: any }) => {
       onPress={() =>
         onPress.navigate({
           pathname: '/(shared)/jobDescription',
-          params: { jobId: item.jobId, fromApplied: 'true' },
+          params: { 
+            jobId: item.jobId, 
+            fromApplied: 'true',
+            applicationStatus: item.status, // ✅ Truyền status để disable withdraw
+            applicationId: item.$id, // ✅ Truyền application ID
+          },
         })
       }
     >

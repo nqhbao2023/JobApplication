@@ -24,12 +24,19 @@ import ContactEmployerButton from "@/components/ContactEmployerButton";
 import * as Haptics from "expo-haptics";
 import { formatSalary } from "@/utils/salary.utils";
 import { Job } from "@/types";
+import { auth } from "@/config/firebase";
 
 const JobDescription = () => {
   const [selected, setSelected] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const params = useLocalSearchParams<{ jobId?: string; id?: string }>();
+  const params = useLocalSearchParams<{ 
+    jobId?: string; 
+    id?: string;
+    applicationStatus?: string; // ✅ Status từ appliedJob
+    applicationId?: string; // ✅ Application ID
+  }>();
   const jobId = (params.jobId || params.id || "") as string;
+  const applicationStatus = params.applicationStatus as string | undefined;
   const { role: userRole } = useRole();
 
   const {
@@ -55,8 +62,40 @@ const JobDescription = () => {
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
 
   const showCandidateUI = userRole === "candidate";
+  
   // ✅ Check if user is employer and owns this job
-  const showEmployerUI = userRole === "employer" && (jobData as Job)?.employerId;
+  const showEmployerUI = React.useMemo(() => {
+    if (userRole !== "employer" || !jobData) return false;
+    
+    const currentUserId = auth.currentUser?.uid;
+    if (!currentUserId) return false;
+    
+    // Check if current user owns this job
+    const jobEmployerId = (jobData as Job)?.employerId || (jobData as Job)?.ownerId;
+    return jobEmployerId === currentUserId;
+  }, [userRole, jobData]);
+
+  // ✅ Xác định xem có cho phép withdraw không
+  const canWithdraw = React.useMemo(() => {
+    // Nếu có applicationStatus từ params, check theo đó
+    if (applicationStatus) {
+      // Chỉ cho withdraw nếu status = pending
+      return applicationStatus === 'pending';
+    }
+    // Nếu không có status từ params, cho phép withdraw (old behavior)
+    return true;
+  }, [applicationStatus]);
+
+  // ✅ Get status label cho UI
+  const statusLabel = React.useMemo(() => {
+    if (!applicationStatus) return null;
+    switch (applicationStatus) {
+      case 'accepted': return '✅ Đã được chấp nhận';
+      case 'rejected': return '❌ Đã bị từ chối';
+      case 'pending': return '⏳ Đang chờ duyệt';
+      default: return null;
+    }
+  }, [applicationStatus]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -199,6 +238,19 @@ const JobDescription = () => {
       <View style={styles.bottomBar}>
         {showCandidateUI && (
           <>
+            {/* ✅ Hiển thị status badge nếu đã ứng tuyển */}
+            {statusLabel && (
+              <View style={styles.statusBadge}>
+                <Text style={[
+                  styles.statusBadgeText,
+                  { color: applicationStatus === 'accepted' ? '#34C759' : 
+                           applicationStatus === 'rejected' ? '#FF3B30' : '#FF9500' }
+                ]}>
+                  {statusLabel}
+                </Text>
+              </View>
+            )}
+
             {/* Lưu tin */}
             <TouchableOpacity
               style={styles.saveBtn}
@@ -215,7 +267,7 @@ const JobDescription = () => {
               />
             </TouchableOpacity>
 
-            {/* Nút Ứng tuyển */}
+            {/* Nút Ứng tuyển / Hủy ứng tuyển */}
             {applyLoading ? (
               <TouchableOpacity
                 style={[styles.actionBtn, styles.disabledBtn]}
@@ -224,12 +276,23 @@ const JobDescription = () => {
                 <ActivityIndicator size="small" color="#F97459" />
               </TouchableOpacity>
             ) : isApplied ? (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.cancelBtn]}
-                onPress={handleCancel}
-              >
-                <Text style={styles.actionText}>Hủy ứng tuyển</Text>
-              </TouchableOpacity>
+              // ✅ Chỉ hiện nút hủy nếu canWithdraw = true
+              canWithdraw ? (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.cancelBtn]}
+                  onPress={handleCancel}
+                >
+                  <Text style={styles.actionText}>Hủy ứng tuyển</Text>
+                </TouchableOpacity>
+              ) : (
+                // ✅ Hiện message nếu không thể hủy
+                <View style={[styles.actionBtn, styles.disabledBtn]}>
+                  <Text style={[styles.actionText, { color: '#999' }]}>
+                    {applicationStatus === 'accepted' ? 'Đã được chấp nhận' : 
+                     applicationStatus === 'rejected' ? 'Đã bị từ chối' : 'Không thể hủy'}
+                  </Text>
+                </View>
+              )
             ) : hasDraft ? (
               <TouchableOpacity
                 style={[styles.actionBtn, styles.applyBtn]}
@@ -246,17 +309,33 @@ const JobDescription = () => {
               </TouchableOpacity>
             )}
 
-            {/* Liên hệ nhà tuyển dụng */}
+            {/* Liên hệ nhà tuyển dụng - ✅ Fixed: Truyền đúng params */}
             {((jobData as Job)?.employerId || (jobData as Job)?.ownerId) && (
               <TouchableOpacity
                 style={styles.chatBtn}
                 activeOpacity={0.8}
-                onPress={() =>
+                onPress={() => {
+                  const employerId = (jobData as Job)?.employerId || (jobData as Job)?.ownerId;
+                  const companyName = (() => {
+                    const company = (jobData as Job)?.company;
+                    if (!company) return "Nhà tuyển dụng";
+                    if (typeof company === 'string') return company;
+                    return company.corp_name || "Nhà tuyển dụng";
+                  })();
+
+                  if (!employerId) {
+                    Alert.alert("Lỗi", "Thiếu thông tin nhà tuyển dụng");
+                    return;
+                  }
+
                   router.push({
-                    pathname: "/chat",
-                    params: { employerId: (jobData as Job)?.employerId || (jobData as Job)?.ownerId },
-                  })
-                }
+                    pathname: "/(shared)/chat",
+                    params: { 
+                      partnerId: employerId, // ✅ Truyền employerId làm partnerId
+                      partnerName: companyName,
+                    },
+                  });
+                }}
               >
                 <Ionicons name="chatbubbles-outline" size={20} color="#fff" />
                 <Text style={styles.chatText}>Liên hệ nhà tuyển dụng</Text>
@@ -270,12 +349,14 @@ const JobDescription = () => {
           <View style={styles.employerButtons}>
             <TouchableOpacity
               style={[styles.editButton, { backgroundColor: "#4A80F0" }]}
-              onPress={() =>
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                console.log('🔧 Navigating to editJob with jobId:', jobId);
                 router.push({
-                  pathname: "/employer/editJob",
-                  params: { id: jobId },
-                } as any)
-              }
+                  pathname: "/(employer)/editJob",
+                  params: { jobId: jobId },
+                });
+              }}
             >
               <Ionicons name="create-outline" size={20} color="#fff" />
               <Text style={styles.employerText}>Chỉnh sửa</Text>
@@ -390,6 +471,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#eee",
     gap: 10,
+  },
+  statusBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  statusBadgeText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   saveBtn: {
     width: 50,

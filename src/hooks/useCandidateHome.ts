@@ -34,6 +34,8 @@ export const useCandidateHome = () => {
   const hasTriggeredHaptic = useSharedValue(false);
   
   const isLoadingRef = useRef(false);
+  const lastLoadTimeRef = useRef<number>(0);
+  const CACHE_DURATION = 30000; // 30 seconds cache
 
   const load_user_id = useCallback(async () => {
     try {
@@ -150,15 +152,23 @@ export const useCandidateHome = () => {
       setUnreadCount(count);
     } catch (e: any) {
       console.error('🔴 loadUnreadNotifications ERROR:', e.message);
-      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải thông báo';
-      setError(errorMessage);
-      handleApiError(e, 'generic', { silent: true });
+      // ✅ Silent fail for notifications - không quan trọng lắm
+      // Không show error, không làm gián đoạn UX
     }
   }, [userId]);
 
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (force = false) => {
     if (isLoadingRef.current) {
       console.log('⚠️ Already loading, skipping...');
+      return;
+    }
+    
+    // ✅ Check cache - skip nếu data còn fresh
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastLoadTimeRef.current;
+    
+    if (!force && timeSinceLastLoad < CACHE_DURATION && dataJob.length > 0) {
+      console.log(`⏭️ Using cached data (${Math.round(timeSinceLastLoad / 1000)}s old)`);
       return;
     }
     
@@ -167,20 +177,29 @@ export const useCandidateHome = () => {
     setError(null);
     
     try {
-      await Promise.allSettled([
-        load_data_user(),
-        load_data_job(),
-        load_data_company(),
-        load_data_categories(),
-        loadUnreadNotifications(),
-      ]);
+      // ✅ Load sequentially với delay để tránh rate limit
+      await load_data_user();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await load_data_job();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await load_data_company();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await load_data_categories();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await loadUnreadNotifications();
+      
+      lastLoadTimeRef.current = Date.now(); // ✅ Update cache timestamp
     } catch (e) {
       console.error('[useCandidateHome] loadAllData error:', e);
     } finally {
       setLoading(false);
       isLoadingRef.current = false;
     }
-  }, [load_data_user, load_data_job, load_data_company, load_data_categories, loadUnreadNotifications]);
+  }, [load_data_user, load_data_job, load_data_company, load_data_categories, loadUnreadNotifications, dataJob.length]);
 
   useEffect(() => {
     load_user_id();
@@ -194,15 +213,16 @@ export const useCandidateHome = () => {
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
-      loadAllData();
-    }, [userId, loadAllData])
+      // ✅ Không auto-reload khi focus, chỉ load nếu chưa có data
+      if (dataJob.length === 0) {
+        loadAllData(true); // Force load lần đầu
+      }
+    }, [userId, dataJob.length])
   );
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    isLoadingRef.current = false;
-    await loadAllData();
-    
+    await loadAllData(true); // ✅ Force reload khi pull-to-refresh
     setRefreshing(false);
   }, [loadAllData]);
   const reload = useCallback(() => {

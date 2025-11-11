@@ -18,7 +18,7 @@ export default function RootLayout() {
     listenerAttached.current = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("👀 Auth state:", user ? user.email : "No user");
+      console.log(" Auth state:", user ? user.email : "No user");
 
       const group = segments?.[0];
       const inAuth = group === "(auth)";

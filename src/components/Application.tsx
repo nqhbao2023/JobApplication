@@ -38,18 +38,36 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
 
   // 🗣️ Hàm mở chat (ví dụ: chuyển sang trang chat với user đó)
   const handleContact = () => {
-    const candidateId = userId || app.candidateId;
+    const candidateId = userId || app.candidateId || user?.uid;
     
-    if (!candidateId) {
-      Alert.alert("Lỗi", "Không tìm thấy thông tin ứng viên");
+    console.log('🔍 Attempting to contact candidate:', {
+      userId,
+      candidateId: app.candidateId,
+      userUid: user?.uid,
+      finalId: candidateId
+    });
+    
+    if (!candidateId || candidateId === '') {
+      Alert.alert("Lỗi", "Không tìm thấy thông tin ứng viên. Ứng viên có thể đã xóa hồ sơ.");
       return;
     }
 
     // 🔹 UID người đang đăng nhập
     const myUid = auth.currentUser?.uid;
+    
+    if (!myUid) {
+      Alert.alert("Lỗi", "Bạn cần đăng nhập để chat");
+      return;
+    }
 
     // 🔹 Tạo chatId cố định giữa employer và candidate
     const chatId = [myUid, candidateId].sort().join("_");
+
+    console.log('💬 Opening chat with:', {
+      chatId,
+      partnerId: candidateId,
+      partnerName: user?.name || "Ứng viên"
+    });
 
     router.push({
       pathname: "/(shared)/chat",
@@ -75,14 +93,22 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
         onPress: async () => {
           try {
             setLoading(true);
+            console.log('🗑️ Deleting application:', $id);
+            
             // ✅ Update status to 'rejected' instead of delete
             // Backend chỉ cho candidate withdraw, employer không có quyền delete
             await applicationApiService.updateApplicationStatus($id, 'rejected');
-            Alert.alert("✅ Đã xóa", "Ứng viên đã bị xóa khỏi danh sách");
-            // Call parent callback to refresh list
+            
+            console.log('✅ Application status updated to rejected');
+            
+            // ✅ Call parent callback to refresh list FIRST
             if (onDelete) {
+              console.log('📞 Calling onDelete callback to refresh list');
               onDelete();
             }
+            
+            // ✅ Then show success message
+            Alert.alert("✅ Đã xóa", "Ứng viên đã bị xóa khỏi danh sách");
           } catch (error: any) {
             console.error("❌ Lỗi khi xóa:", error);
             Alert.alert("Lỗi", error.message || "Không thể xóa ứng viên này.");
@@ -108,7 +134,17 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
   };
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity 
+      style={styles.card}
+      activeOpacity={0.9}
+      onPress={() => {
+        // ✅ Navigate to application detail when card is pressed
+        router.push({
+          pathname: "/(employer)/applicationDetail",
+          params: { applicationId: $id },
+        });
+      }}
+    >
       {/* Header */}
       <View style={styles.header}>
         <Image
@@ -134,12 +170,15 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
       </Text>
 
       {/* Nút hành động */}
-      <View style={styles.actions}>
+      <View style={styles.actions} onStartShouldSetResponder={() => true}>
         {status === "pending" && (
           <>
             <TouchableOpacity
               style={[styles.button, { backgroundColor: "#4CAF50" }]}
-              onPress={() => onStatusChange("accepted")}
+              onPress={(e) => {
+                e.stopPropagation();
+                onStatusChange("accepted");
+              }}
               disabled={loading}
             >
               {loading ? (
@@ -151,7 +190,10 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
 
             <TouchableOpacity
               style={[styles.button, { backgroundColor: "#F44336" }]}
-              onPress={() => onStatusChange("rejected")}
+              onPress={(e) => {
+                e.stopPropagation();
+                onStatusChange("rejected");
+              }}
               disabled={loading}
             >
               {loading ? (
@@ -166,7 +208,10 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
         {status === "accepted" && (
           <TouchableOpacity
             style={[styles.button, { backgroundColor: "#2E8BFD" }]}
-            onPress={handleContact}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleContact();
+            }}
             disabled={loading}
           >
             <Text style={styles.buttonText}>💬 Liên hệ ứng viên</Text>
@@ -176,7 +221,10 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
         {status === "rejected" && (
           <TouchableOpacity
             style={[styles.button, { backgroundColor: "#9E9E9E" }]}
-            onPress={handleDelete}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDelete();
+            }}
             disabled={loading}
           >
             {loading ? (
@@ -191,7 +239,10 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
         {cv_url || cv_path ? (
           <TouchableOpacity
             style={[styles.button, { backgroundColor: "#2196F3" }]}
-            onPress={handleViewCV}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleViewCV();
+            }}
             disabled={loading}
           >
             <Text style={styles.buttonText}>📄 Xem CV</Text>
@@ -205,7 +256,7 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
 
       {/* ✅ Modal WebView hiển thị CV trực tiếp trong app */}
       <CVViewer visible={showCV} onClose={() => setShowCV(false)} url={cvLink} />
-    </View>
+    </TouchableOpacity>
   );
 };
 

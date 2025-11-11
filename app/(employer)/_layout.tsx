@@ -64,7 +64,7 @@ export default function EmployerLayout() {
 
       {/* 👥 Ứng viên */}
       <Tabs.Screen
-        name="applications"
+        name="appliedList"
         options={{
           title: "Ứng viên",
           tabBarIcon: ({ color, size, focused }) => (
@@ -115,7 +115,9 @@ export default function EmployerLayout() {
 
       {/* 🔒 Ẩn màn phụ */}
       <Tabs.Screen name="addJob" options={{ href: null }} />
-      <Tabs.Screen name="appliedList" options={{ href: null }} />
+      <Tabs.Screen name="applications" options={{ href: null }} />
+      <Tabs.Screen name="applicationDetail" options={{ href: null }} />
+      <Tabs.Screen name="editJob" options={{ href: null }} />
     </Tabs>
   );
 }

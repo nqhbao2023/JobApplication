@@ -75,6 +75,14 @@ export default function EmployerHome() {
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
 
+useEffect(() => {
+  const logToken = async () => {
+    const token = await auth.currentUser?.getIdToken();
+    console.log(" FIREBASE TOKEN : ", token);
+  };
+  logToken();
+}, []);
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -382,13 +390,16 @@ export default function EmployerHome() {
         activeOpacity={0.7}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          // Navigate to appliedList (application management screen)
-          router.push({
-            pathname: "/(employer)/appliedList",
-            params: { 
-              highlightId: item.id, // To scroll/highlight specific application
-            },
-          });
+          // ✅ Navigate to application detail screen (best practice)
+          if (item.id) {
+            router.push({
+              pathname: "/(employer)/applicationDetail",
+              params: { applicationId: item.id },
+            });
+          } else {
+            // Fallback: Navigate to applications list
+            router.push("/(employer)/appliedList");
+          }
         }}
       >
         <Image

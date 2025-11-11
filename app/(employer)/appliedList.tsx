@@ -30,7 +30,8 @@ export default function AppliedList() {
 
   /**
    * Fetch applications từ API
-   * Flow: API applications → Fetch job/user details → Map data
+   * Flow: API applications → Batch fetch job/user details → Map data
+   * ✅ Optimized: Batch fetch + parallel requests + caching
    */
   const fetchData = useCallback(async () => {
     try {
@@ -39,74 +40,99 @@ export default function AppliedList() {
       // ✅ Lấy applications từ API
       const applications = await applicationApiService.getEmployerApplications();
       
-      // ✅ Fetch job và candidate details với rate limiting
-      const mappedApps: any[] = [];
+      // ✅ Filter out rejected/deleted applications
+      const activeApplications = applications.filter(app => app.status !== 'rejected');
       
-      for (let i = 0; i < applications.length; i++) {
-        const app = applications[i];
-        
-        try {
-          // Add 200ms delay between requests (except first one)
-          if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
-          
-          // Fetch job và candidate info song song
-          const [job, candidate] = await Promise.all([
-            jobApiService.getJobById(app.jobId),
-            app.candidateId 
-              ? userApiService.getUserById(app.candidateId)
-              : Promise.resolve(null)
-          ]);
-          
-          mappedApps.push({
-            $id: app.id,
-            id: app.id,
-            jobId: app.jobId,
-            candidateId: app.candidateId,
-            userId: app.candidateId, // For Application component compatibility
-            status: app.status,
-            applied_at: app.appliedAt,
-            cvUrl: app.cvUrl,
-            cv_url: app.cvUrl, // Alias for Application component
-            coverLetter: app.coverLetter,
-            job: {
-              title: job.title,
-              $id: job.id,
-            },
-            user: candidate ? {
-              name: candidate.displayName || candidate.email,
-              email: candidate.email,
-              photoURL: candidate.photoURL,
-              phone: candidate.phone,
-            } : {
-              name: "Ứng viên ẩn danh",
-              email: "",
-            },
-          });
-        } catch (error: any) {
-          console.error(`Failed to fetch details for application ${app.id}:`, error);
-          
-          // If 429, increase delay
-          if (error?.response?.status === 429) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-          
-          // Fallback data
-          mappedApps.push({
-            $id: app.id,
-            id: app.id,
-            jobId: app.jobId,
-            candidateId: app.candidateId,
-            userId: app.candidateId,
-            status: app.status,
-            applied_at: app.appliedAt,
-            cvUrl: app.cvUrl,
-            cv_url: app.cvUrl,
-            coverLetter: app.coverLetter,
-            job: { title: "Không rõ", $id: app.jobId },
-            user: { name: "Ứng viên ẩn danh", email: "" },
-          });
-        }
+      console.log(`📊 Total applications: ${applications.length}, Active: ${activeApplications.length}`);
+      
+      if (activeApplications.length === 0) {
+        setApps([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
       }
+      
+      // ✅ Extract unique IDs - lọc bỏ null/undefined candidateIds
+      const jobIds = [...new Set(activeApplications.map(app => app.jobId))];
+      const candidateIds = [...new Set(
+        activeApplications
+          .map(app => app.candidateId)
+          .filter(id => id != null && id !== undefined && id !== '') // ✅ Filter null/undefined/empty
+      )];
+      
+      console.log(`📊 Fetching ${jobIds.length} jobs and ${candidateIds.length} candidates`);
+      
+      // ✅ Batch fetch jobs và candidates in parallel
+      const jobsPromises = jobIds.map(jobId => 
+        jobApiService.getJobById(jobId).catch(err => {
+          console.warn(`⚠️ Failed to fetch job ${jobId}:`, err.message);
+          return { id: jobId, title: "Không rõ" };
+        })
+      );
+      
+      const candidatesPromises = candidateIds.map(candidateId => 
+        userApiService.getUserById(candidateId).catch(err => {
+          console.warn(`⚠️ Failed to fetch candidate ${candidateId}:`, err.message);
+          return null;
+        })
+      );
+      
+      // ✅ Wait for all fetches (parallel, much faster!)
+      const [jobs, candidates] = await Promise.all([
+        Promise.all(jobsPromises),
+        Promise.all(candidatesPromises)
+      ]);
+      
+      // ✅ Create lookup maps for O(1) access
+      const jobMap = new Map(jobs.map(job => [job.id || (job as any).$id, job]));
+      const candidateMap = new Map(
+        candidates
+          .filter(c => c !== null && c !== undefined)
+          .map(c => [c!.uid || c!.email, c]) // ✅ Use uid or email as key
+      );
+      
+      console.log(`✅ Loaded ${jobMap.size} jobs and ${candidateMap.size} candidates`);
+      
+      // ✅ Map active applications with fetched data
+      const mappedApps = activeApplications.map(app => {
+        const job = jobMap.get(app.jobId);
+        const candidate = app.candidateId ? candidateMap.get(app.candidateId) : null;
+        
+        // ✅ Log if candidate is missing (debugging)
+        if (app.candidateId && !candidate) {
+          console.warn(`⚠️ Candidate data not found for ID: ${app.candidateId}`);
+        }
+        
+        return {
+          $id: app.id,
+          id: app.id,
+          jobId: app.jobId,
+          candidateId: app.candidateId,
+          userId: app.candidateId,
+          status: app.status,
+          applied_at: app.appliedAt,
+          cvUrl: app.cvUrl,
+          cv_url: app.cvUrl,
+          coverLetter: app.coverLetter,
+          job: {
+            title: job?.title || "Không rõ",
+            $id: job?.id || (job as any)?.$id || app.jobId,
+          },
+          user: candidate ? {
+            uid: candidate.uid || app.candidateId, // ✅ Add uid field (from User type)
+            name: candidate.displayName || candidate.email || "Ứng viên",
+            email: candidate.email || "",
+            photoURL: candidate.photoURL || null,
+            phone: candidate.phone || "",
+          } : {
+            uid: app.candidateId || '', // ✅ Fallback uid
+            name: app.candidateId ? "Đang tải..." : "Ứng viên ẩn danh",
+            email: "",
+            photoURL: null,
+            phone: "",
+          },
+        };
+      });
       
       setApps(mappedApps);
     } catch (error: any) {
@@ -128,36 +154,36 @@ export default function AppliedList() {
    */
   const handleStatusChange = async (appId: string, status: string) => {
     try {
+      console.log(`🔄 Changing application ${appId} status to ${status}`);
+      
       // ✅ Update status qua API
       await applicationApiService.updateApplicationStatus(
         appId,
         status as ApplicationType['status']
       );
 
-      // ✅ Lấy thông tin application để tạo notification
-      const applications = await applicationApiService.getEmployerApplications();
-      const app = applications.find((a: ApplicationType) => a.id === appId);
+      console.log(`✅ Status updated successfully`);
+
+      // ✅ Lấy thông tin application để hiển thị notification
+      const app = apps.find(a => a.$id === appId);
       
       if (app) {
-        try {
-          const job = await jobApiService.getJobById(app.jobId);
-          const msg =
-            status === "accepted"
-              ? `Đã chấp nhận đơn cho job "${job?.title ?? ""}"`
-              : `Đã từ chối đơn cho job "${job?.title ?? ""}"`;
+        const msg =
+          status === "accepted"
+            ? `Đã chấp nhận đơn cho job "${app.job?.title ?? ""}"`
+            : `Đã từ chối đơn cho job "${app.job?.title ?? ""}"`;
 
-          // TODO: Tạo notification qua notificationApiService nếu có endpoint
-          // Hiện tại notification được tạo tự động bởi backend hoặc qua notificationApiService
-          
-          // ✅ Cập nhật UI
-          setApps((p) => p.map((x) => (x.$id === appId ? { ...x, status } : x)));
-          Alert.alert("Thông báo", msg);
-        } catch (jobError) {
-          console.error("Failed to fetch job for notification:", jobError);
-          // Vẫn update UI dù không fetch được job
-          setApps((p) => p.map((x) => (x.$id === appId ? { ...x, status } : x)));
-          Alert.alert("Thông báo", `Đã ${status === "accepted" ? "chấp nhận" : "từ chối"} đơn ứng tuyển.`);
+        // ✅ Update UI immediately
+        if (status === 'rejected') {
+          // Remove rejected applications from list
+          console.log(`🗑️ Removing rejected application from list`);
+          setApps((prev) => prev.filter((x) => x.$id !== appId));
+        } else {
+          // Update status for accepted applications
+          setApps((prev) => prev.map((x) => (x.$id === appId ? { ...x, status } : x)));
         }
+        
+        Alert.alert("Thành công", msg);
       }
     } catch (e: any) {
       console.error("❌ Update application status error:", e);

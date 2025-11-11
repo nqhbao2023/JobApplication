@@ -18,6 +18,7 @@ import { useRouter } from "expo-router";
 
 import { applicationApiService } from "@/services/applicationApi.service";
 import { jobApiService } from "@/services/jobApi.service";
+import { userApiService } from "@/services/userApi.service";
 import { useRole } from "@/contexts/RoleContext";
 import { Application } from "@/services/applicationApi.service";
 
@@ -52,42 +53,69 @@ export default function Applications() {
         return company.corp_name || "Ẩn danh";
       };
 
-      // ✅ Populate job và user details
-      const appsWithDetails = await Promise.all(
-        applications.map(async (app: Application) => {
-          try {
-            const job = await jobApiService.getJobById(app.jobId);
-            
-            // Nếu là employer, cần lấy thông tin candidate
-            // Nếu là candidate, chỉ cần job info
-            return {
-              id: app.id,
-              jobId: app.jobId,
-              status: app.status,
-              applied_at: app.appliedAt,
-              jobInfo: {
-                title: job.title,
-                company: getCompanyName(job.company),
-                image: job.image,
-              },
-              // TODO: Add userInfo nếu cần (candidate info cho employer view)
-            };
-          } catch (error) {
-            console.error(`Failed to fetch details for application ${app.id}:`, error);
-            return {
-              id: app.id,
-              jobId: app.jobId,
-              status: app.status,
-              applied_at: app.appliedAt,
-              jobInfo: {
-                title: "Không rõ",
-                company: "Ẩn danh",
-                image: undefined,
-              },
-            };
+      // ✅ Populate job và user details with rate limiting
+      const appsWithDetails: any[] = [];
+      
+      for (let i = 0; i < applications.length; i++) {
+        const app = applications[i];
+        
+        try {
+          // Add 200ms delay between requests (except first one)
+          if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Fetch job và candidate info song song
+          const [job, candidate] = await Promise.all([
+            jobApiService.getJobById(app.jobId),
+            role === "employer" && app.candidateId 
+              ? userApiService.getUserById(app.candidateId)
+              : Promise.resolve(null)
+          ]);
+          
+          appsWithDetails.push({
+            id: app.id,
+            jobId: app.jobId,
+            candidateId: app.candidateId,
+            status: app.status,
+            applied_at: app.appliedAt,
+            jobInfo: {
+              title: job.title,
+              company: getCompanyName(job.company),
+              image: job.image,
+            },
+            userInfo: candidate ? {
+              name: candidate.displayName || candidate.email,
+              email: candidate.email,
+              photoURL: candidate.photoURL,
+              phone: candidate.phone,
+            } : null,
+          });
+        } catch (error: any) {
+          console.error(`Failed to fetch details for application ${app.id}:`, error);
+          
+          // If 429, increase delay for next request
+          if (error?.response?.status === 429) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
-        })
-      );
+          
+          appsWithDetails.push({
+            id: app.id,
+            jobId: app.jobId,
+            candidateId: app.candidateId,
+            status: app.status,
+            applied_at: app.appliedAt,
+            jobInfo: {
+              title: "Không rõ",
+              company: "Ẩn danh",
+              image: undefined,
+            },
+            userInfo: {
+              name: "Ứng viên ẩn danh",
+              email: "",
+              photoURL: undefined,
+            },
+          });
+        }
+      }
       
       setApps(appsWithDetails);
     } catch (error: any) {
@@ -128,13 +156,24 @@ export default function Applications() {
       <TouchableOpacity
         activeOpacity={0.85}
         style={styles.card}
-        onPress={() =>
-          !isEmp &&
-          router.push({
-            pathname: "/(shared)/jobDescription",
-            params: { jobId: item.jobId },
-          })
-        }
+        onPress={() => {
+          if (isEmp && item.id) {
+            // Employer: Xem chi tiết application (CV, accept/reject actions)
+            router.push({
+              pathname: "/(employer)/appliedList",
+              params: { 
+                applicationId: item.id,
+                highlightId: item.id, // To scroll to specific application
+              },
+            });
+          } else if (!isEmp) {
+            // Candidate: Xem chi tiết job
+            router.push({
+              pathname: "/(shared)/jobDescription",
+              params: { jobId: item.jobId },
+            });
+          }
+        }}
       >
         <Image
           source={{
@@ -153,6 +192,18 @@ export default function Applications() {
           <Text style={styles.sub} numberOfLines={1}>
             {isEmp ? `Ứng tuyển: ${job.title ?? "Không rõ"}` : job.company ?? "Ẩn danh"}
           </Text>
+          
+          {isEmp && usr.email && (
+            <Text style={styles.email} numberOfLines={1}>
+              📧 {usr.email}
+            </Text>
+          )}
+          
+          {isEmp && usr.phone && (
+            <Text style={styles.phone} numberOfLines={1}>
+              📱 {usr.phone}
+            </Text>
+          )}
 
           <View style={styles.statusRow}>
             <Ionicons
@@ -181,10 +232,14 @@ export default function Applications() {
 
           {appliedDate && (
             <Text style={styles.date}>
-              {appliedDate.toLocaleDateString("vi-VN")}
+              Ứng tuyển: {appliedDate.toLocaleDateString("vi-VN")}
             </Text>
           )}
         </View>
+        
+        {isEmp && (
+          <Ionicons name="chevron-forward" size={20} color="#999" style={{ marginLeft: 8 }} />
+        )}
       </TouchableOpacity>
     );
   };
@@ -247,6 +302,8 @@ const styles = StyleSheet.create({
 
   title: { fontSize: 16, fontWeight: "700", color: "#111827" },
   sub: { fontSize: 14, color: "#555", marginVertical: 2 },
+  email: { fontSize: 12, color: "#666", marginTop: 2 },
+  phone: { fontSize: 12, color: "#666", marginTop: 1 },
 
   statusRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
   statusTxt: { marginLeft: 4, fontSize: 13, fontWeight: "600" },

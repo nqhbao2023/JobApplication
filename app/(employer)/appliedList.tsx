@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { applicationApiService } from "@/services/applicationApi.service";
 import { jobApiService } from "@/services/jobApi.service";
+import { userApiService } from "@/services/userApi.service";
 import { notificationApiService } from "@/services/notificationApi.service";
 import Application from "@/components/Application";
 import { Application as ApplicationType } from "@/services/applicationApi.service";
@@ -29,7 +30,7 @@ export default function AppliedList() {
 
   /**
    * Fetch applications từ API
-   * Flow: API applications → Update state
+   * Flow: API applications → Fetch job/user details → Map data
    */
   const fetchData = useCallback(async () => {
     try {
@@ -38,17 +39,74 @@ export default function AppliedList() {
       // ✅ Lấy applications từ API
       const applications = await applicationApiService.getEmployerApplications();
       
-      // ✅ Map để tương thích với component Application
-      const mappedApps = applications.map((app: ApplicationType) => ({
-        $id: app.id,
-        id: app.id,
-        jobId: app.jobId,
-        candidateId: app.candidateId,
-        status: app.status,
-        applied_at: app.appliedAt,
-        cvUrl: app.cvUrl,
-        coverLetter: app.coverLetter,
-      }));
+      // ✅ Fetch job và candidate details với rate limiting
+      const mappedApps: any[] = [];
+      
+      for (let i = 0; i < applications.length; i++) {
+        const app = applications[i];
+        
+        try {
+          // Add 200ms delay between requests (except first one)
+          if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Fetch job và candidate info song song
+          const [job, candidate] = await Promise.all([
+            jobApiService.getJobById(app.jobId),
+            app.candidateId 
+              ? userApiService.getUserById(app.candidateId)
+              : Promise.resolve(null)
+          ]);
+          
+          mappedApps.push({
+            $id: app.id,
+            id: app.id,
+            jobId: app.jobId,
+            candidateId: app.candidateId,
+            userId: app.candidateId, // For Application component compatibility
+            status: app.status,
+            applied_at: app.appliedAt,
+            cvUrl: app.cvUrl,
+            cv_url: app.cvUrl, // Alias for Application component
+            coverLetter: app.coverLetter,
+            job: {
+              title: job.title,
+              $id: job.id,
+            },
+            user: candidate ? {
+              name: candidate.displayName || candidate.email,
+              email: candidate.email,
+              photoURL: candidate.photoURL,
+              phone: candidate.phone,
+            } : {
+              name: "Ứng viên ẩn danh",
+              email: "",
+            },
+          });
+        } catch (error: any) {
+          console.error(`Failed to fetch details for application ${app.id}:`, error);
+          
+          // If 429, increase delay
+          if (error?.response?.status === 429) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          // Fallback data
+          mappedApps.push({
+            $id: app.id,
+            id: app.id,
+            jobId: app.jobId,
+            candidateId: app.candidateId,
+            userId: app.candidateId,
+            status: app.status,
+            applied_at: app.appliedAt,
+            cvUrl: app.cvUrl,
+            cv_url: app.cvUrl,
+            coverLetter: app.coverLetter,
+            job: { title: "Không rõ", $id: app.jobId },
+            user: { name: "Ứng viên ẩn danh", email: "" },
+          });
+        }
+      }
       
       setApps(mappedApps);
     } catch (error: any) {
@@ -66,7 +124,7 @@ export default function AppliedList() {
 
   /**
    * Accept / Reject application qua API
-   * Flow: Update status → Create notification (nếu cần)
+   * Flow: Update status → Create notification (nếu cần) → Refresh UI
    */
   const handleStatusChange = async (appId: string, status: string) => {
     try {
@@ -107,6 +165,13 @@ export default function AppliedList() {
     }
   };
 
+  /**
+   * Handle delete callback - Refresh list
+   */
+  const handleDelete = () => {
+    fetchData(); // Reload all applications
+  };
+
   /* --------------------------------- UI ---------------------------------- */
   if (loading)
     return (
@@ -126,6 +191,7 @@ export default function AppliedList() {
           <Application
             app={item}
             onStatusChange={(s) => handleStatusChange(item.$id, s)}
+            onDelete={() => fetchData()} // Refresh list after delete
           />
         )}
         refreshControl={

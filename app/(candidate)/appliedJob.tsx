@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { applicationApiService } from '@/services/applicationApi.service';
 import { jobApiService } from '@/services/jobApi.service';
 import { Application } from '@/services/applicationApi.service';
+import { sequentialFetch } from '@/utils/rateLimit.utils';
 
 export default function AppliedJob() {
   const router = useRouter();
@@ -42,7 +43,7 @@ export default function AppliedJob() {
   }, []);
 
   /**
-   * Fetch with optimistic updates & error recovery
+   * Fetch with optimistic updates, error recovery & rate limiting
    */
   const fetchApplications = useCallback(
     async (silent = false) => {
@@ -51,53 +52,51 @@ export default function AppliedJob() {
 
         const apps = await applicationApiService.getMyApplications();
 
-        // Fetch job details with Promise.allSettled (continue on individual failures)
-        const applicationsWithJobs = await Promise.allSettled(
-          apps.map(async (app: Application) => {
-            try {
-              const job = await jobApiService.getJobById(app.jobId);
-              return {
-                $id: app.id,
-                jobId: app.jobId,
-                status: app.status,
-                applied_at: app.appliedAt,
-                jobInfo: {
-                  title: job.title,
-                  company: getCompanyName(job.company),
-                  location: job.location || getCompanyCity(job.company) || 'Không rõ',
-                  image: job.image,
-                },
-              };
-            } catch (jobError) {
-              console.error(`Failed to fetch job ${app.jobId}:`, jobError);
-              
-              // Return from cache if available
-              const cached = applications.find((a) => a.jobId === app.jobId);
-              if (cached) return cached;
+        // Fetch job details sequentially with rate limiting using utility
+        const applicationsWithJobs = await sequentialFetch(
+          apps,
+          async (app: Application) => {
+            const job = await jobApiService.getJobById(app.jobId);
+            return {
+              $id: app.id,
+              jobId: app.jobId,
+              status: app.status,
+              applied_at: app.appliedAt,
+              jobInfo: {
+                title: job.title,
+                company: getCompanyName(job.company),
+                location: job.location || getCompanyCity(job.company) || 'Không rõ',
+                image: job.image,
+              },
+            };
+          },
+          200, // 200ms delay between requests
+          // Error handler
+          (error, app) => {
+            console.error(`Failed to fetch job ${app.jobId}:`, error);
+            
+            // Return from cache if available
+            const cached = applications.find((a) => a.jobId === app.jobId);
+            if (cached) return cached;
 
-              // Fallback to basic info
-              return {
-                $id: app.id,
-                jobId: app.jobId,
-                status: app.status,
-                applied_at: app.appliedAt,
-                jobInfo: {
-                  title: 'Đang tải...',
-                  company: 'Ẩn danh',
-                  location: 'Không rõ',
-                  image: undefined,
-                },
-              };
-            }
-          })
+            // Fallback to basic info
+            return {
+              $id: app.id,
+              jobId: app.jobId,
+              status: app.status,
+              applied_at: app.appliedAt,
+              jobInfo: {
+                title: 'Đang tải...',
+                company: 'Ẩn danh',
+                location: 'Không rõ',
+                image: undefined,
+              },
+            };
+          }
         );
 
-        const successfulApps = applicationsWithJobs
-          .filter((r) => r.status === 'fulfilled')
-          .map((r: any) => r.value);
-
         if (!mountedRef.current) return;
-        setApplications(successfulApps);
+        setApplications(applicationsWithJobs);
       } catch (error: any) {
         console.error('❌ Fetch applications error:', error);
 

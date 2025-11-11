@@ -40,11 +40,26 @@ const Job = () => {
       const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId));
       const savedSnap = await getDocs(q);
       const jobIds = savedSnap.docs.map(doc => doc.data().jobId);
-      const jobPromises = jobIds.map(async (jobId: string) => {
-        const jobSnap = await getDoc(doc(db, 'jobs', jobId));
-        return { $id: jobId, ...jobSnap.data() };
-      });
-      const jobDetails = await Promise.all(jobPromises);
+      
+      // Fetch jobs sequentially with delay to prevent rate limiting
+      const jobDetails: any[] = [];
+      for (let i = 0; i < jobIds.length; i++) {
+        const jobId = jobIds[i];
+        
+        try {
+          // Add 200ms delay between requests (except first one)
+          if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
+          
+          const jobSnap = await getDoc(doc(db, 'jobs', jobId));
+          if (jobSnap.exists()) {
+            jobDetails.push({ $id: jobId, ...jobSnap.data() });
+          }
+        } catch (jobError) {
+          console.error(`Failed to fetch job ${jobId}:`, jobError);
+          // Continue with other jobs even if one fails
+        }
+      }
+      
       setSavedJobs(jobDetails);
     } catch (error) {
       console.log('Lỗi khi load saved jobs:', error);

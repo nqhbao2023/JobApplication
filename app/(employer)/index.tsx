@@ -38,6 +38,7 @@ type RecentApp = {
   userName: string; 
   jobTitle: string; 
   id: string;
+  candidateId?: string;
   userAvatar?: string;
   appliedAt?: string;
   status?: string;
@@ -73,13 +74,7 @@ export default function EmployerHome() {
 
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
-useEffect(() => {
-  const logToken = async () => {
-    const token = await auth.currentUser?.getIdToken();
-    console.log("=== FIREBASE TOKEN ===", token);
-  };
-  logToken();
-}, []);
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -158,44 +153,52 @@ useEffect(() => {
             return bDate - aDate;
           });
 
-          const recent = await Promise.all(
-            sorted.slice(0, 5).map(async (app) => {
-              let userName = 'Không rõ tên';
-              let userAvatar: string | undefined;
+          // Fetch recent applications with rate limiting
+          const recent: any[] = [];
+          const recentApps = sorted.slice(0, 5);
+          
+          for (let i = 0; i < recentApps.length; i++) {
+            const app = recentApps[i];
+            
+            // Add 200ms delay between requests (except first one)
+            if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
+            
+            let userName = 'Không rõ tên';
+            let userAvatar: string | undefined;
+            try {
+              const userSnap = await getDoc(doc(db, 'users', app.candidateId));
+              if (userSnap.exists()) {
+                const candidate = userSnap.data();
+                userName = candidate?.name || candidate?.displayName || userName;
+                userAvatar = candidate?.photoURL;
+              }
+            } catch (candidateError) {
+              console.warn('⚠️ loadStats candidate fetch error:', candidateError);
+            }
+
+            let jobTitle = jobTitleMap.get(app.jobId);
+            if (!jobTitle) {
               try {
-                const userSnap = await getDoc(doc(db, 'users', app.candidateId));
-                if (userSnap.exists()) {
-                  const candidate = userSnap.data();
-                  userName = candidate?.name || candidate?.displayName || userName;
-                  userAvatar = candidate?.photoURL;
+                const jobSnap = await getDoc(doc(db, 'jobs', app.jobId));
+                if (jobSnap.exists()) {
+                  jobTitle = jobSnap.data()?.title || jobTitle;
                 }
-              } catch (candidateError) {
-                console.warn('⚠️ loadStats candidate fetch error:', candidateError);
+              } catch (jobError) {
+                console.warn('⚠️ loadStats job fallback error:', jobError);
               }
+            }
 
-              let jobTitle = jobTitleMap.get(app.jobId);
-              if (!jobTitle) {
-                try {
-                  const jobSnap = await getDoc(doc(db, 'jobs', app.jobId));
-                  if (jobSnap.exists()) {
-                    jobTitle = jobSnap.data()?.title || jobTitle;
-                  }
-                } catch (jobError) {
-                  console.warn('⚠️ loadStats job fallback error:', jobError);
-                }
-              }
-
-              const appliedAtDate = toDate(app.appliedAt);
-              return {
-                id: app.id || `${app.jobId}-${app.candidateId}`,
-                userName,
-                userAvatar,
-                jobTitle: jobTitle || 'Không rõ công việc',
-                appliedAt: appliedAtDate ? appliedAtDate.toLocaleDateString('vi-VN') : '',
-                status: app.status || 'pending',
-              };
-            })
-          );
+            const appliedAtDate = toDate(app.appliedAt);
+            recent.push({
+              id: app.id || `${app.jobId}-${app.candidateId}`,
+              candidateId: app.candidateId,
+              userName,
+              userAvatar,
+              jobTitle: jobTitle || 'Không rõ công việc',
+              appliedAt: appliedAtDate ? appliedAtDate.toLocaleDateString('vi-VN') : '',
+              status: app.status || 'pending',
+            });
+          }
 
           if (isMountedRef.current) {
             setRecentApps(recent);
@@ -379,7 +382,13 @@ useEffect(() => {
         activeOpacity={0.7}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push("/(employer)/appliedList");
+          // Navigate to appliedList (application management screen)
+          router.push({
+            pathname: "/(employer)/appliedList",
+            params: { 
+              highlightId: item.id, // To scroll/highlight specific application
+            },
+          });
         }}
       >
         <Image
@@ -393,10 +402,13 @@ useEffect(() => {
           <Text style={styles.applicantJob} numberOfLines={1}>{item.jobTitle}</Text>
           <Text style={styles.applicantDate}>{item.appliedAt}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {getStatusLabel(item.status)}
-          </Text>
+        <View style={styles.applicantRight}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+              {getStatusLabel(item.status)}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#94a3b8" style={{ marginLeft: 8 }} />
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -652,6 +664,10 @@ const styles = StyleSheet.create({
   applicantInfo: {
     marginLeft: 14,
     flex: 1,
+  },
+  applicantRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   applicantName: {
     fontSize: 16,

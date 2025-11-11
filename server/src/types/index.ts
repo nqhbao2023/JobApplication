@@ -29,7 +29,9 @@ export interface Job {
   type: 'full-time' | 'part-time' | 'contract' | 'internship';
   category: string;
   status: 'active' | 'inactive' | 'closed';
+  image?: string; // ✅ Add image field
   employerId: string;
+  ownerId?: string;
   applicantCount?: number;
   viewCount?: number;
   created_at?: string;

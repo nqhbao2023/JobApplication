@@ -5,11 +5,17 @@ import { Card } from '../base/Card';
 import { Badge } from '../base/Badge';
 import { IconButton } from '../base/IconButton';
 
+type Salary = {
+  currency?: string;
+  min?: number;
+  max?: number;
+};
+
 type Job = {
   $id: string;
   title?: string;
   location?: string;
-  salary?: string;
+  salary?: string | Salary;
   status?: string;
   ownerName?: string;
   ownerEmail?: string;
@@ -29,6 +35,26 @@ const getStatusBadgeVariant = (status?: string) => {
     case 'closed': return 'gray';
     default: return 'primary';
   }
+};
+
+const formatSalary = (salary?: string | Salary): string => {
+  if (!salary) return 'Thỏa thuận';
+  
+  if (typeof salary === 'string') return salary;
+  
+  const { currency = 'VND', min, max } = salary;
+  
+  if (min && max) {
+    return `${min.toLocaleString()} - ${max.toLocaleString()} ${currency}`;
+  }
+  if (min) {
+    return `Từ ${min.toLocaleString()} ${currency}`;
+  }
+  if (max) {
+    return `Tối đa ${max.toLocaleString()} ${currency}`;
+  }
+  
+  return 'Thỏa thuận';
 };
 
 export const JobCard = ({ job, onEdit, onDelete }: JobCardProps) => {
@@ -60,7 +86,7 @@ export const JobCard = ({ job, onEdit, onDelete }: JobCardProps) => {
 
 <View style={styles.detailRow}>
   <Ionicons name="cash-outline" size={14} color="#64748b" />
-  <Text style={styles.detail}>{job.salary || 'Thỏa thuận'}</Text>
+  <Text style={styles.detail}>{formatSalary(job.salary)}</Text>
 </View>
 
           {job.created_at && (

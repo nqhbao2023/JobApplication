@@ -41,8 +41,10 @@ function mapDocToJob(doc: FirebaseFirestore.DocumentSnapshot): Job {
     type: data.type || 'full-time',
     category: data.category || '',
     status: data.status || 'active',
+    image: data.image || data.img || data.imageUrl || undefined, // ✅ Add image field
     // ✅ Priority: employerId > ownerId > users.id (legacy field)
     employerId: data.employerId || data.ownerId || data.users?.id || '',
+    ownerId: data.ownerId || data.employerId || data.users?.id,
     applicantCount: data.applicantCount || 0,
     viewCount: data.viewCount || 0,
     created_at: toISOString(data.created_at || data.createdAt),
@@ -145,8 +147,16 @@ export class JobService {
       const now = new Date();
       const jobRef = db.collection(JOBS_COLLECTION).doc();
 
+      // ✅ Normalize employerId/ownerId: đồng bộ employerId và ownerId
+      const normalizedEmployerId = jobData.employerId || (jobData as any).ownerId;
+      if (!normalizedEmployerId) {
+        throw new AppError('Missing employerId for job creation', 400);
+      }
+
       const newJob: any = {
         ...jobData,
+        employerId: normalizedEmployerId,
+        ownerId: (jobData as any).ownerId || normalizedEmployerId,
         id: jobRef.id,
         status: jobData.status || 'active',
         applicantCount: 0,
@@ -183,6 +193,13 @@ export class JobService {
         updatedAt: now,
         updated_at: now.toISOString(),
       };
+
+      // ✅ Normalize employerId/ownerId: đồng bộ employerId và ownerId nếu có cập nhật
+      const normalizedEmployerId = updates.employerId || (updates as any).ownerId;
+      if (normalizedEmployerId) {
+        updatedData.employerId = normalizedEmployerId;
+        updatedData.ownerId = (updates as any).ownerId || normalizedEmployerId;
+      }
 
       await jobRef.update(updatedData);
       

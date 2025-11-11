@@ -11,7 +11,7 @@ import Animated, {
   runOnJS,
   Easing,
 } from 'react-native-reanimated';
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -22,23 +22,18 @@ import {
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { db, auth } from "@/config/firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-  doc,
-  getDoc,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-
+import { authApiService } from '@/services/authApi.service';
+import { jobApiService } from '@/services/jobApi.service';
+import { applicationApiService } from '@/services/applicationApi.service';
+import { handleApiError } from '@/utils/errorHandler';
 type RecentApp = { 
   userName: string; 
   jobTitle: string; 
@@ -73,71 +68,181 @@ export default function EmployerHome() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const isMountedRef = useRef(true);
+  const isFetchingRef = useRef(false);
+
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
+useEffect(() => {
+  const logToken = async () => {
+    const token = await auth.currentUser?.getIdToken();
+    console.log("=== FIREBASE TOKEN ===", token);
+  };
+  logToken();
+}, []);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const toDate = useCallback((value: any): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === 'number') return new Date(value);
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (value.toDate && typeof value.toDate === 'function') {
+      try {
+        return value.toDate();
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }, []);
+
+  const loadStats = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    setLoading(true);
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      isFetchingRef.current = false;
+      return;
+    }
+
+    try {
+
+       const [profileResult, jobsResult, appsResult] = await Promise.allSettled([
+        authApiService.getProfile(),
+        jobApiService.getMyJobs(),
+        applicationApiService.getEmployerApplications(),
+      ]);
+
+      if (!isMountedRef.current) return;
+
+      if (profileResult.status === 'fulfilled') {
+        const profile = profileResult.value;
+        setCompanyName(profile.name || profile.email || '');
+        setCompanyAvatar(profile.photoURL || user.photoURL || '');
+      } else {
+        handleApiError(profileResult.reason, 'update_profile', { silent: true });
+        setCompanyName(user.displayName || user.email || '');
+        setCompanyAvatar(user.photoURL || '');
+      }
+
+      if (jobsResult.status === 'fulfilled') {
+        const jobs = jobsResult.value;
+        setJobCount(jobs.length);
+        setActiveJobCount(jobs.filter(job => job.status !== 'closed').length);
+
+        const jobTitleMap = new Map<string, string>();
+        jobs.forEach(job => {
+          const jobId = job.id || (job as any).$id;
+          if (!jobId) return;
+          const title = job.title || (job as any).job_title || 'Không rõ công việc';
+          jobTitleMap.set(jobId, title);
+        });
+
+        if (appsResult.status === 'fulfilled') {
+          const applications = appsResult.value;
+          setAppCount(applications.length);
+
+          const sorted = [...applications].sort((a, b) => {
+            const aDate = toDate(a.appliedAt)?.getTime() || 0;
+            const bDate = toDate(b.appliedAt)?.getTime() || 0;
+            return bDate - aDate;
+          });
+
+          const recent = await Promise.all(
+            sorted.slice(0, 5).map(async (app) => {
+              let userName = 'Không rõ tên';
+              let userAvatar: string | undefined;
+              try {
+                const userSnap = await getDoc(doc(db, 'users', app.candidateId));
+                if (userSnap.exists()) {
+                  const candidate = userSnap.data();
+                  userName = candidate?.name || candidate?.displayName || userName;
+                  userAvatar = candidate?.photoURL;
+                }
+              } catch (candidateError) {
+                console.warn('⚠️ loadStats candidate fetch error:', candidateError);
+              }
+
+              let jobTitle = jobTitleMap.get(app.jobId);
+              if (!jobTitle) {
+                try {
+                  const jobSnap = await getDoc(doc(db, 'jobs', app.jobId));
+                  if (jobSnap.exists()) {
+                    jobTitle = jobSnap.data()?.title || jobTitle;
+                  }
+                } catch (jobError) {
+                  console.warn('⚠️ loadStats job fallback error:', jobError);
+                }
+              }
+
+              const appliedAtDate = toDate(app.appliedAt);
+              return {
+                id: app.id || `${app.jobId}-${app.candidateId}`,
+                userName,
+                userAvatar,
+                jobTitle: jobTitle || 'Không rõ công việc',
+                appliedAt: appliedAtDate ? appliedAtDate.toLocaleDateString('vi-VN') : '',
+                status: app.status || 'pending',
+              };
+            })
+          );
+
+          if (isMountedRef.current) {
+            setRecentApps(recent);
+          }
+        } else {
+          handleApiError(appsResult.reason, 'fetch_applications', { silent: true });
+          setAppCount(0);
+          setRecentApps([]);
+        }
+      } else {
+        handleApiError(jobsResult.reason, 'fetch_jobs', { silent: false });
+        setJobCount(0);
+        setActiveJobCount(0);
+        setRecentApps([]);
+        if (appsResult.status === 'rejected') {
+          handleApiError(appsResult.reason, 'fetch_applications', { silent: true });
+          setAppCount(0);
+        }
+      }
+    } catch (error: any) {
+      handleApiError(error, 'fetch_jobs');
+    } finally {
+
+      isFetchingRef.current = false;
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+    
+  }, [toDate]);
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [loadStats]);
 
-  const loadStats = async () => {
-    setLoading(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const companySnap = await getDoc(doc(db, "users", user.uid));
-      const companyData = companySnap.data();
-      setCompanyName(companyData?.name ?? "");
-      setCompanyAvatar(companyData?.photoURL ?? "");
-
-      const jobSnap = await getDocs(
-        query(collection(db, "jobs"), where("ownerId", "==", user.uid))
-      );
-      setJobCount(jobSnap.size);
-      const activeJobs = jobSnap.docs.filter(d => d.data().status !== 'closed');
-      setActiveJobCount(activeJobs.length);
-
-      const appQuery = query(
-        collection(db, "applied_jobs"),
-        where("employerId", "==", user.uid),
-        orderBy("applied_at", "desc"),
-        limit(5)
-      );
-      const appliedSnap = await getDocs(appQuery);
-      setAppCount(appliedSnap.size);
-
-      const detailed: RecentApp[] = await Promise.all(
-        appliedSnap.docs.map(async (d) => {
-          const data = d.data();
-          const [userSnap, jobSnap] = await Promise.all([
-            getDoc(doc(db, "users", data.userId)),
-            getDoc(doc(db, "jobs", data.jobId)),
-          ]);
-          return {
-            id: d.id,
-            userName: userSnap.data()?.name ?? "Không rõ tên",
-            userAvatar: userSnap.data()?.photoURL,
-            jobTitle: jobSnap.data()?.title ?? "Không rõ công việc",
-            appliedAt: data.applied_at?.toDate?.()?.toLocaleDateString('vi-VN') ?? '',
-            status: data.status ?? 'pending',
-          };
-        })
-      );
-      setRecentApps(detailed);
-    } catch (e) {
-      console.error('loadStats error:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await loadStats();
     setRefreshing(false);
-  }, []);
+  }, [loadStats]);
 
   const triggerHaptic = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

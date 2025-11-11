@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
-import { getDoc, doc } from 'firebase/firestore';
-import { db, auth } from '@/config/firebase';
+import { useFocusEffect } from 'expo-router';
+
 import * as Haptics from 'expo-haptics';
-import { handleFirestoreError } from '@/utils/firebaseErrorHandler';
+import { auth } from '@/config/firebase';
 import { jobApiService } from '@/services/jobApi.service';
 import { companyApiService } from '@/services/companyApi.service';
 import { categoryApiService } from '@/services/categoryApi.service';
 import { notificationApiService } from '@/services/notificationApi.service';
+import { authApiService } from '@/services/authApi.service';
+
 import { Job, Company, Category } from '@/types';
 import { normalizeJob, sortJobsByDate } from '@/utils/job.utils';
+import { handleApiError } from '@/utils/errorHandler';
 
 export type QuickFilter = 'all' | 'intern' | 'part-time' | 'remote' | 'nearby';
 
@@ -44,14 +47,29 @@ export const useCandidateHome = () => {
   const load_data_user = useCallback(async () => {
     if (!userId) return;
     try {
-      const docRef = doc(db, 'users', userId);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        setDataUser({ $id: snap.id, ...snap.data() });
-      }
+      const profile = await authApiService.getProfile();
+      const displayName = profile.name || profile.email || '';
+      setDataUser({
+        ...profile,
+        $id: profile.uid,
+        displayName,
+        name: profile.name || displayName,
+        photoURL: profile.photoURL || auth.currentUser?.photoURL || null,
+      });
     } catch (e: any) {
-      handleFirestoreError(e, 'load_data_user');
-    }
+      handleApiError(e, 'update_profile', { silent: true });
+      const user = auth.currentUser;
+      if (user) {
+        setDataUser({
+          $id: user.uid,
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || user.email || '',
+          displayName: user.displayName || user.email || '',
+          photoURL: user.photoURL,
+          role: 'candidate',
+        });
+      }    }
   }, [userId]);
 
   const load_data_job = useCallback(async () => {
@@ -63,12 +81,16 @@ export const useCandidateHome = () => {
       const normalizedJobs = response.jobs.map(normalizeJob);
       const sortedJobs = sortJobsByDate(normalizedJobs);
       
+      // Debug: Check image URLs
+      console.log('🖼️ First job image:', sortedJobs[0]?.image);
+      console.log('🖼️ Sample job data:', JSON.stringify(sortedJobs[0], null, 2));
+      
       setDataJob(sortedJobs);
     } catch (e: any) {
       console.error('🔴 load_data_job ERROR:', e.message);
       const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách việc làm';
       setError(errorMessage);
-      handleFirestoreError(e, 'load_data_job');
+      handleApiError(e, 'generic', { silent: true });
     }
   }, []);
 
@@ -77,12 +99,28 @@ export const useCandidateHome = () => {
     try {
       const companies = await companyApiService.getAllCompanies(12);
       console.log('🟢 load_data_company SUCCESS:', companies.length, 'companies');
-      setDataCompany(companies);
+      
+      // ✅ Normalize company image URLs
+      const normalizedCompanies = companies.map(company => {
+        let imageUrl = company.image;
+        // If image is invalid (like "1" or undefined), use placeholder
+        if (!imageUrl || typeof imageUrl !== 'string' || 
+            (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+          imageUrl = 'https://via.placeholder.com/400x300.png?text=' + encodeURIComponent(company.corp_name || 'Company');
+        }
+        return { ...company, image: imageUrl };
+      });
+      
+      // Debug: Check image URLs
+      console.log('🖼️ First company image:', normalizedCompanies[0]?.image);
+      console.log('🖼️ Sample company data:', JSON.stringify(normalizedCompanies[0], null, 2));
+      
+      setDataCompany(normalizedCompanies);
     } catch (e: any) {
       console.error('🔴 load_data_company ERROR:', e.message);
       const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách công ty';
       setError(errorMessage);
-      handleFirestoreError(e, 'load_data_company');
+      handleApiError(e, 'generic', { silent: true });
     }
   }, []);
 
@@ -96,7 +134,7 @@ export const useCandidateHome = () => {
       console.error('🔴 load_data_categories ERROR:', e.message);
       const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh mục việc làm';
       setError(errorMessage);
-      handleFirestoreError(e, 'load_data_categories');
+      handleApiError(e, 'generic', { silent: true });
     }
   }, []);
 
@@ -114,7 +152,7 @@ export const useCandidateHome = () => {
       console.error('🔴 loadUnreadNotifications ERROR:', e.message);
       const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải thông báo';
       setError(errorMessage);
-      handleFirestoreError(e, 'loadUnreadNotifications');
+      handleApiError(e, 'generic', { silent: true });
     }
   }, [userId]);
 
@@ -153,15 +191,24 @@ export const useCandidateHome = () => {
     loadAllData();
   }, [userId]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      loadAllData();
+    }, [userId, loadAllData])
+  );
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
     isLoadingRef.current = false;
     await loadAllData();
     
     setRefreshing(false);
   }, [loadAllData]);
+  const reload = useCallback(() => {
+    if (!userId) return;
+    loadAllData();
+  }, [userId, loadAllData]);
 
   const handleFilterChange = useCallback((filter: QuickFilter) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -273,6 +320,7 @@ export const useCandidateHome = () => {
     trendingCategories,
     getJobCompany,
     onRefresh,
+    reload,
     handleFilterChange,
     clearNotifications,
     resetUnreadCount,

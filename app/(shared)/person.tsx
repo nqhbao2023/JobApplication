@@ -16,11 +16,11 @@ import { RelativePathString, Stack } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth, storage } from '@/config/firebase';
+import { auth } from '@/config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { authApiService } from '@/services/authApi.service';
+import { userApiService } from '@/services';
 import { useRole } from '@/contexts/RoleContext';
 import { handleApiError, handleSuccess } from '@/utils/errorHandler';
 
@@ -241,20 +241,24 @@ const Person = () => {
       if (res.canceled) return;
 
       const asset = res.assets![0];
-      const blob = await (await fetch(asset.uri)).blob();
+      
+      console.log('📸 Uploading avatar via API...');
+      
+      // Upload via User API instead of direct Firebase Storage
+      const response = await userApiService.uploadAvatar(asset.uri);
+      const photoURL = response.photoURL;
 
-      const uid = auth.currentUser!.uid;
-      const fileRef = ref(storage, `avatars/${uid}/avatar.jpg`);
-      await uploadBytes(fileRef, blob, { contentType: asset.mimeType || 'image/jpeg' });
+      console.log('✅ Avatar uploaded:', photoURL);
 
-      const url = await getDownloadURL(fileRef);
-
-      await updateProfile(auth.currentUser!, { photoURL: url });
-      await authApiService.updateProfile({ photoURL: url });
-
-      setDataUser((prev: any) => ({ ...prev, photoURL: url, id_image: url }));
+      // Update local state
+      setDataUser((prev: any) => ({ ...prev, photoURL, id_image: photoURL }));
+      
+      // Force image cache refresh
+      await loadDataUser();
+      
       handleSuccess('Ảnh đại diện đã được cập nhật!');
     } catch (err: any) {
+      console.error('❌ Avatar upload error:', err);
       handleApiError(err, 'update_profile');
     }
   };

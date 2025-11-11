@@ -39,7 +39,7 @@ import {
 } from '@/constants/candidate_Home.constants';
 
 const CandidateHome = () => {
-  const {
+  const { 
     data,
     loading,
     error,
@@ -52,7 +52,10 @@ const CandidateHome = () => {
     handleFilterChange,
     resetUnreadCount,
   } = useCandidateHome();
-
+  const displayName = useMemo(
+    () => data?.user?.displayName || data?.user?.name || '',
+    [data?.user?.displayName, data?.user?.name]
+  );
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
 
@@ -138,6 +141,8 @@ const CandidateHome = () => {
           <Animated.View style={[styles.welcomeTextContainer, welcomeTextAnimatedStyle]}>
             <Text style={styles.hello}>Xin chào 👋</Text>
             {!!data?.user?.displayName && <Text style={styles.hello2}>{data.user.displayName}</Text>}
+            {!!displayName && <Text style={styles.hello2}>{displayName}</Text>}
+
           </Animated.View>
 
           <View style={styles.headerIcons}>

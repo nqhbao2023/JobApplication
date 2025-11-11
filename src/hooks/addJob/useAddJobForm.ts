@@ -50,7 +50,12 @@ export const useAddJobForm = () => {
 
   const [jobTypeItems, setJobTypeItems] = useState<Array<{ label: string; value: string }>>([]);
   const [jobCategoryItems, setJobCategoryItems] = useState<Array<{ label: string; value: string }>>([]);
-  const [companyItems, setCompanyItems] = useState<Array<{ label: string; value: string }>>([]);
+  const [companyItems, setCompanyItems] = useState<Array<{ 
+    label: string; 
+    value: string;
+    city?: string;
+    nation?: string;
+  }>>([]);
 
   const [openTypeDD, setOpenTypeDD] = useState(false);
   const [openCategoryDD, setOpenCategoryDD] = useState(false);
@@ -200,8 +205,21 @@ export const useAddJobForm = () => {
         { label: '📦 Khác', value: 'other' },
       ]);
 
-      setCompanyItems(companiesSnap.docs.map(d => ({ label: d.data().corp_name, value: d.id })));
-    } catch {
+      setCompanyItems(companiesSnap.docs.map(d => {
+        const data = d.data();
+        const name = data.corp_name || data.name || data.company_name || `Company ${d.id}`;
+        return { 
+          label: name, 
+          value: d.id,
+          // Store additional data for later use
+          city: data.city || data.location || '',
+          nation: data.nation || '',
+        };
+      }));
+      
+      console.log('📦 Loaded companies:', companiesSnap.docs.length);
+    } catch (error) {
+      console.error('Load dropdowns error:', error);
       Alert.alert('Lỗi', 'Không thể tải dữ liệu lựa chọn');
     }
 
@@ -359,25 +377,88 @@ export const useAddJobForm = () => {
 
       // ✅ Get company name and location
       let companyName = '';
-      let location = 'Không xác định';
+      let location = '';
       
       if (isAddingNewCompany) {
         companyName = newCompany.corp_name.trim();
-        location = newCompany.city?.trim() || 'Không xác định';
+        location = newCompany.city?.trim() || newCompany.nation?.trim() || 'Hà Nội, Việt Nam';
       } else if (companyId) {
         const companyDoc = await getDoc(doc(db, "companies", companyId));
+        console.log('📦 Company Doc exists:', companyDoc.exists());
+        
         if (companyDoc.exists()) {
           const companyData = companyDoc.data();
-          companyName = companyData?.corp_name || companyId;
-          location = companyData?.city?.trim() || companyData?.nation?.trim() || 'Không xác định';
-        } else {
-          companyName = companyId; // Fallback
+          console.log('📦 Company Data:', JSON.stringify(companyData, null, 2));
+          
+          companyName = companyData?.corp_name || companyData?.name || '';
+          location = companyData?.city || companyData?.nation || companyData?.location || '';
+          
+          // Trim và validate
+          companyName = companyName.trim();
+          location = location.trim();
         }
       }
+
+      // ✅ Validation company ID
+      if (!companyId) {
+        Alert.alert("Lỗi", "Vui lòng chọn công ty.");
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Validation company name
+      if (!companyName || companyName === '') {
+        // Fallback: Nếu không tìm thấy, thử lấy từ companyItems dropdown
+        const selectedCompanyItem = companyItems.find(item => item.value === companyId);
+        if (selectedCompanyItem) {
+          companyName = selectedCompanyItem.label;
+          // Also get location from dropdown if available
+          if (!location && selectedCompanyItem.city) {
+            location = selectedCompanyItem.city;
+          }
+          console.log('🔄 Fallback to dropdown - Company:', companyName, 'Location:', location);
+        } else {
+          Alert.alert("Lỗi", `Không tìm thấy tên công ty với ID: ${companyId}. Vui lòng kiểm tra lại.`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // ✅ Validation: Company name phải có ít nhất 2 ký tự (theo schema server)
+      if (companyName.length < 2) {
+        Alert.alert(
+          "Dữ liệu không hợp lệ", 
+          `Tên công ty "${companyName}" quá ngắn. Vui lòng cập nhật dữ liệu công ty trong hệ thống hoặc chọn công ty khác.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Set default location if empty
+      if (!location || location === '' || location.length < 2) {
+        location = 'Hà Nội, Việt Nam'; // Default location
+        console.log('🔄 Using default location:', location);
+      }
+      
+      console.log('✅ Final company:', companyName);
+      console.log('✅ Final location:', location);
 
       // ✅ Parse salary
       const min = parseFloat(formData.salaryMin);
       const max = formData.salaryMax.trim() ? parseFloat(formData.salaryMax) : min; // Nếu không có max, dùng min
+
+      // ✅ Validation salary
+      if (isNaN(min) || min < 0) {
+        Alert.alert("Lỗi", "Lương tối thiểu không hợp lệ.");
+        setLoading(false);
+        return;
+      }
+
+      if (isNaN(max) || max < min) {
+        Alert.alert("Lỗi", "Lương tối đa phải lớn hơn hoặc bằng lương tối thiểu.");
+        setLoading(false);
+        return;
+      }
 
       // ✅ Parse requirements và skills từ string sang array
       const requirements = formData.responsibilities
@@ -389,6 +470,15 @@ export const useAddJobForm = () => {
         .split(',')
         .map(s => s.trim())
         .filter(s => s.length > 0);
+
+      // ✅ Ensure requirements và skills không rỗng
+      const finalRequirements = requirements.length > 0 
+        ? requirements 
+        : ['Mô tả công việc: ' + formData.jobDescription.trim()];
+      
+      const finalSkills = skills.length > 0 
+        ? skills 
+        : ['Kỹ năng cơ bản'];
 
       // ✅ Map job type từ form sang API format
       const jobTypeMap: Record<string, 'full-time' | 'part-time' | 'contract' | 'internship'> = {
@@ -406,16 +496,23 @@ export const useAddJobForm = () => {
       const mappedType = jobTypeMap[jobTypeName] || 'full-time';
 
       // ✅ Get category name or ID
-      const categoryName = jobCategoryObj.category_name || jobCategoryObj.id || '';
+      const categoryName = jobCategoryObj.category_name || jobCategoryObj.id || 'Khác';
+
+      // ✅ Validation category
+      if (!categoryName || categoryName.trim() === '') {
+        Alert.alert("Lỗi", "Danh mục công việc không hợp lệ.");
+        setLoading(false);
+        return;
+      }
 
       // ✅ Build API payload
       const apiPayload = {
         title: formData.title.trim(),
         company: companyName,
-        companyId: companyId || '',
+        companyId: companyId,
         description: formData.jobDescription.trim(),
-        requirements: requirements.length > 0 ? requirements : [formData.jobDescription.trim()], // Fallback to description
-        skills: skills.length > 0 ? skills : ['Không yêu cầu'], // Fallback
+        requirements: finalRequirements,
+        skills: finalSkills,
         salary: {
           min: min,
           max: max,
@@ -426,6 +523,9 @@ export const useAddJobForm = () => {
         category: categoryName,
         status: 'active' as const,
       };
+
+      // ✅ Log payload để debug
+      console.log('📤 API Payload:', JSON.stringify(apiPayload, null, 2));
 
       // ✅ Create job via API
       const createdJob = await jobApiService.createJob(apiPayload);

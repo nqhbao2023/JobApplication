@@ -13,11 +13,17 @@ import { useFirestoreCollection } from '@/hooks/useFirestoreCollection';
 import { useSearch } from '@/hooks/useSearch';
 import { useFilter } from '@/hooks/useFilter';
 
+type Salary = {
+  currency?: string;
+  min?: number;
+  max?: number;
+};
+
 type Job = {
   $id: string;
   title?: string;
   location?: string;
-  salary?: string;
+  salary?: string | Salary;
   status?: string;
   ownerId?: string;
   ownerName?: string;

@@ -14,7 +14,7 @@ import applicationRoutes from './routes/application.routes';
 import companyRoutes from './routes/company.routes';
 import categoryRoutes from './routes/category.routes';
 import notificationRoutes from './routes/notification.routes';
-
+import userRoutes from './routes/user.routes';
 dotenv.config();
 
 const app = express();
@@ -58,6 +58,7 @@ app.get('/api/health', (_req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/news', newsRoutes);

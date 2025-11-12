@@ -31,7 +31,7 @@ const getBaseURL = (): string => {
   const devUrl = Platform.select({
     android: 'http://10.0.2.2:3000',      // Android emulator loopback
     ios: 'http://localhost:3000',         // iOS simulator
-    default: 'http://192.168.1.32:3000', // ⚠️ CHANGE THIS to your LAN IP
+    default: 'http://192.168.1.35:3000', // ⚠️ CHANGE THIS to your LAN IP
   }) as string;
 
   console.log('🌐 Using development API URL:', devUrl);

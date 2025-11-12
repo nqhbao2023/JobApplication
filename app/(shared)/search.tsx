@@ -1,24 +1,26 @@
 import { useLocalSearchParams } from 'expo-router';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { router } from 'expo-router';
 import { db } from '@/config/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
+import { searchJobs, isAlgoliaAvailable } from '@/services/algoliaSearch.service';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Job {
   $id: string;
   title: string;
-  image: string;
-  skills_required: string;
-  responsibilities: string;
-  created_at: string;
-  updated_at: string;
-  salary: number;
-  jobTypes: any;
-  jobCategories: any;
-  company: any;
+  company: string;
+  companyId?: string;
+  location?: string;
+  type?: string;
+  category?: string;
+  salary?: any;
+  skills?: string[];
+  description?: string;
+  _highlightResult?: any; // Algolia highlights
 }
 
 interface JobType {
@@ -42,6 +44,9 @@ export default function SearchScreen() {
   const { q } = useLocalSearchParams();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalResults, setTotalResults] = useState(0);
+  
   const [company, setCompany] = useState<Company[]>([]);
   const [jobTypes, setJobTypes] = useState<JobType[]>([]);
   const [jobCategories, setJobCategories] = useState<JobCategory[]>([]);
@@ -54,69 +59,87 @@ export default function SearchScreen() {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
 
-  const fetchJobs = async () => {
+  // Check if Algolia is available
+  const useAlgolia = isAlgoliaAvailable();
+
+  const fetchJobs = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // ✅ Fetch ALL jobs first (no Firestore composite index needed)
-      const qJobs = collection(db, 'jobs');
-      const snapshot = await getDocs(qJobs);
+      setError(null);
 
-      let formattedJobs: Job[] = snapshot.docs
-        .map((docSnap) => {
-          const data = docSnap.data();
-          if (!data || typeof data !== 'object') return null;
-          return {
-            $id: docSnap.id,
-            ...data,
-          } as Job;
-        })
-        .filter((job): job is Job => job !== null);
-
-      // ✅ Client-side filtering (no Firestore index required)
-      
-      // Filter by search query (title)
-      if (q && typeof q === 'string') {
-        const searchLower = q.toLowerCase().trim();
-        formattedJobs = formattedJobs.filter(job => 
-          job.title?.toLowerCase().includes(searchLower)
-        );
-      }
-
-      // Filter by job type
-      if (selectedTypeId) {
-        formattedJobs = formattedJobs.filter(job => 
-          job.jobTypes === selectedTypeId
-        );
-      }
-
-      // Filter by category
-      if (selectedCategoryId) {
-        formattedJobs = formattedJobs.filter(job => 
-          job.jobCategories === selectedCategoryId
-        );
-      }
-
-      // Filter by company
-      if (selectedCompanyId) {
-        formattedJobs = formattedJobs.filter(job => {
-          // Handle company as object or string
-          if (typeof job.company === 'object' && job.company !== null) {
-            return (job.company as any).$id === selectedCompanyId;
-          }
-          return job.company === selectedCompanyId;
+      // ✅ Use Algolia if available, fallback to Firestore
+      if (useAlgolia) {
+        console.log('🔍 Using Algolia search');
+        
+        const result = await searchJobs({
+          query: typeof q === 'string' ? q : '',
+          jobType: selectedTypeId || undefined,
+          category: selectedCategoryId || undefined,
+          companyId: selectedCompanyId || undefined,
+          hitsPerPage: 50,
         });
-      }
 
-      console.log(`🔍 Search results: ${formattedJobs.length} jobs found`);
-      setJobs(formattedJobs);
-    } catch (error) {
+        setJobs(result.jobs);
+        setTotalResults(result.total);
+        console.log(`✅ Algolia: Found ${result.total} jobs`);
+      } else {
+        // Fallback: Firestore client-side filtering
+        console.log('⚠️  Algolia unavailable, using Firestore fallback');
+        
+        const qJobs = collection(db, 'jobs');
+        const snapshot = await getDocs(qJobs);
+
+        let formattedJobs: Job[] = snapshot.docs
+          .map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              $id: docSnap.id,
+              title: data.title || '',
+              company: data.company?.corp_name || data.company || '',
+              companyId: data.companyId || data.company?.$id,
+              location: data.location || '',
+              type: data.type || data.jobTypes,
+              category: data.category || data.jobCategories,
+              salary: data.salary,
+              skills: data.skills || [],
+              description: data.description || '',
+            } as Job;
+          });
+
+        // Client-side filtering
+        if (q && typeof q === 'string') {
+          const searchLower = q.toLowerCase().trim();
+          formattedJobs = formattedJobs.filter(job =>
+            job.title?.toLowerCase().includes(searchLower) ||
+            job.company?.toLowerCase().includes(searchLower)
+          );
+        }
+
+        if (selectedTypeId) {
+          formattedJobs = formattedJobs.filter(job => job.type === selectedTypeId);
+        }
+
+        if (selectedCategoryId) {
+          formattedJobs = formattedJobs.filter(job => job.category === selectedCategoryId);
+        }
+
+        if (selectedCompanyId) {
+          formattedJobs = formattedJobs.filter(job => job.companyId === selectedCompanyId);
+        }
+
+        setJobs(formattedJobs);
+        setTotalResults(formattedJobs.length);
+        console.log(`� Firestore fallback: Found ${formattedJobs.length} jobs`);
+      }
+    } catch (error: any) {
       console.error('❌ Error fetching jobs:', error);
+      setError(error.message || 'Có lỗi xảy ra khi tìm kiếm');
       setJobs([]);
+      setTotalResults(0);
     } finally {
       setLoading(false);
     }
-  };
+  }, [q, selectedTypeId, selectedCategoryId, selectedCompanyId, useAlgolia]);
 
   const fetchFilters = async () => {
     try {
@@ -168,7 +191,22 @@ export default function SearchScreen() {
   return (
     <PaperProvider>
       <View style={styles.container}>
-        <Text style={styles.heading}>Kết quả cho: "{q}"</Text>
+        {/* Header với search info */}
+        <View style={styles.header}>
+          <Text style={styles.heading}>
+            Kết quả tìm kiếm
+            {q && <Text style={styles.queryText}> "{q}"</Text>}
+          </Text>
+          {!loading && (
+            <View style={styles.resultCount}>
+              {useAlgolia && <Ionicons name="flash" size={16} color="#10b981" />}
+              <Text style={styles.resultText}>
+                {totalResults} công việc
+                {useAlgolia && ' (Algolia)'}
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* DropDown Loại công việc */}
         <View style={{ zIndex: 2000 }}>
@@ -219,19 +257,34 @@ export default function SearchScreen() {
             dropDownContainerStyle={styles.dropdownContainer}
           />
         </View>
-        <TouchableOpacity onPress={clearFilters}>
-          <Text style={styles.clearButton}> Xóa bộ lọc</Text>
+        <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
+          <Ionicons name="close-circle" size={16} color="#ef4444" />
+          <Text style={styles.clearButtonText}>Xóa bộ lọc</Text>
         </TouchableOpacity>
 
-        <Text style={styles.jobListTitle}>Danh sách công việc:</Text>
-      
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#4A80F0" />
-            <Text style={styles.loadingText}>Đang tìm kiếm...</Text>
+            <Text style={styles.loadingText}>
+              {useAlgolia ? 'Đang tìm kiếm với Algolia...' : 'Đang tìm kiếm...'}
+            </Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="warning-outline" size={48} color="#ef4444" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchJobs}>
+              <Text style={styles.retryButtonText}>Thử lại</Text>
+            </TouchableOpacity>
           </View>
         ) : jobs.length === 0 ? (
-          <Text style={styles.noJobsText}>Không tìm thấy công việc phù hợp</Text>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search-outline" size={64} color="#94a3b8" />
+            <Text style={styles.emptyText}>Không tìm thấy công việc phù hợp</Text>
+            <Text style={styles.emptySubtext}>
+              Thử điều chỉnh bộ lọc hoặc tìm kiếm với từ khóa khác
+            </Text>
+          </View>
         ) : (
           <FlatList
             data={jobs}
@@ -239,13 +292,63 @@ export default function SearchScreen() {
             renderItem={({ item }) => (
               <TouchableOpacity
                 onPress={() => router.push({ pathname: "/jobDescription", params: { jobId: item.$id } })}
+                activeOpacity={0.7}
               >
                 <View style={styles.jobItem}>
-                  <Text style={styles.jobTitle}>{item.title}</Text>
-                  <Text>{item.company?.corp_name} - {item.company?.city}</Text>
+                  <View style={styles.jobHeader}>
+                    <Text style={styles.jobTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    {item.type && (
+                      <View style={styles.typeBadge}>
+                        <Text style={styles.typeBadgeText}>
+                          {jobTypes.find(t => t.$id === item.type)?.type_name || item.type}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.jobDetails}>
+                    <View style={styles.detailRow}>
+                      <Ionicons name="business-outline" size={14} color="#64748b" />
+                      <Text style={styles.detailText} numberOfLines={1}>
+                        {item.company}
+                      </Text>
+                    </View>
+                    {item.location && (
+                      <View style={styles.detailRow}>
+                        <Ionicons name="location-outline" size={14} color="#64748b" />
+                        <Text style={styles.detailText} numberOfLines={1}>
+                          {item.location}
+                        </Text>
+                      </View>
+                    )}
+                    {item.salary && (
+                      <View style={styles.detailRow}>
+                        <Ionicons name="cash-outline" size={14} color="#10b981" />
+                        <Text style={[styles.detailText, { color: '#10b981', fontWeight: '600' }]}>
+                          {typeof item.salary === 'object' 
+                            ? `${item.salary.min?.toLocaleString()} - ${item.salary.max?.toLocaleString()} ${item.salary.currency || 'VND'}`
+                            : item.salary.toLocaleString() + ' VND'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {item.skills && item.skills.length > 0 && (
+                    <View style={styles.skillsContainer}>
+                      {item.skills.slice(0, 3).map((skill, index) => (
+                        <View key={index} style={styles.skillChip}>
+                          <Text style={styles.skillText}>{skill}</Text>
+                        </View>
+                      ))}
+                      {item.skills.length > 3 && (
+                        <Text style={styles.moreSkills}>+{item.skills.length - 3}</Text>
+                      )}
+                    </View>
+                  )}
                 </View>
               </TouchableOpacity>
             )}
+            contentContainerStyle={styles.listContent}
           />
         )}
     </View>           
@@ -255,80 +358,201 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    paddingTop: 50,
     flex: 1,
-    backgroundColor: '#f0f4ff', // nền nhẹ tông xanh nhạt
+    backgroundColor: '#f8fafc',
+    paddingTop: 50,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
   },
   heading: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#4A80F0',
-  },
-  dropdown: {
-    borderColor: '#4A80F0',
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 10,
-    marginBottom: 10,
-  },
-  dropdownContainer: {
-    borderColor: '#4A80F0',
-    borderRadius: 10,
-  },
-  clearButton: {
-    marginTop: 10,
-    marginBottom: 20,
-    color: '#e63946',
-    fontWeight: 'bold',
-    fontSize: 14,
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: '#ffeaea',
-  },
-  jobListTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#1d3557',
-  },
-  jobItem: {
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderLeftWidth: 5,
-    borderLeftColor: '#4A80F0',
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  jobTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4A80F0',
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
     marginBottom: 4,
   },
-  noJobsText: {
+  queryText: {
+    color: '#4A80F0',
     fontStyle: 'italic',
-    color: '#999',
-    marginTop: 10,
-    textAlign: 'center',
+  },
+  resultCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  resultText: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  dropdown: {
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  dropdownContainer: {
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    marginHorizontal: 16,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    alignSelf: 'flex-start',
+  },
+  clearButtonText: {
+    color: '#ef4444',
+    fontWeight: '600',
+    fontSize: 14,
   },
   loadingContainer: {
-    marginTop: 40,
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
   },
   loadingText: {
     marginTop: 12,
-    color: '#4A80F0',
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#ef4444',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    backgroundColor: '#4A80F0',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
     fontSize: 14,
   },
-  
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#475569',
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
+  listContent: {
+    padding: 16,
+  },
+  jobItem: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A80F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  jobHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  jobTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginRight: 8,
+  },
+  typeBadge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  typeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1e40af',
+    textTransform: 'uppercase',
+  },
+  jobDetails: {
+    gap: 6,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#64748b',
+    flex: 1,
+  },
+  skillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  skillChip: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  skillText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  moreSkills: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '600',
+    alignSelf: 'center',
+  },
 });

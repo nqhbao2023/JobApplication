@@ -13,6 +13,7 @@ type JobType = {
   type_name: string;
   icon?: string;
   color?: string;
+  isSystem?: boolean; // Thêm flag để đánh dấu system type
 };
 
 const JobTypesScreen = () => {
@@ -36,6 +37,7 @@ const JobTypesScreen = () => {
       } else {
         await addDoc(collection(db, 'job_types'), {
           ...formData,
+          isSystem: false, // Custom types tạo bởi admin không phải system type
           created_at: new Date().toISOString(),
         });
         Alert.alert('Thành công', 'Đã thêm mới');
@@ -52,6 +54,16 @@ const JobTypesScreen = () => {
   };
 
   const handleDelete = (item: JobType) => {
+    // Kiểm tra nếu là system type
+    if (item.isSystem) {
+      Alert.alert(
+        'Không thể xóa',
+        'Đây là loại công việc hệ thống và không thể xóa. Các loại này được sử dụng bởi hệ thống và backend validator.',
+        [{ text: 'Đã hiểu', style: 'cancel' }]
+      );
+      return;
+    }
+
     Alert.alert('Xác nhận', `Bạn có chắc muốn xóa "${item.type_name}"?`, [
       { text: 'Hủy', style: 'cancel' },
       {

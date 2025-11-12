@@ -8,7 +8,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "jest",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "seed:job-types": "ts-node src/scripts/seed-job-types.ts",
+    "sync:algolia:jobs": "ts-node src/scripts/sync-jobs-to-algolia.ts",
+    "sync:algolia:all": "npm run seed:job-types && npm run sync:algolia:jobs"
   },
   "keywords": [
     "job",
@@ -20,6 +23,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "algoliasearch": "^5.43.0",
     "axios": "^1.6.2",
     "cheerio": "^1.0.0-rc.12",
     "compression": "^1.7.4",

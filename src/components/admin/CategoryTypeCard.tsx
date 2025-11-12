@@ -12,6 +12,7 @@ type CategoryTypeCardProps = {
     icon?: string;
     icon_name?: string;
     color?: string;
+    isSystem?: boolean; // Thêm flag để đánh dấu system type
   };
   onEdit: () => void;
   onDelete: () => void;
@@ -31,6 +32,7 @@ export const CategoryTypeCard = ({ item, onEdit, onDelete }: CategoryTypeCardPro
   const name = item.type_name || item.category_name || 'N/A';
   const iconValue = item.icon_name || item.icon || 'briefcase';
   const color = item.color || '#3b82f6';
+  const isSystem = item.isSystem ?? false; // Kiểm tra nếu là system type
   
   // Check if the icon is an emoji or an Ionicons name
   const isIconEmoji = isEmoji(iconValue);
@@ -47,11 +49,22 @@ export const CategoryTypeCard = ({ item, onEdit, onDelete }: CategoryTypeCardPro
               <Ionicons name={iconName} size={20} color="#fff" />
             )}
           </View>
-          <Text style={styles.title}>{name}</Text>
+          <View style={styles.textContent}>
+            <Text style={styles.title}>{name}</Text>
+            {isSystem && (
+              <View style={styles.systemBadge}>
+                <Ionicons name="shield-checkmark" size={12} color="#10b981" />
+                <Text style={styles.systemText}>Hệ thống</Text>
+              </View>
+            )}
+          </View>
         </View>
         <View style={styles.actions}>
           <IconButton icon="pencil" color="#3b82f6" onPress={onEdit} />
-          <IconButton icon="trash-outline" color="#ef4444" onPress={onDelete} />
+          {/* Chỉ hiển thị nút xóa nếu không phải system type */}
+          {!isSystem && (
+            <IconButton icon="trash-outline" color="#ef4444" onPress={onDelete} />
+          )}
         </View>
       </View>
     </Card>
@@ -80,10 +93,29 @@ const styles = StyleSheet.create({
   emojiIcon: {
     fontSize: 20,
   },
+  textContent: {
+    flex: 1,
+    gap: 4,
+  },
   title: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1a1a1a',
+  },
+  systemBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  systemText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#10b981',
   },
   actions: {
     flexDirection: 'row',

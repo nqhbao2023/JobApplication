@@ -18,7 +18,7 @@ export default function RootLayout() {
     listenerAttached.current = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log(" Auth state:", user ? user.email : "No user");
+      console.log("🔐 Auth state:", user ? user.email : "No user");
 
       const group = segments?.[0];
       const inAuth = group === "(auth)";
@@ -29,17 +29,35 @@ export default function RootLayout() {
       if (user) {
         try {
           const role = await getCurrentUserRole();
-          console.log("🔥 User role from utils:", role, "Current segment:", group);
+          console.log("� User role:", role, "| Current segment:", group);
 
+          // Nếu đã ở đúng route, không cần redirect
+          if (role === "admin" && inAdmin) {
+            console.log("✅ Already in admin route");
+            setCheckingAuth(false);
+            return;
+          }
+          if (role === "candidate" && inCandidate) {
+            console.log("✅ Already in candidate route");
+            setCheckingAuth(false);
+            return;
+          }
+          if (role === "employer" && inEmployer) {
+            console.log("✅ Already in employer route");
+            setCheckingAuth(false);
+            return;
+          }
+
+          // Redirect nếu cần
           if (inAuth) {
             if (role === "admin") {
-              console.log("🔐 Routing to admin from auth screen");
+              console.log("� Routing to admin from auth screen");
               router.replace("/(admin)" as any);
             } else if (role === "candidate") {
-              console.log("👤 Routing to candidate");
+              console.log("� Routing to candidate");
               router.replace("/(candidate)");
             } else if (role === "employer") {
-              console.log("💼 Routing to employer");
+              console.log("� Routing to employer");
               router.replace("/(employer)");
             } else {
               console.log("❌ Invalid role, signing out");
@@ -51,16 +69,28 @@ export default function RootLayout() {
             if (role === "candidate") router.replace("/(candidate)");
             else if (role === "employer") router.replace("/(employer)");
             else router.replace("/(auth)/login");
+          } else if (inCandidate && role !== "candidate") {
+            console.log("❌ Not candidate, redirecting");
+            if (role === "admin") router.replace("/(admin)" as any);
+            else if (role === "employer") router.replace("/(employer)");
+            else router.replace("/(auth)/login");
+          } else if (inEmployer && role !== "employer") {
+            console.log("❌ Not employer, redirecting");
+            if (role === "admin") router.replace("/(admin)" as any);
+            else if (role === "candidate") router.replace("/(candidate)");
+            else router.replace("/(auth)/login");
           }
         } catch (error) {
-          console.error("❌ Error:", error);
+          console.error("❌ Error getting role:", error);
           if (inAdmin || inCandidate || inEmployer) {
             await signOut(auth);
             router.replace("/(auth)/login");
           }
         }
       } else {
+        // No user logged in
         if (inCandidate || inEmployer || inAdmin) {
+          console.log("🔀 No user, redirecting to login");
           router.replace("/(auth)/login");
         }
       }

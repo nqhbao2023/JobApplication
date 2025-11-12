@@ -1,0 +1,65 @@
+[
+  {
+    "id": "full-time",
+    "type_name": "Toàn thời gian",
+    "slug": "toan-thoi-gian",
+    "icon": "💼",
+    "color": "#3b82f6",
+    "description": "Full-time, 40h/tuần",
+    "isSystem": true
+  },
+  {
+    "id": "part-time",
+    "type_name": "Bán thời gian",
+    "slug": "ban-thoi-gian",
+    "icon": "⏰",
+    "color": "#8b5cf6",
+    "description": "Part-time, linh hoạt giờ",
+    "isSystem": true
+  },
+  {
+    "id": "internship",
+    "type_name": "Thực tập",
+    "slug": "thuc-tap",
+    "icon": "🎓",
+    "color": "#10b981",
+    "description": "Sinh viên, học việc",
+    "isSystem": true
+  },
+  {
+    "id": "contract",
+    "type_name": "Hợp đồng",
+    "slug": "hop-dong",
+    "icon": "📝",
+    "color": "#f59e0b",
+    "description": "Theo dự án, có thời hạn",
+    "isSystem": true
+  },
+  {
+    "id": "freelance",
+    "type_name": "Freelance",
+    "slug": "freelance",
+    "icon": "🌐",
+    "color": "#06b6d4",
+    "description": "Tự do, remote",
+    "isSystem": true
+  },
+  {
+    "id": "remote",
+    "type_name": "Remote",
+    "slug": "remote",
+    "icon": "🏠",
+    "color": "#ec4899",
+    "description": "Làm việc từ xa 100%",
+    "isSystem": true
+  },
+  {
+    "id": "hybrid",
+    "type_name": "Hybrid",
+    "slug": "hybrid",
+    "icon": "🔄",
+    "color": "#6366f1",
+    "description": "Kết hợp văn phòng & remote",
+    "isSystem": true
+  }
+]

@@ -27,14 +27,24 @@ const getBaseURL = (): string => {
     return 'https://job4s-api.onrender.com';
   }
 
-  // ✅ 3. Development fallback cho emulator/simulator/thiết bị thật
+  // ✅ 3. Development fallback - Tự động dùng Expo debugger host
+  // Expo tự detect IP của máy tính đang chạy Metro bundler
+  const debuggerHost = Constants.expoConfig?.hostUri?.split(':')[0];
+  
+  if (debuggerHost && debuggerHost !== 'localhost') {
+    const autoUrl = `http://${debuggerHost}:3000`;
+    console.log('🌐 Auto-detected API URL from Expo:', autoUrl);
+    return autoUrl;
+  }
+
+  // ✅ 4. Fallback cuối cùng cho emulator/simulator
   const devUrl = Platform.select({
     android: 'http://10.0.2.2:3000',      // Android emulator loopback
     ios: 'http://localhost:3000',         // iOS simulator
-    default: 'http://192.168.1.35:3000', // ⚠️ CHANGE THIS to your LAN IP
+    default: 'http://localhost:3000',
   }) as string;
 
-  console.log('🌐 Using development API URL:', devUrl);
+  console.log('🌐 Using fallback API URL:', devUrl);
   return devUrl;
 };
 

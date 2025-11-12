@@ -4,12 +4,12 @@
 const admin = require('firebase-admin');
 
 // Initialize Firebase Admin
-// Bạn cần tải service account key từ Firebase Console
-// const serviceAccount = require('./serviceAccountKey.json');
+// Service account key từ Firebase Console → Project Settings → Service Accounts
+const serviceAccount = require('./serviceAccountKey.json');
 
-// admin.initializeApp({
-//   credential: admin.credential.cert(serviceAccount)
-// });
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 const db = admin.firestore();
 

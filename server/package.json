@@ -10,8 +10,10 @@
     "test": "jest",
     "lint": "eslint src --ext .ts",
     "seed:job-types": "ts-node src/scripts/seed-job-types.ts",
+    "seed:companies": "ts-node src/scripts/seed-companies.ts",
     "sync:algolia:jobs": "ts-node src/scripts/sync-jobs-to-algolia.ts",
-    "sync:algolia:all": "npm run seed:job-types && npm run sync:algolia:jobs"
+    "sync:algolia:all": "npm run seed:job-types && npm run sync:algolia:jobs",
+    "seed:all": "npm run seed:job-types && npm run seed:companies"
   },
   "keywords": [
     "job",

@@ -60,7 +60,10 @@ export const CategoryTypeCard = ({ item, onEdit, onDelete }: CategoryTypeCardPro
           </View>
         </View>
         <View style={styles.actions}>
-          <IconButton icon="pencil" color="#3b82f6" onPress={onEdit} />
+          {/* Chỉ hiển thị nút edit nếu không phải system type */}
+          {!isSystem && (
+            <IconButton icon="pencil" color="#3b82f6" onPress={onEdit} />
+          )}
           {/* Chỉ hiển thị nút xóa nếu không phải system type */}
           {!isSystem && (
             <IconButton icon="trash-outline" color="#ef4444" onPress={onDelete} />

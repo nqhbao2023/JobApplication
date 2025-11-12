@@ -83,6 +83,16 @@ const JobTypesScreen = () => {
   };
 
   const openEditModal = (item: JobType) => {
+    // Không cho phép edit system types
+    if (item.isSystem) {
+      Alert.alert(
+        'Không thể chỉnh sửa',
+        'Đây là loại công việc hệ thống và không thể chỉnh sửa. Các loại này được chuẩn hóa cho backend validator và search engine.',
+        [{ text: 'Đã hiểu', style: 'cancel' }]
+      );
+      return;
+    }
+
     setEditingId(item.$id);
     setFormData({
       type_name: item.type_name,

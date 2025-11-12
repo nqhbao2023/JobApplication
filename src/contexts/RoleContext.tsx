@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,8 +25,16 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRoleOrNull>(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ 1. useRef để giữ giá trị role mới nhất mà không trigger re-render
+  const roleRef = useRef<AppRoleOrNull>(null);
+  
+  useEffect(() => {
+    roleRef.current = role;
+  }, [role]);
+
   /**
    * Load role with cache invalidation
+   * ✅ 2. Không còn phụ thuộc trực tiếp vào state role trong closure
    */
   const loadRole = useCallback(async () => {
     setLoading(true);
@@ -52,8 +60,8 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
         ? Date.now() - parseInt(cacheTimestamp)
         : Infinity;
 
-      // Use cache if fresh and available
-      if (cachedRole && cacheAge < CACHE_MAX_AGE && !role) {
+      // ✅ Chỉ dùng cache khi chưa có role trong bộ nhớ (sử dụng roleRef.current)
+      if (cachedRole && cacheAge < CACHE_MAX_AGE && !roleRef.current) {
         setRole(cachedRole as AppRoleOrNull);
       }
 
@@ -100,18 +108,18 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  }, [role]);
+  }, []); // ✅ Không còn dependency [role]
 
-  // Initial mount
+  // ✅ 3. Initial mount - thêm loadRole vào dependency
   useEffect(() => {
     loadRole();
-  }, []);
+  }, [loadRole]);
 
-  // Listen to auth state changes
+  // ✅ 3. Listen to auth state changes - thêm loadRole vào dependency
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
-        loadRole();
+        loadRole(); // ✅ Luôn gọi phiên bản loadRole mới nhất
       } else {
         setRole(null);
         setLoading(false);
@@ -120,18 +128,18 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
     });
     
     return unsub;
-  }, []);
+  }, [loadRole]); // ✅ Thêm dependency
 
-  // Background refresh every 5 minutes if user is active
+  // ✅ 3. Background refresh every 5 minutes - thêm loadRole vào dependency
   useEffect(() => {
     const interval = setInterval(() => {
       if (auth.currentUser) {
-        loadRole();
+        loadRole(); // ✅ Luôn gọi phiên bản loadRole mới nhất
       }
     }, CACHE_MAX_AGE);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [loadRole]); // ✅ Thêm dependency
 
   const value = useMemo(
     () => ({ role, loading, refresh: loadRole }),

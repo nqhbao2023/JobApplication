@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useEffect, useState } from 'react';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -40,26 +40,8 @@ interface Company {
 
 export default function SearchScreen() {
   const { q } = useLocalSearchParams();
-  useEffect(() => {
-  console.log("🔍 [TEST] useLocalSearchParams():", q);
-
-  if (typeof q === "string") {
-    console.log("✅ Kiểu dữ liệu:", typeof q);
-    console.log("📘 Nội dung query nhận được:", q);
-  } else {
-    console.warn("⚠️ Lỗi: q không phải là chuỗi (có thể undefined)");
-  }
-
-  // Test độ an toàn encode/decode
-  try {
-    const decoded = decodeURIComponent(String(q));
-    console.log("🧩 decodeURIComponent test:", decoded);
-  } catch (e) {
-    console.error("❌ decodeURIComponent thất bại:", e);
-  }
-}, [q]);
-
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState<Company[]>([]);
   const [jobTypes, setJobTypes] = useState<JobType[]>([]);
   const [jobCategories, setJobCategories] = useState<JobCategory[]>([]);
@@ -74,18 +56,13 @@ export default function SearchScreen() {
 
   const fetchJobs = async () => {
     try {
-      let qJobs: any = collection(db, 'jobs');
-      let qArr: any[] = [];
+      setLoading(true);
+      
+      // ✅ Fetch ALL jobs first (no Firestore composite index needed)
+      const qJobs = collection(db, 'jobs');
+      const snapshot = await getDocs(qJobs);
 
-      if (q) qArr.push(where('title', '>=', q), where('title', '<=', q + '\uf8ff'));
-      if (selectedTypeId) qArr.push(where('jobTypes', '==', selectedTypeId));
-      if (selectedCategoryId) qArr.push(where('jobCategories', '==', selectedCategoryId));
-      if (selectedCompanyId) qArr.push(where('company', '==', selectedCompanyId));
-
-      let jobsQuery = qArr.length ? query(qJobs, ...qArr) : qJobs;
-      const snapshot = await getDocs(jobsQuery);
-
-      const formattedJobs: Job[] = snapshot.docs
+      let formattedJobs: Job[] = snapshot.docs
         .map((docSnap) => {
           const data = docSnap.data();
           if (!data || typeof data !== 'object') return null;
@@ -96,9 +73,48 @@ export default function SearchScreen() {
         })
         .filter((job): job is Job => job !== null);
 
+      // ✅ Client-side filtering (no Firestore index required)
+      
+      // Filter by search query (title)
+      if (q && typeof q === 'string') {
+        const searchLower = q.toLowerCase().trim();
+        formattedJobs = formattedJobs.filter(job => 
+          job.title?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Filter by job type
+      if (selectedTypeId) {
+        formattedJobs = formattedJobs.filter(job => 
+          job.jobTypes === selectedTypeId
+        );
+      }
+
+      // Filter by category
+      if (selectedCategoryId) {
+        formattedJobs = formattedJobs.filter(job => 
+          job.jobCategories === selectedCategoryId
+        );
+      }
+
+      // Filter by company
+      if (selectedCompanyId) {
+        formattedJobs = formattedJobs.filter(job => {
+          // Handle company as object or string
+          if (typeof job.company === 'object' && job.company !== null) {
+            return (job.company as any).$id === selectedCompanyId;
+          }
+          return job.company === selectedCompanyId;
+        });
+      }
+
+      console.log(`🔍 Search results: ${formattedJobs.length} jobs found`);
       setJobs(formattedJobs);
     } catch (error) {
-      console.error('Error fetching jobs:', error);
+      console.error('❌ Error fetching jobs:', error);
+      setJobs([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -209,25 +225,29 @@ export default function SearchScreen() {
 
         <Text style={styles.jobListTitle}>Danh sách công việc:</Text>
       
-        {jobs.length === 0 ? (
-          <Text style={styles.noJobsText}>Không có công việc nào</Text>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#4A80F0" />
+            <Text style={styles.loadingText}>Đang tìm kiếm...</Text>
+          </View>
+        ) : jobs.length === 0 ? (
+          <Text style={styles.noJobsText}>Không tìm thấy công việc phù hợp</Text>
         ) : (
-
-    <FlatList
-    data={jobs}
-    keyExtractor={(item) => item.$id}
-    renderItem={({ item }) => (
-      <TouchableOpacity
-      onPress={() => router.push({ pathname: "/jobDescription", params: { jobId: item.$id } })}
-      >
-      <View style={styles.jobItem}>
-        <Text style={styles.jobTitle}>{item.title}</Text>
-        <Text>{item.company?.corp_name} - {item.company?.city}</Text>
-      </View>
-      </TouchableOpacity>
-          )}
+          <FlatList
+            data={jobs}
+            keyExtractor={(item) => item.$id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => router.push({ pathname: "/jobDescription", params: { jobId: item.$id } })}
+              >
+                <View style={styles.jobItem}>
+                  <Text style={styles.jobTitle}>{item.title}</Text>
+                  <Text>{item.company?.corp_name} - {item.company?.city}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           />
-          )}
+        )}
     </View>           
     </PaperProvider>
   );
@@ -298,6 +318,17 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: '#999',
     marginTop: 10,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    marginTop: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#4A80F0',
+    fontSize: 14,
   },
   
 });

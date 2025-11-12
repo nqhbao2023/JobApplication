@@ -26,10 +26,14 @@ const handleSearch = () => {
     <View style={styles.searchbar}>
       <TextInput
         style={styles.input}
-        placeholder="Tìm kiếm công việc"
-        placeholderTextColor="#CCCCCC"
+        placeholder="Tìm kiếm công việc, công ty..."
+        placeholderTextColor="rgba(255, 255, 255, 0.7)"
         value={keyword}
         onChangeText={setKeyword}
+        onSubmitEditing={handleSearch}
+        returnKeyType="search"
+        cursorColor="#FFFFFF"
+        selectionColor="rgba(255, 255, 255, 0.3)"
       />
       <TouchableOpacity style={styles.btnSearch} onPress={handleSearch}>
         <Ionicons name="search" color={'white'} size={30} />
@@ -45,8 +49,11 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     borderRadius: 12,
     flex: 1,
-    backgroundColor: '#1674D1',
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#FFFFFF',
+    height: 50,
   },
   btnSearch: {
     borderRadius: 12,
@@ -55,6 +62,11 @@ const styles = StyleSheet.create({
     width: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#F5A623',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   searchbar: {
     // marginVertical: 20,

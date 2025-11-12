@@ -1,19 +1,41 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
+/**
+ * Get API base URL based on environment
+ * Priority:
+ * 1. EXPO_PUBLIC_API_URL environment variable
+ * 2. extra.apiUrl from app.json
+ * 3. Production URL (if NODE_ENV !== 'development')
+ * 4. Platform-specific localhost/emulator URLs
+ */
 const getBaseURL = (): string => {
-  const isDev = process.env.NODE_ENV === 'development';
+  // ✅ 1. Ưu tiên biến môi trường Expo (cho phép config linh hoạt)
+  const envUrl =
+    process.env.EXPO_PUBLIC_API_URL ??
+    (Constants.expoConfig?.extra as { apiUrl?: string })?.apiUrl;
+  
+  if (envUrl) {
+    console.log('🌐 Using API URL from environment:', envUrl);
+    return envUrl;
+  }
 
+  // ✅ 2. Production mode → dùng Render URL
+  const isDev = process.env.NODE_ENV === 'development';
   if (!isDev) {
+    console.log('🌐 Using production API URL');
     return 'https://job4s-api.onrender.com';
   }
 
-  // ✅ Đảm bảo emulator truy cập được backend
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:3000'; // Android emulator loopback
-  }
+  // ✅ 3. Development fallback cho emulator/simulator/thiết bị thật
+  const devUrl = Platform.select({
+    android: 'http://10.0.2.2:3000',      // Android emulator loopback
+    ios: 'http://localhost:3000',         // iOS simulator
+    default: 'http://192.168.1.32:3000', // ⚠️ CHANGE THIS to your LAN IP
+  }) as string;
 
-  // ✅ Nếu chạy trên iOS simulator hoặc web dev
-  return 'http://localhost:3000';
+  console.log('🌐 Using development API URL:', devUrl);
+  return devUrl;
 };
 
 export const API_BASE_URL = getBaseURL();

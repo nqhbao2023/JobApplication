@@ -140,9 +140,9 @@ const CandidateHome = () => {
         <View style={styles.topView}>
           <Animated.View style={[styles.welcomeTextContainer, welcomeTextAnimatedStyle]}>
             <Text style={styles.hello}>Xin chào 👋</Text>
-            {!!data?.user?.displayName && <Text style={styles.hello2}>{data.user.displayName}</Text>}
-            {!!displayName && <Text style={styles.hello2}>{displayName}</Text>}
-
+            <Text style={styles.hello2}>
+              {data?.user?.displayName || displayName || 'Bạn'}
+            </Text>
           </Animated.View>
 
           <View style={styles.headerIcons}>

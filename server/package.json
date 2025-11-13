@@ -13,7 +13,14 @@
     "seed:companies": "ts-node src/scripts/seed-companies.ts",
     "sync:algolia:jobs": "ts-node src/scripts/sync-jobs-to-algolia.ts",
     "sync:algolia:all": "npm run seed:job-types && npm run sync:algolia:jobs",
-    "seed:all": "npm run seed:job-types && npm run seed:companies"
+    "seed:all": "npm run seed:job-types && npm run seed:companies",
+    "crawl:viecoi-sitemap": "ts-node src/crawlers/viecoi/sitemap-crawler.ts",
+    "crawl:viecoi-urls": "ts-node src/crawlers/viecoi/fetch-job-urls.ts",
+    "crawl:viecoi-jobs": "ts-node src/crawlers/viecoi/job-crawler.ts",
+    "normalize:viecoi": "ts-node src/crawlers/viecoi/normalize-runner.ts",
+    "upsert:viecoi-jobs": "ts-node src/crawlers/viecoi/upsert-jobs.ts",
+    "sync:viecoi-algolia": "ts-node src/crawlers/viecoi/sync-algolia.ts",
+    "crawl:viecoi-full": "npm run crawl:viecoi-jobs && npm run normalize:viecoi && npm run upsert:viecoi-jobs && npm run sync:viecoi-algolia"
   },
   "keywords": [
     "job",
@@ -47,6 +54,7 @@
     "@types/morgan": "^1.9.9",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.10.5",
+    "@types/xml2js": "^0.4.14",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.56.0",

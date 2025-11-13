@@ -1,0 +1,85 @@
+{
+  "timestamp": 1763013166839,
+  "urls": [
+    {
+      "url": "https://viecoi.vn/job.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/job-expired.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/job-closed.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobsearch.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobsearch_khuvuc1.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobsearch_khuvuc2.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobsearch_Danhmuc1.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobsearch_linhvuc1.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobsearch_linhvuc2.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobsearch_vltn1.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/detail_news.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/search_news.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/cv-search.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/company.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/companyjob.xml",
+      "type": "other",
+      "lastmod": "2024-06-23T19:18:51+01:00"
+    },
+    {
+      "url": "https://viecoi.vn/jobAmp.xml",
+      "type": "other",
+      "lastmod": "2024-07-02T19:18:51+01:00"
+    }
+  ]
+}

@@ -1,22 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { Button } from '@/components/base/Button';
 import { AuthInput } from '@/components/auth/AuthInput';
 import { PasswordInput } from '@/components/auth/PasswordInput';
+import { SocialLogin } from '@/components/auth/SocialLogin';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthValidation } from '@/hooks/auth/useAuthValidation';
 import { useAuthRedirect } from '@/hooks/auth/useAuthRedirect';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const { signIn, loading: authLoading, error: authError, clearError } = useAuth();
+  const { signIn, signInWithGoogle, loading: authLoading, error: authError, clearError } = useAuth();
   const { errors, clearError: clearFieldError, validateLoginForm } = useAuthValidation();
 
   useAuthRedirect();
+
+  // Google Sign-In
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: '519470633273-q02bbr05e436b6udjrnp4m9e13aojetc.apps.googleusercontent.com', // Replace with your Google Client ID
+    //iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // Optional
+    //androidClientId: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com', // Optional
+  });
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      if (id_token) {
+        signInWithGoogle(id_token);
+      }
+    }
+  }, [response]);
 
   const handleLogin = async () => {
     if (!validateLoginForm(email, password)) return;
@@ -74,6 +95,11 @@ export default function LoginScreen() {
         )}
 
         <Button title="Đăng nhập" onPress={handleLogin} loading={authLoading} disabled={authLoading} fullWidth size="large" />
+
+        <SocialLogin 
+          onGooglePress={() => promptAsync()}
+          disabled={authLoading || !request}
+        />
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.footer}>
           <Text style={styles.footerText}>Chưa có tài khoản? </Text>

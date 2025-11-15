@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
+import * as Google from 'expo-auth-session/providers/google';
 type SocialLoginProps = {
   onGooglePress?: () => void;
   onFacebookPress?: () => void;

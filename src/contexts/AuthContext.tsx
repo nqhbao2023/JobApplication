@@ -4,6 +4,8 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile,
+  GoogleAuthProvider,
+  signInWithCredential,
 } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '@/config/firebase';
@@ -16,6 +18,7 @@ type AuthContextType = {
   loading: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: (idToken: string) => Promise<void>;
   signUp: (
     name: string,
     phone: string,
@@ -218,6 +221,60 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   /**
+   * Sign In with Google
+   */
+  const signInWithGoogle = useCallback(
+    async (idToken: string) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Step 1: Create Google credential
+        const credential = GoogleAuthProvider.credential(idToken);
+        
+        // Step 2: Sign in with Firebase
+        const userCredential = await signInWithCredential(auth, credential);
+
+        // Step 3: Verify with backend
+        try {
+          const roleData = await authApiService.getCurrentRole();
+
+          if (!roleData.role) {
+            // Người dùng mới - sync với backend
+            await authApiService.syncUser({
+              uid: userCredential.user.uid,
+              email: userCredential.user.email!,
+              name: userCredential.user.displayName || 'User',
+              phone: '',
+              role: 'candidate', // Mặc định là candidate
+            });
+            await AsyncStorage.setItem('userRole', 'candidate');
+          } else {
+            await AsyncStorage.setItem('userRole', roleData.role);
+          }
+
+          await refreshRole();
+        } catch (apiError: any) {
+          console.error('❌ Backend verification failed:', apiError);
+
+          // Rollback authentication
+          await firebaseSignOut(auth);
+          await AsyncStorage.removeItem('userRole');
+
+          throw new Error('Không thể đồng bộ dữ liệu. Vui lòng thử lại.');
+        }
+      } catch (err: any) {
+        const errorMessage = err?.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.';
+        setError(errorMessage);
+        console.error('❌ Google sign in error:', errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [refreshRole]
+  );
+
+  /**
    * Sign Out
    */
   const signOut = useCallback(async () => {
@@ -241,6 +298,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         error,
         signIn,
+        signInWithGoogle,
         signUp,
         signOut,
         clearError,

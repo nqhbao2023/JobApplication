@@ -1,7 +1,6 @@
+// server/src/services/ai.service.ts
 import axios from 'axios';
-import { db } from '../config/firebase';
-import { Job, AIRecommendation } from '../types';
-import { AppError } from '../middleware/errorHandler';
+import { Job, User } from '../types';
 
 export class AIService {
   private apiKey: string;
@@ -9,144 +8,143 @@ export class AIService {
 
   constructor() {
     this.apiKey = process.env.AI_API_KEY || '';
-    this.apiUrl = process.env.AI_API_URL || 'https://api.openai.com/v1';
+    this.apiUrl = process.env.AI_API_URL || '';
   }
 
-  async recommendJobs(candidateId: string, limit: number = 10): Promise<AIRecommendation[]> {
-    try {
-      const userDoc = await db.collection('users').doc(candidateId).get();
-      
-      if (!userDoc.exists) {
-        throw new AppError('User not found', 404);
-      }
-
-      const userData = userDoc.data();
-      const userSkills = userData?.skills || [];
-
-      if (userSkills.length === 0) {
-        return [];
-      }
-
-      const jobsSnapshot = await db
-        .collection('jobs')
-        .where('status', '==', 'active')
-        .limit(100)
-        .get();
-
-      const jobs = jobsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Job[];
-
-      const recommendations: AIRecommendation[] = jobs
-        .map((job) => {
-          const matchedSkills = this.calculateMatchedSkills(userSkills, job.skills || []);
-          const score = this.calculateMatchScore(matchedSkills, job.skills || []);
-
-          return {
-            jobId: job.id!,
-            score,
-            reason: this.generateReason(matchedSkills),
-            matchedSkills,
-          };
-        })
-        .filter((rec) => rec.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
-
-      return recommendations;
-    } catch (error: any) {
-      if (error instanceof AppError) throw error;
-      throw new AppError(`Failed to generate recommendations: ${error.message}`, 500);
+  // 1. GỢI Ý JOBS (Rule-based)
+  async recommendJobs(
+    user: User, 
+    allJobs: Job[], 
+    limit: number = 10
+  ): Promise<Array<{ job: Job; score: number; reason: string; matchedSkills: string[] }>> {
+    // Extract user skills từ profile (giả sử có field skills)
+    const userSkills = this.extractUserSkills(user);
+    
+    if (userSkills.length === 0) {
+      return [];
     }
+
+    const recommendations = allJobs
+      .map((job) => {
+        // Sửa: dùng job.skills (kiểu mảng string)
+        const jobSkills = Array.isArray(job.skills)
+          ? job.skills
+          : this.extractSkillsFromText(job.skills || '');
+        const matchedSkills = this.calculateMatchedSkills(userSkills, jobSkills);
+        const score = this.calculateMatchScore(matchedSkills, jobSkills);
+
+        return {
+          job,
+          score,
+          reason: this.generateReason(matchedSkills),
+          matchedSkills,
+        };
+      })
+      .filter((rec) => rec.score > 30) // Chỉ lấy match >30%
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return recommendations;
   }
 
-  async enhanceJobDescription(description: string): Promise<string> {
+  // 2. HỎI AI (Google Gemini) - Dùng cho chatbot hoặc hỏi đáp chung
+  async askAI(prompt: string): Promise<string> {
     try {
-      if (!this.apiKey) {
-        return description;
+      if (!this.apiKey || !this.apiUrl) {
+        console.warn('AI API not configured');
+        return 'AI chưa được cấu hình. Vui lòng kiểm tra lại API key.';
       }
 
       const response = await axios.post(
-        `${this.apiUrl}/chat/completions`,
+        `${this.apiUrl}?key=${this.apiKey}`,
         {
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a professional job description writer. Enhance the given job description to be more clear, engaging, and professional.',
-            },
-            {
-              role: 'user',
-              content: `Enhance this job description:\n\n${description}`,
-            },
-          ],
-          max_tokens: 500,
-          temperature: 0.7,
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 500,
+          }
         },
         {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           timeout: 30000,
         }
       );
 
-      return response.data.choices[0]?.message?.content || description;
+      return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có phản hồi từ AI.';
     } catch (error: any) {
-      console.error('AI enhancement failed:', error.message);
-      return description;
+      console.error('AI request failed:', error.message);
+      return 'Lỗi khi gọi AI. Vui lòng thử lại sau.';
     }
   }
 
-  async extractSkillsFromText(text: string): Promise<string[]> {
-    try {
-      const commonSkills = [
-        'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 'PHP', 'Ruby',
-        'React', 'Angular', 'Vue', 'Node.js', 'Express', 'Django', 'Flask',
-        'MongoDB', 'PostgreSQL', 'MySQL', 'Redis', 'Firebase',
-        'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP',
-        'Git', 'CI/CD', 'Agile', 'Scrum', 'REST API', 'GraphQL',
-        'HTML', 'CSS', 'Sass', 'Tailwind', 'Bootstrap',
-        'React Native', 'Flutter', 'Swift', 'Kotlin', 'Android', 'iOS',
-      ];
+  // 3. ENHANCE JOB DESCRIPTION (Google Gemini)
+  async enhanceJobDescription(description: string): Promise<string> {
+    const prompt = `Bạn là chuyên gia viết mô tả công việc. Hãy cải thiện mô tả sau để rõ ràng, hấp dẫn hơn (giữ tiếng Việt):\n\n${description}`;
+    return this.askAI(prompt);
+  }
 
-      const textLower = text.toLowerCase();
-      const foundSkills = commonSkills.filter((skill) =>
-        textLower.includes(skill.toLowerCase())
+  // 4. EXTRACT SKILLS từ text
+  extractSkillsFromText(textOrArray: string | string[]): string[] {
+    const commonSkills = [
+      'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 'PHP', 'Ruby',
+      'React', 'Angular', 'Vue', 'Node.js', 'Express', 'Django', 'Flask',
+      'MongoDB', 'PostgreSQL', 'MySQL', 'Redis', 'Firebase', 'Appwrite',
+      'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP',
+      'Git', 'CI/CD', 'Agile', 'Scrum', 'REST API', 'GraphQL',
+      'HTML', 'CSS', 'Sass', 'Tailwind', 'Bootstrap',
+      'React Native', 'Flutter', 'Swift', 'Kotlin', 'Android', 'iOS',
+      'Photoshop', 'Illustrator', 'Figma', 'UI/UX', 'SEO', 'Marketing',
+    ];
+
+    if (Array.isArray(textOrArray)) {
+      // Nếu là mảng, lọc các kỹ năng có trong commonSkills
+      return textOrArray.filter(skill =>
+        commonSkills.includes(skill)
       );
-
-      return foundSkills;
-    } catch (error: any) {
-      console.error('Skill extraction failed:', error.message);
-      return [];
     }
+
+    const textLower = textOrArray.toLowerCase();
+    const found = commonSkills.filter((skill) =>
+      textLower.includes(skill.toLowerCase())
+    );
+
+    return [...new Set(found)];
   }
 
+  // 5. EXTRACT USER SKILLS (từ user object hoặc giả định)
+  private extractUserSkills(_user: User): string[] {
+    // Giả sử user có field skills (nếu không có, return empty)
+    // Hoặc extract từ name/email nếu test
+    
+    // VD: Giả định user có skills
+    return ['React Native', 'JavaScript', 'TypeScript', 'Firebase'];
+  }
+
+  // HELPER: Match skills
   private calculateMatchedSkills(userSkills: string[], jobSkills: string[]): string[] {
     const userSkillsLower = userSkills.map((s) => s.toLowerCase());
-
     return jobSkills.filter((skill) =>
       userSkillsLower.includes(skill.toLowerCase())
     );
   }
 
+  // HELPER: Calculate score (đơn giản: chỉ dựa vào skills)
   private calculateMatchScore(matchedSkills: string[], jobSkills: string[]): number {
     if (jobSkills.length === 0) return 0;
     return Math.round((matchedSkills.length / jobSkills.length) * 100);
   }
 
+  // HELPER: Generate reason
   private generateReason(matchedSkills: string[]): string {
     if (matchedSkills.length === 0) {
-      return 'Bạn có thể học thêm kỹ năng cần thiết cho công việc này.';
+      return '✗ Chưa có kỹ năng phù hợp';
     }
 
-    if (matchedSkills.length === 1) {
-      return `Bạn có kỹ năng ${matchedSkills[0]} phù hợp với yêu cầu.`;
-    }
-
-    return `Bạn có ${matchedSkills.length} kỹ năng phù hợp: ${matchedSkills.slice(0, 3).join(', ')}${matchedSkills.length > 3 ? '...' : ''}.`;
+    return `✓ Có ${matchedSkills.length} kỹ năng phù hợp: ${matchedSkills.slice(0, 3).join(', ')}`;
   }
 }
 

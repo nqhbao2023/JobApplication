@@ -85,7 +85,7 @@ export const useCandidateHome = () => {
       
       // Debug: Check image URLs
       console.log('🖼️ First job image:', sortedJobs[0]?.image);
-      console.log('🖼️ Sample job data:', JSON.stringify(sortedJobs[0], null, 2));
+      //console.log('🖼️ Sample job data:', JSON.stringify(sortedJobs[0], null, 2));
       
       setDataJob(sortedJobs);
     } catch (e: any) {
@@ -115,7 +115,7 @@ export const useCandidateHome = () => {
       
       // Debug: Check image URLs
       console.log('🖼️ First company image:', normalizedCompanies[0]?.image);
-      console.log('🖼️ Sample company data:', JSON.stringify(normalizedCompanies[0], null, 2));
+      //console.log('🖼️ Sample company data:', JSON.stringify(normalizedCompanies[0], null, 2));
       
       setDataCompany(normalizedCompanies);
     } catch (e: any) {

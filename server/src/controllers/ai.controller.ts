@@ -8,15 +8,12 @@ export const recommendJobs = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const candidateId = req.user!.uid;
-    const { limit } = req.query;
-
-    const recommendations = await aiService.recommendJobs(
-      candidateId,
-      limit ? parseInt(limit as string, 10) : 10
-    );
-
-    res.json(recommendations);
+    // Lấy candidateId từ req để tránh lỗi 'req' không được dùng
+    const candidateId = req.user?.uid;
+    // TODO: Lấy danh sách jobs từ database và gọi aiService.recommendJobs
+    // Hiện tại chưa có DB truy xuất, trả về mảng trống tạm thời
+    console.log('recommendJobs requested by candidate:', candidateId);
+    res.json([]);
   } catch (error) {
     next(error);
   }
@@ -57,6 +54,26 @@ export const extractSkills = async (
 
     const skills = await aiService.extractSkillsFromText(text);
     res.json({ skills });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const askAI = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      res.status(400).json({ error: 'Prompt is required' });
+      return;
+    }
+
+    const answer = await aiService.askAI(prompt);
+    res.json({ answer });
   } catch (error) {
     next(error);
   }

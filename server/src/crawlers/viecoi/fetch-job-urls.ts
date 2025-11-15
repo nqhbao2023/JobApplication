@@ -1,8 +1,8 @@
 /**
- * Sitemap Index Handler for Viecoi.vn
- * Crawl sitemap index → sub-sitemaps → job URLs
+ * Trình xử lý Sitemap Index cho Viecoi.vn
+ * Quét sitemap index → các sitemap con → lấy danh sách URL công việc
  * 
- * Run: ts-node server/src/crawlers/viecoi/fetch-job-urls.ts
+ * Chạy: ts-node server/src/crawlers/viecoi/fetch-job-urls.ts
  */
 
 import axios from 'axios';
@@ -14,7 +14,7 @@ interface JobURL {
 }
 
 /**
- * Fetch và parse XML sitemap
+ * Hàm lấy và phân tích dữ liệu XML từ sitemap
  */
 async function fetchXML(url: string): Promise<any> {
   console.log(`🌐 Fetching: ${url}`);
@@ -31,18 +31,18 @@ async function fetchXML(url: string): Promise<any> {
 }
 
 /**
- * Extract job URLs from sitemap
+ * Hàm lấy danh sách URL công việc từ sitemap
  */
 function extractJobURLs(sitemapData: any): JobURL[] {
   const urls: JobURL[] = [];
   
-  // Check if it's a urlset (contains actual URLs)
+  // Kiểm tra xem có phải là urlset (chứa các URL công việc thực tế không)
   if (sitemapData.urlset && sitemapData.urlset.url) {
     for (const urlEntry of sitemapData.urlset.url) {
       const loc = urlEntry.loc[0];
       const lastmod = urlEntry.lastmod ? urlEntry.lastmod[0] : undefined;
       
-      // Only job URLs (/viec-lam/*.html)
+      // Chỉ lấy các URL công việc (/viec-lam/*.html)
       if (/\/viec-lam\/.*\.html$/i.test(loc)) {
         urls.push({ url: loc, lastmod });
       }
@@ -53,18 +53,18 @@ function extractJobURLs(sitemapData: any): JobURL[] {
 }
 
 /**
- * Main function: Fetch job URLs from viecoi.vn
+ * Hàm chính: Lấy danh sách URL công việc từ viecoi.vn
  */
 export async function fetchJobURLs(limit?: number): Promise<JobURL[]> {
   console.log('🚀 Starting job URL fetch from viecoi.vn...\n');
 
   try {
-    // Fetch main sitemap index
+    // Lấy sitemap index chính
     const mainSitemapURL = 'https://viecoi.vn/sitemap.xml';
     const mainSitemap = await fetchXML(mainSitemapURL);
     
-    // Find job sitemap URL
-    let jobSitemapURL = 'https://viecoi.vn/job.xml'; // Default
+    // Tìm URL sitemap chứa công việc
+    let jobSitemapURL = 'https://viecoi.vn/job.xml'; // Mặc định
     
     if (mainSitemap.sitemapindex && mainSitemap.sitemapindex.sitemap) {
       for (const sitemap of mainSitemap.sitemapindex.sitemap) {
@@ -78,15 +78,15 @@ export async function fetchJobURLs(limit?: number): Promise<JobURL[]> {
     
     console.log(`📄 Job sitemap URL: ${jobSitemapURL}\n`);
     
-    // Fetch job sitemap
+    // Lấy sitemap công việc
     const jobSitemap = await fetchXML(jobSitemapURL);
     
-    // Extract job URLs
+    // Lấy danh sách URL công việc
     let jobURLs = extractJobURLs(jobSitemap);
     
     console.log(`✅ Found ${jobURLs.length} job URLs\n`);
     
-    // Apply limit if specified
+    // Giới hạn số lượng URL nếu có truyền tham số limit
     if (limit && limit < jobURLs.length) {
       jobURLs = jobURLs.slice(0, limit);
       console.log(`⚠️  Limited to ${limit} URLs\n`);
@@ -100,7 +100,7 @@ export async function fetchJobURLs(limit?: number): Promise<JobURL[]> {
 }
 
 /**
- * CLI runner
+ * Chạy trực tiếp bằng dòng lệnh (CLI)
  */
 if (require.main === module) {
   (async () => {

@@ -1,10 +1,8 @@
 name: Daily Job Crawler
-
 on:
   schedule:
-    # Run every day at 2 AM UTC (9 AM Vietnam time)
-    - cron: '0 2 * * *'
-  workflow_dispatch: # Allow manual trigger
+    - cron: '0 2 */3 * *'
+  workflow_dispatch:
 
 jobs:
   crawl-viecoi:

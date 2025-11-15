@@ -150,6 +150,16 @@ const CandidateHome = () => {
               style={styles.iconButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(shared)/quickPost');
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 resetUnreadCount();
                 router.push('/(shared)/Notifications');
               }}

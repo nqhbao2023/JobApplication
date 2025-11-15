@@ -15,6 +15,7 @@ import companyRoutes from './routes/company.routes';
 import categoryRoutes from './routes/category.routes';
 import notificationRoutes from './routes/notification.routes';
 import userRoutes from './routes/user.routes';
+import quickPostRoutes from './routes/quickpost.routes'; // ✅ NEW
 dotenv.config();
 
 const app = express();
@@ -60,6 +61,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/quick-posts', quickPostRoutes); // ✅ NEW: Quick Post Jobs
 app.use('/api/ai', aiRoutes);
 app.use('/api/news', newsRoutes);
 app.use('/api/applications', applicationRoutes);

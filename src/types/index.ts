@@ -41,6 +41,20 @@ export interface Job {
   ownerId?: string;     // ✅ Legacy field support (some jobs might use this)
   applicantCount?: number;
   viewCount?: number;
+  
+  // ✅ NEW PLAN: Job Aggregator Fields
+  jobSource?: 'crawled' | 'quick-post' | 'featured';
+  sourceUrl?: string; // URL gốc nếu crawled
+  contactInfo?: {
+    phone?: string;
+    zalo?: string;
+    facebook?: string;
+    email?: string;
+  };
+  isVerified?: boolean;
+  isFeatured?: boolean;
+  workSchedule?: string;
+  hourlyRate?: number;
 }
 
 // Enhanced Company type

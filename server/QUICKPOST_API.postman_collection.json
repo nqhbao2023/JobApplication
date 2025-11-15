@@ -1,0 +1,117 @@
+{
+  "info": {
+    "name": "Job4S - Quick Post API",
+    "description": "Testing Quick Post Jobs workflow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Quick Posts",
+      "item": [
+        {
+          "name": "Create Quick Post (No Auth)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/quick-posts",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Phục vụ quán cafe gần TDMU\",\n  \"description\": \"Tuyển sinh viên làm part-time phục vụ quán cafe. Làm việc nhẹ nhàng, thân thiện. Lương theo giờ 25k.\",\n  \"company\": \"Cafe Highlands\",\n  \"location\": \"Bình Dương, gần Đại học Thủ Dầu Một\",\n  \"workSchedule\": \"Thứ 2, 4, 6 tối (6h-9h)\",\n  \"hourlyRate\": 25000,\n  \"type\": \"part-time\",\n  \"category\": \"Dịch vụ\",\n  \"contactInfo\": {\n    \"phone\": \"0909123456\",\n    \"zalo\": \"0909123456\"\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Pending Quick Posts (Admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/quick-posts/pending",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Quick Post (Admin)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/quick-posts/{{jobId}}/approve",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ]
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Quick Post (Admin)",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/quick-posts/{{jobId}}/reject",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Thông tin không đầy đủ\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Get All Jobs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/jobs"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/jobs/{{jobId}}"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "adminToken",
+      "value": "YOUR_ADMIN_FIREBASE_TOKEN"
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    }
+  ]
+}

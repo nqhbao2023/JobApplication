@@ -25,12 +25,24 @@ export const normalizeJob = (job: any): Job => {
     imageUrl = PLACEHOLDER_JOB_IMG;
   }
   
+  // ✅ Ensure employerId exists (required for New Plan)
+  const employerId = job.employerId || job.ownerId || job.users?.id || job.users?.$id || 'unknown-employer';
+  
   return {
     ...job,
     $id: jobId,
     image: imageUrl,
     created_at: job.created_at || job.createdAt || new Date().toISOString(),
     salary: normalizeSalary(job.salary),
+    employerId, // ✅ Always provide employerId
+    // ✅ NEW PLAN fields (preserve if exist)
+    jobSource: job.jobSource || 'featured', // Default to featured for legacy jobs
+    sourceUrl: job.sourceUrl,
+    contactInfo: job.contactInfo,
+    isVerified: job.isVerified,
+    isFeatured: job.isFeatured,
+    workSchedule: job.workSchedule,
+    hourlyRate: job.hourlyRate,
   };
 };
 

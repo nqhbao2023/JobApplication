@@ -29,7 +29,7 @@ export interface Job {
   type: 'full-time' | 'part-time' | 'contract' | 'internship';
   category: string;
   status: 'active' | 'inactive' | 'closed';
-  image?: string; // ✅ Add image field
+  image?: string;
   employerId: string;
   ownerId?: string;
   applicantCount?: number;
@@ -39,6 +39,20 @@ export interface Job {
   createdAt: any;
   updatedAt: any;
   expiresAt?: any;
+  
+  // ✅ NEW PLAN: Job Aggregator Fields
+  jobSource: 'crawled' | 'quick-post' | 'featured'; // Nguồn job
+  sourceUrl?: string; // URL gốc nếu crawled
+  contactInfo?: {
+    phone?: string;
+    zalo?: string;
+    facebook?: string;
+    email?: string;
+  }; // Contact cho quick-post và featured
+  isVerified?: boolean; // Admin đã duyệt chưa (cho quick-post)
+  isFeatured?: boolean; // Featured job (trả phí)
+  workSchedule?: string; // VD: "Thứ 2,4,6 tối", "Cuối tuần"
+  hourlyRate?: number; // Lương theo giờ (cho part-time)
 }
 
 export interface Application {

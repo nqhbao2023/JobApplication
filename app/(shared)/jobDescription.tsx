@@ -21,6 +21,7 @@ import { useJobDescription } from "@/hooks/useJobDescription";
 import { useJobStatus } from "@/hooks/useJobStatus";
 import { smartBack } from "@/utils/navigation";
 import ContactEmployerButton from "@/components/ContactEmployerButton";
+import JobApplySection from "@/components/JobApplySection";
 import * as Haptics from "expo-haptics";
 import { formatSalary } from "@/utils/salary.utils";
 import { Job } from "@/types";
@@ -251,6 +252,12 @@ const JobDescription = () => {
               </View>
             )}
 
+            {/* ✅ New: Apply Section with 3 workflows */}
+            <JobApplySection
+              job={jobData as Job}
+              onApplyFeatured={handleApply}
+            />
+
             {/* Lưu tin */}
             <TouchableOpacity
               style={styles.saveBtn}
@@ -266,48 +273,6 @@ const JobDescription = () => {
                 color={isSaved ? "#F97459" : "#999"}
               />
             </TouchableOpacity>
-
-            {/* Nút Ứng tuyển / Hủy ứng tuyển */}
-            {applyLoading ? (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.disabledBtn]}
-                disabled
-              >
-                <ActivityIndicator size="small" color="#F97459" />
-              </TouchableOpacity>
-            ) : isApplied ? (
-              // ✅ Chỉ hiện nút hủy nếu canWithdraw = true
-              canWithdraw ? (
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.cancelBtn]}
-                  onPress={handleCancel}
-                >
-                  <Text style={styles.actionText}>Hủy ứng tuyển</Text>
-                </TouchableOpacity>
-              ) : (
-                // ✅ Hiện message nếu không thể hủy
-                <View style={[styles.actionBtn, styles.disabledBtn]}>
-                  <Text style={[styles.actionText, { color: '#999' }]}>
-                    {applicationStatus === 'accepted' ? 'Đã được chấp nhận' : 
-                     applicationStatus === 'rejected' ? 'Đã bị từ chối' : 'Không thể hủy'}
-                  </Text>
-                </View>
-              )
-            ) : hasDraft ? (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.applyBtn]}
-                onPress={handleApply}
-              >
-                <Text style={styles.actionText}>Tiếp tục nộp</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.applyBtn]}
-                onPress={handleApply}
-              >
-                <Text style={styles.actionText}>Ứng tuyển ngay</Text>
-              </TouchableOpacity>
-            )}
 
             {/* Liên hệ nhà tuyển dụng - ✅ Fixed: Truyền đúng params */}
             {((jobData as Job)?.employerId || (jobData as Job)?.ownerId) && (

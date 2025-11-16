@@ -6,9 +6,28 @@ export const SCROLL_THRESHOLD = 80;
 export const CARD_GAP = 14;
 export const HORIZONTAL_PADDING = 20;
 
-// ✅ Import and re-export Job type from @/types to avoid duplication
-import type { Job } from '@/types';
-export type { Job } from '@/types';
+// ✅ Import Job type from root types folder
+import type { Job as BaseJob } from '../../types/type';
+
+// ✅ Extend Job type with new fields for external jobs
+export type Job = BaseJob & {
+  source?: 'viecoi' | 'internal' | 'quick-post';
+  external_url?: string;
+  is_verified?: boolean;
+  jobSource?: 'crawled' | 'quick-post' | 'featured';
+  contactInfo?: {
+    phone?: string;
+    zalo?: string;
+    facebook?: string;
+    email?: string;
+  };
+  workSchedule?: string;
+  hourlyRate?: number;
+  location?: string;
+  sourceUrl?: string;
+  isFeatured?: boolean;
+  type?: string;
+};
 
 export type Company = {
   $id: string;

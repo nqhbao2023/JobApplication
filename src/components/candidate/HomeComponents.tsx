@@ -155,6 +155,17 @@ export const JobCard = memo(({
       contentFit="cover"
       transition={200}
     />
+    {/* Badge for external jobs */}
+    {item.source === 'viecoi' && (
+      <View style={styles.externalBadge}>
+        <Text style={styles.externalBadgeText}>📱 viecoi.vn</Text>
+      </View>
+    )}
+    {item.jobSource === 'quick-post' && (
+      <View style={styles.quickPostBadge}>
+        <Text style={styles.quickPostBadgeText}>⚡ Quick Post</Text>
+      </View>
+    )}
     <View style={styles.jobTextContainer}>
       <Text style={styles.jobTitle} numberOfLines={2}>
         {item.title || 'Chưa có tiêu đề'}
@@ -362,6 +373,37 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     marginBottom: 12,
+    position: 'relative',
+  },
+  externalBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  externalBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  quickPostBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  quickPostBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   jobImage: {
     height: 72,

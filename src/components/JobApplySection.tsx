@@ -9,8 +9,19 @@ interface JobApplySectionProps {
 }
 
 const JobApplySection: React.FC<JobApplySectionProps> = ({ job, onApplyFeatured }) => {
-  // Default to 'featured' if jobSource is not set (legacy jobs)
-  const jobSource = job.jobSource || 'featured';
+  // Map 'source' field to 'jobSource' for backward compatibility
+  // source='viecoi' -> jobSource='crawled'
+  // source='quick-post' -> jobSource='quick-post'  
+  // otherwise use jobSource field or default to 'featured'
+  let jobSource: 'crawled' | 'quick-post' | 'featured' = 'featured';
+  
+  if (job.source === 'viecoi') {
+    jobSource = 'crawled';
+  } else if (job.source === 'quick-post' || job.jobSource === 'quick-post') {
+    jobSource = 'quick-post';
+  } else if (job.jobSource) {
+    jobSource = job.jobSource;
+  }
 
   return (
     <View style={styles.container}>
@@ -18,7 +29,7 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({ job, onApplyFeatured 
       <View style={styles.badgeContainer}>
         {jobSource === 'crawled' && (
           <View style={[styles.badge, styles.crawledBadge]}>
-            <Text style={styles.badgeText}>📱 Từ {job.sourceUrl ? new URL(job.sourceUrl).hostname : 'web'}</Text>
+            <Text style={styles.badgeText}>📱 Từ viecoi.vn</Text>
           </View>
         )}
         {jobSource === 'quick-post' && (
@@ -52,7 +63,7 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({ job, onApplyFeatured 
       {/* Apply Button */}
       <ApplyButton
         jobSource={jobSource}
-        sourceUrl={job.sourceUrl}
+        sourceUrl={job.external_url || job.sourceUrl}
         contactInfo={job.contactInfo}
         onApplyFeatured={onApplyFeatured}
       />

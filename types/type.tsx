@@ -14,6 +14,24 @@ export interface Job {
     users: User;
     job_Description: string;
     company: Company;
+    
+    // External jobs fields (from crawler)
+    source?: 'viecoi' | 'internal' | 'quick-post';
+    external_url?: string;
+    is_verified?: boolean;
+    
+    // Quick post fields
+    jobSource?: 'crawled' | 'quick-post' | 'featured';
+    contactInfo?: {
+      phone?: string;
+      zalo?: string;
+      facebook?: string;
+      email?: string;
+    };
+    workSchedule?: string;
+    hourlyRate?: number;
+    isFeatured?: boolean;
+    location?: string;
   }
   
   export interface JobType {

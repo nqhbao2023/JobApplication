@@ -40,13 +40,24 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
     }
 
     Alert.alert(
-      'Ứng tuyển công việc',
-      'Công việc này từ nguồn bên ngoài. Bạn sẽ được chuyển đến trang gốc để ứng tuyển.',
+      '📱 Công việc từ viecoi.vn',
+      'Bạn có muốn:',
       [
         { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Xem chi tiết',
-          onPress: () => Linking.openURL(sourceUrl),
+          text: 'Xem chi tiết trên web',
+          onPress: () => {
+            Linking.openURL(sourceUrl).catch(() => {
+              Alert.alert('Lỗi', 'Không thể mở link');
+            });
+          },
+        },
+        {
+          text: 'Lưu công việc',
+          onPress: () => {
+            Alert.alert('Thông báo', 'Đã lưu công việc vào danh sách yêu thích');
+            // TODO: Implement save job logic
+          },
         },
       ]
     );

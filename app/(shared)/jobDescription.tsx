@@ -253,6 +253,13 @@ const JobDescription = () => {
             )}
 
             {/* ✅ New: Apply Section with 3 workflows */}
+            {/* Debug: Log job data */}
+            {__DEV__ && console.log('🔍 Job data in JobDescription:', {
+              source: (jobData as Job)?.source,
+              external_url: (jobData as Job)?.external_url,
+              jobSource: (jobData as Job)?.jobSource,
+              title: (jobData as Job)?.title
+            })}
             <JobApplySection
               job={jobData as Job}
               onApplyFeatured={handleApply}

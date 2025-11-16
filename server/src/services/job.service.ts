@@ -52,6 +52,13 @@ function mapDocToJob(doc: FirebaseFirestore.DocumentSnapshot): Job {
     createdAt: data.createdAt || new Date(),
     updatedAt: data.updatedAt || new Date(),
     expiresAt: data.expiresAt,
+    // ✅ NEW PLAN: External job fields
+    source: data.source,
+    external_url: data.external_url,
+    is_verified: data.is_verified,
+    contactInfo: data.contactInfo,
+    workSchedule: data.workSchedule,
+    hourlyRate: data.hourlyRate,
   } as Job;
 }
 

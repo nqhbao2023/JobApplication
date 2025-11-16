@@ -41,15 +41,18 @@ export interface Job {
   expiresAt?: any;
   
   // ✅ NEW PLAN: Job Aggregator Fields
-  jobSource: 'crawled' | 'quick-post' | 'featured'; // Nguồn job
-  sourceUrl?: string; // URL gốc nếu crawled
+  source?: 'viecoi' | 'internal' | 'quick-post'; // Source from crawler (viecoi, internal, quick-post)
+  external_url?: string; // External URL from crawler (snake_case to match Firestore)
+  is_verified?: boolean; // Verified status from Firestore (snake_case)
+  jobSource?: 'crawled' | 'quick-post' | 'featured'; // Legacy: Nguồn job
+  sourceUrl?: string; // Legacy: URL gốc nếu crawled
   contactInfo?: {
     phone?: string;
     zalo?: string;
     facebook?: string;
     email?: string;
   }; // Contact cho quick-post và featured
-  isVerified?: boolean; // Admin đã duyệt chưa (cho quick-post)
+  isVerified?: boolean; // Camel case version: Admin đã duyệt chưa (cho quick-post)
   isFeatured?: boolean; // Featured job (trả phí)
   workSchedule?: string; // VD: "Thứ 2,4,6 tối", "Cuối tuần"
   hourlyRate?: number; // Lương theo giờ (cho part-time)

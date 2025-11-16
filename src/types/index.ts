@@ -42,16 +42,27 @@ export interface Job {
   applicantCount?: number;
   viewCount?: number;
   
+  // ✅ Legacy fields from types/type.tsx (for backward compatibility)
+  skills_required?: string;
+  responsibilities?: string;
+  updated_at?: string;
+  jobTypes?: any;
+  users?: any;
+  job_Description?: string;
+  
   // ✅ NEW PLAN: Job Aggregator Fields
-  jobSource?: 'crawled' | 'quick-post' | 'featured';
-  sourceUrl?: string; // URL gốc nếu crawled
+  source?: 'viecoi' | 'internal' | 'quick-post'; // Source of the job (viecoi crawler, internal posting, or quick-post)
+  external_url?: string; // Original URL if crawled from external source
+  jobSource?: 'crawled' | 'quick-post' | 'featured'; // Legacy/alternative field for job source type
+  sourceUrl?: string; // Legacy/alternative field for URL gốc nếu crawled
   contactInfo?: {
     phone?: string;
     zalo?: string;
     facebook?: string;
     email?: string;
   };
-  isVerified?: boolean;
+  is_verified?: boolean; // Snake case to match Firestore
+  isVerified?: boolean; // Camel case for frontend
   isFeatured?: boolean;
   workSchedule?: string;
   hourlyRate?: number;

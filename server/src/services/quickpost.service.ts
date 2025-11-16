@@ -41,13 +41,19 @@ class QuickPostService {
    * Get all pending quick posts
    */
   async getPendingQuickPosts(): Promise<Job[]> {
+    // Simplified query to avoid index requirement
     const snapshot = await this.jobsCollection
       .where('jobSource', '==', 'quick-post')
-      .where('isVerified', '==', false)
-      .orderBy('createdAt', 'desc')
+      .where('status', '==', 'inactive') // Use status instead of isVerified
       .get();
 
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Job));
+    // Sort in memory
+    const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Job));
+    return jobs.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(0);
+      const bTime = b.createdAt?.toDate?.() || new Date(0);
+      return bTime.getTime() - aTime.getTime();
+    });
   }
 
   /**

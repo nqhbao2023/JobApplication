@@ -17,6 +17,7 @@ const AdminDashboard = () => {
   const adminCards: AdminCard[] = [
     { title: 'Users', icon: 'people-outline', route: '/(admin)/users', color: '#3b82f6' },
     { title: 'Jobs', icon: 'briefcase-outline', route: '/(admin)/jobs', color: '#10b981' },
+    { title: 'Quick Posts', icon: 'flash-outline', route: '/(admin)/quick-posts-pending', color: '#f97316' },
     { title: 'Companies', icon: 'business-outline', route: '/(admin)/companies', color: '#f59e0b' },
     { title: 'Job_Types', icon: 'layers-outline', route: '/(admin)/job-types', color: '#8b5cf6' },
     { title: 'Categories', icon: 'apps-outline', route: '/(admin)/job-categories', color: '#ec4899' },

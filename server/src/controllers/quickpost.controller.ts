@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import quickPostService from '../services/quickpost.service';
+import { checkForSpam, extractMetadata } from '../utils/spamDetection';
 
 /**
  * Quick Post Job - Không cần authentication
@@ -12,11 +13,33 @@ export const createQuickPostJob = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    const { title, description, contactInfo } = req.body;
+
+    // ✅ Spam detection
+    const spamCheck = checkForSpam({ title, description, contactInfo });
+    
+    // ✅ Extract metadata for tracking
+    const metadata = extractMetadata(req);
+
+    // ✅ Auto-reject if spam score too high
+    if (spamCheck.isSpam) {
+      console.warn(`🚨 Spam detected (score: ${spamCheck.score}): ${spamCheck.reason}`);
+      console.warn(`📍 Metadata:`, metadata);
+      
+      res.status(400).json({
+        error: 'Your submission appears to be spam and has been rejected.',
+        reason: spamCheck.reason,
+      });
+      return;
+    }
+
     const jobData = {
       ...req.body,
       jobSource: 'quick-post',
       isVerified: false, // Admin phải duyệt
       status: 'pending',
+      metadata, // Lưu metadata để admin review
+      spamScore: spamCheck.score, // Lưu spam score
     };
 
     const job = await quickPostService.createQuickPost(jobData);

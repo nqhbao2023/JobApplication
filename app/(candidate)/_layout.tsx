@@ -12,38 +12,33 @@ export default function CandidateLayout() {
         tabBarStyle: {
           backgroundColor: "#fff",
           borderTopColor: "#eee",
-          height: 65,
-          paddingBottom: 6,
-          paddingTop: 4,
+          height: 60,
+          paddingBottom: 5,
+          paddingTop: 5,
           elevation: 3,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 10,
           fontWeight: "500",
-          textAlign: "center",
-          flexWrap: "wrap",
-          minWidth: 60,
+          marginTop: 2,
         },
-        tabBarItemStyle: {
-          borderRadius: 16,
-          marginHorizontal: 3,
-          paddingHorizontal: 2,
-          minWidth: 70,
+        tabBarIconStyle: {
+          marginBottom: -2,
         },
         // ✨ Hiệu ứng nền nhẹ cho tab đang chọn
-        tabBarActiveBackgroundColor: "#E8F1FF",
+        tabBarActiveBackgroundColor: "transparent",
       }}
     >
       {/* 🏠 Trang chủ */}
       <Tabs.Screen
         name="index"
         options={{
-          title: "Trang chủ",
+          title: "Tìm việc",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? "home" : "home-outline"}
+              name={focused ? "search" : "search-outline"}
               color={color}
-              size={22}
+              size={24}
             />
           ),
         }}
@@ -58,7 +53,7 @@ export default function CandidateLayout() {
             <Ionicons
               name={focused ? "bookmark" : "bookmark-outline"}
               color={color}
-              size={22}
+              size={24}
             />
           ),
         }}
@@ -68,12 +63,12 @@ export default function CandidateLayout() {
       <Tabs.Screen
         name="appliedJob"
         options={{
-          title: "Ứng tuyển",
+          title: "Hồ sơ UV",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "document-text" : "document-text-outline"}
               color={color}
-              size={22}
+              size={24}
             />
           ),
         }}
@@ -83,12 +78,12 @@ export default function CandidateLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: "Chat",
+          title: "Tin nhắn",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "chatbubbles" : "chatbubbles-outline"}
               color={color}
-              size={22}
+              size={24}
             />
           ),
         }}
@@ -98,14 +93,12 @@ export default function CandidateLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Hồ sơ",
+          title: "Cá nhân",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={
-                focused ? "person-circle" : "person-circle-outline"
-              }
+              name={focused ? "person" : "person-outline"}
               color={color}
-              size={22}
+              size={24}
             />
           ),
         }}

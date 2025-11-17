@@ -16,6 +16,7 @@ import DropDownPicker from 'react-native-dropdown-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAddJobForm } from '@/hooks/addJob/useAddJobForm';
 import { SectionCard, AITemplateModal } from '@/components/employer/AddJobSections';
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 
 const AddJob = () => {
   const scrollRef = useRef<ScrollView>(null);
@@ -507,7 +508,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-  scrollContent: { padding: 16 },
+  scrollContent: { padding: 16, paddingBottom: SCROLL_BOTTOM_PADDING },
   input: {
     borderWidth: 1,
     borderColor: '#e0e0e0',

@@ -18,10 +18,11 @@ interface ContactInfo {
 }
 
 interface ApplyButtonProps {
-  jobSource: 'crawled' | 'quick-post' | 'featured';
+  jobSource: 'crawled' | 'quick-post' | 'featured' | 'internal';
   sourceUrl?: string;
   contactInfo?: ContactInfo;
   onApplyFeatured?: () => void; // Callback để gửi CV
+  compact?: boolean; // Compact mode for bottom bar
 }
 
 const ApplyButton: React.FC<ApplyButtonProps> = ({
@@ -29,6 +30,7 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
   sourceUrl,
   contactInfo,
   onApplyFeatured,
+  compact = false,
 }) => {
   /**
    * Type 1: Crawled Jobs - Redirect to source
@@ -40,23 +42,16 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
     }
 
     Alert.alert(
-      '📱 Công việc từ viecoi.vn',
-      'Bạn có muốn:',
+      'Ứng tuyển công việc',
+      'Bạn sẽ được chuyển đến trang nguồn để ứng tuyển',
       [
         { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Xem chi tiết trên web',
+          text: 'Tiếp tục',
           onPress: () => {
             Linking.openURL(sourceUrl).catch(() => {
               Alert.alert('Lỗi', 'Không thể mở link');
             });
-          },
-        },
-        {
-          text: 'Lưu công việc',
-          onPress: () => {
-            Alert.alert('Thông báo', 'Đã lưu công việc vào danh sách yêu thích');
-            // TODO: Implement save job logic
           },
         },
       ]
@@ -124,34 +119,39 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
   };
 
   const renderButton = () => {
+    const buttonStyle = compact ? styles.compactButton : styles.button;
+    const iconSize = compact ? 18 : 20;
+    const textStyle = compact ? styles.compactButtonText : styles.buttonText;
+
     switch (jobSource) {
       case 'crawled':
         return (
-          <TouchableOpacity style={styles.button} onPress={handleCrawledJobApply}>
-            <Ionicons name="open-outline" size={20} color="#fff" />
-            <Text style={styles.buttonText}>Xem chi tiết trên web</Text>
+          <TouchableOpacity style={buttonStyle} onPress={handleCrawledJobApply}>
+            <Ionicons name="open-outline" size={iconSize} color="#fff" />
+            <Text style={textStyle}>Xem chi tiết trên web</Text>
           </TouchableOpacity>
         );
 
       case 'quick-post':
         return (
           <TouchableOpacity
-            style={[styles.button, styles.quickPostButton]}
+            style={[buttonStyle, styles.quickPostButton]}
             onPress={handleQuickPostApply}
           >
-            <Ionicons name="call-outline" size={20} color="#fff" />
-            <Text style={styles.buttonText}>Liên hệ ngay</Text>
+            <Ionicons name="call-outline" size={iconSize} color="#fff" />
+            <Text style={textStyle}>Liên hệ ngay</Text>
           </TouchableOpacity>
         );
 
       case 'featured':
+      case 'internal':
         return (
           <TouchableOpacity
-            style={[styles.button, styles.featuredButton]}
+            style={[buttonStyle, styles.featuredButton]}
             onPress={handleFeaturedJobApply}
           >
-            <Ionicons name="send-outline" size={20} color="#fff" />
-            <Text style={styles.buttonText}>Gửi CV ứng tuyển</Text>
+            <Ionicons name="send-outline" size={iconSize} color="#fff" />
+            <Text style={textStyle}>Gửi CV ứng tuyển</Text>
           </TouchableOpacity>
         );
 
@@ -165,7 +165,7 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 16,
+    flex: 1,
   },
   button: {
     backgroundColor: '#007AFF',
@@ -176,6 +176,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
   },
+  compactButton: {
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 6,
+    flex: 1,
+  },
   quickPostButton: {
     backgroundColor: '#34C759',
   },
@@ -185,6 +196,11 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  compactButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

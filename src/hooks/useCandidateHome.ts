@@ -75,21 +75,14 @@ export const useCandidateHome = () => {
   }, [userId]);
 
   const load_data_job = useCallback(async () => {
-    console.log('🔵 load_data_job START');
     try {
       const response = await jobApiService.getAllJobs({ limit: 30 });
-      console.log('🟢 load_data_job SUCCESS:', response.jobs.length, 'jobs');
-      
       const normalizedJobs = response.jobs.map(normalizeJob);
       const sortedJobs = sortJobsByDate(normalizedJobs);
-      
-      // Debug: Check image URLs
-      console.log('🖼️ First job image:', sortedJobs[0]?.image);
-      //console.log('🖼️ Sample job data:', JSON.stringify(sortedJobs[0], null, 2));
-      
       setDataJob(sortedJobs);
+      if (__DEV__) console.log('[Tải công việc] Đã tải', response.jobs.length, 'công việc');
     } catch (e: any) {
-      console.error('🔴 load_data_job ERROR:', e.message);
+      console.error('[Lỗi] Không thể tải công việc:', e.message);
       const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách việc làm';
       setError(errorMessage);
       handleApiError(e, 'generic', { silent: true });
@@ -97,10 +90,8 @@ export const useCandidateHome = () => {
   }, []);
 
   const load_data_company = useCallback(async () => {
-    console.log('🔵 load_data_company START');
     try {
       const companies = await companyApiService.getAllCompanies(12);
-      console.log('🟢 load_data_company SUCCESS:', companies.length, 'companies');
       
       // ✅ Normalize company image URLs
       const normalizedCompanies = companies.map(company => {
@@ -113,13 +104,10 @@ export const useCandidateHome = () => {
         return { ...company, image: imageUrl };
       });
       
-      // Debug: Check image URLs
-      console.log('🖼️ First company image:', normalizedCompanies[0]?.image);
-      //console.log('🖼️ Sample company data:', JSON.stringify(normalizedCompanies[0], null, 2));
-      
       setDataCompany(normalizedCompanies);
+      if (__DEV__) console.log('[Tải công ty] Đã tải', companies.length, 'công ty');
     } catch (e: any) {
-      console.error('🔴 load_data_company ERROR:', e.message);
+      console.error('[Lỗi] Không thể tải công ty:', e.message);
       const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách công ty';
       setError(errorMessage);
       handleApiError(e, 'generic', { silent: true });
@@ -127,13 +115,12 @@ export const useCandidateHome = () => {
   }, []);
 
   const load_data_categories = useCallback(async () => {
-    console.log('🔵 load_data_categories START');
     try {
       const categories = await categoryApiService.getAllCategories(12);
-      console.log('🟢 load_data_categories SUCCESS:', categories.length, 'categories');
       setDataCategories(categories);
+      if (__DEV__) console.log('[Tải danh mục] Đã tải', categories.length, 'danh mục');
     } catch (e: any) {
-      console.error('🔴 load_data_categories ERROR:', e.message);
+      console.error('[Lỗi] Không thể tải danh mục:', e.message);
       const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh mục việc làm';
       setError(errorMessage);
       handleApiError(e, 'generic', { silent: true });
@@ -141,34 +128,26 @@ export const useCandidateHome = () => {
   }, []);
 
   const loadUnreadNotifications = useCallback(async () => {
-    if (!userId) {
-      console.log('⚠️ loadUnreadNotifications SKIP: no userId');
-      return;
-    }
-    console.log('🔵 loadUnreadNotifications START');
+    if (!userId) return;
     try {
       const count = await notificationApiService.getUnreadCount();
-      console.log('🟢 loadUnreadNotifications SUCCESS:', count);
       setUnreadCount(count);
     } catch (e: any) {
-      console.error('🔴 loadUnreadNotifications ERROR:', e.message);
       // ✅ Silent fail for notifications - không quan trọng lắm
       // Không show error, không làm gián đoạn UX
+      if (__DEV__) console.warn('[Cảnh báo] Không thể tải thông báo');
     }
   }, [userId]);
 
   const loadAllData = useCallback(async (force = false) => {
-    if (isLoadingRef.current) {
-      console.log('⚠️ Already loading, skipping...');
-      return;
-    }
+    if (isLoadingRef.current) return;
     
     // ✅ Check cache - skip nếu data còn fresh
     const now = Date.now();
     const timeSinceLastLoad = now - lastLoadTimeRef.current;
     
     if (!force && timeSinceLastLoad < CACHE_DURATION && dataJob.length > 0) {
-      console.log(`⏭️ Using cached data (${Math.round(timeSinceLastLoad / 1000)}s old)`);
+      if (__DEV__) console.log(`[Cache] Dùng dữ liệu đã lưu (${Math.round(timeSinceLastLoad / 1000)}s trước)`);
       return;
     }
     
@@ -193,8 +172,9 @@ export const useCandidateHome = () => {
       await loadUnreadNotifications();
       
       lastLoadTimeRef.current = Date.now(); // ✅ Update cache timestamp
+      if (__DEV__) console.log('[Tải dữ liệu] Hoàn tất');
     } catch (e) {
-      console.error('[useCandidateHome] loadAllData error:', e);
+      console.error('[Lỗi] Không thể tải dữ liệu:', e);
     } finally {
       setLoading(false);
       isLoadingRef.current = false;

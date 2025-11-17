@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 
 import { jobApiService } from '@/services/jobApi.service';
 
@@ -172,7 +173,7 @@ export default function MyJobs() {
           data={jobs}
           keyExtractor={(item) => item.id || item.$id} // ✅ fallback key
           renderItem={renderJob}
-          contentContainerStyle={{ padding: 12 }}
+          contentContainerStyle={{ padding: 12, paddingBottom: SCROLL_BOTTOM_PADDING }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}

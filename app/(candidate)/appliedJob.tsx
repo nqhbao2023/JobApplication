@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { applicationApiService } from '@/services/applicationApi.service';
 import { jobApiService } from '@/services/jobApi.service';
 import { Application } from '@/services/applicationApi.service';
@@ -167,6 +168,7 @@ export default function AppliedJob() {
         }
         contentContainerStyle={[
           styles.listPad,
+          { paddingBottom: SCROLL_BOTTOM_PADDING },
           applications.length === 0 && { flex: 1 },
         ]}
       />

@@ -2,7 +2,7 @@ import apiClient from './apiClient';
 import axios from 'axios';
 import { API_ENDPOINTS } from '@/config/api';
 import { auth } from '@/config/firebase';
-import { AppRole, AppRoleOrNull } from '@/types';
+import { AppRole, AppRoleOrNull, StudentProfile } from '@/types';
 
 /* -------------------------------------------------------------------------- */
 /*                       🔐  Auth API service – Job4S                         */
@@ -47,6 +47,7 @@ export interface UserProfile {
   role: AppRoleOrNull;
   createdAt: string | null;
   updatedAt: string | null;
+  studentProfile?: StudentProfile;
 }
 
 export const authApiService = {
@@ -135,6 +136,7 @@ export const authApiService = {
     name?: string;
     phone?: string;
     photoURL?: string;
+    studentProfile?: StudentProfile;
   }): Promise<UserProfile> {
     return apiClient.patch<UserProfile>(API_ENDPOINTS.auth.profile, updates);
   },

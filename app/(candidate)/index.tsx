@@ -19,6 +19,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useCandidateHome } from '@/hooks/useCandidateHome';
+import { useStudentFilters } from '@/hooks/useStudentFilters';
 import {
   LoadingScreen,
   ErrorView,
@@ -30,6 +31,8 @@ import {
   EmptyState,
   JobAlertCTA,
 } from '@/components/candidate/HomeComponents';
+import { StudentAdvancedFilters } from '@/components/candidate/StudentAdvancedFilters';
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import {
   HEADER_MAX_HEIGHT,
   HEADER_MIN_HEIGHT,
@@ -52,6 +55,16 @@ const CandidateHome = () => {
     handleFilterChange,
     resetUnreadCount,
   } = useCandidateHome();
+  
+  // Student filters for advanced filtering
+  const {
+    filters: studentFilters,
+    filteredJobs,
+    handleFiltersChange,
+  } = useStudentFilters(
+    forYouJobs,
+    data?.user?.studentProfile
+  );
   const displayName = useMemo(
     () => data?.user?.displayName || data?.user?.name || '',
     [data?.user?.displayName, data?.user?.name]
@@ -203,16 +216,35 @@ const CandidateHome = () => {
       >
         <View style={styles.contentWrapper}>
           <QuickFilters selectedFilter={selectedFilter} onFilterChange={handleFilterChange} />
+          
+          {/* Student Advanced Filters */}
+          <View style={styles.advancedFiltersContainer}>
+            <StudentAdvancedFilters
+              filters={studentFilters}
+              onFiltersChange={handleFiltersChange}
+            />
+          </View>
 
-          <SectionHeader title="Dành cho bạn" onPressShowAll={() => router.push('/(shared)/jobList')} />
-          {forYouJobs.length > 0 ? (
-            forYouJobs.map((item, idx) => (
+          <SectionHeader 
+            title={studentFilters.isActive ? "Kết quả lọc" : "Dành cho bạn"} 
+            onPressShowAll={() => router.push('/(shared)/jobList')} 
+          />
+          {filteredJobs.length > 0 ? (
+            filteredJobs.map((item, idx) => (
               <Animated.View key={item.$id} entering={FadeInDown.delay(idx * 50).duration(400)}>
-                <JobCard item={item} company={getJobCompany(item)} />
+                <JobCard 
+                  item={item} 
+                  company={getJobCompany(item)}
+                  matchScore={item.matchScore}
+                  isHighMatch={item.isHighMatch}
+                />
               </Animated.View>
             ))
           ) : (
-            <EmptyState message="Chưa có việc làm phù hợp" icon="briefcase-outline" />
+            <EmptyState 
+              message={studentFilters.isActive ? "Không có công việc phù hợp với bộ lọc" : "Chưa có việc làm phù hợp"} 
+              icon="briefcase-outline" 
+            />
           )}
 
           <SectionHeader title="Danh mục nổi bật" onPressShowAll={() => router.push('/categoriesList')} />
@@ -324,7 +356,11 @@ const styles = StyleSheet.create({
   contentWrapper: {
     paddingHorizontal: HORIZONTAL_PADDING,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: SCROLL_BOTTOM_PADDING,
+  },
+  advancedFiltersContainer: {
+    marginTop: 12,
+    marginBottom: 16,
   },
   horizontalList: { paddingRight: 20 },
 });

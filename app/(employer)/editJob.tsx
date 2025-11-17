@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 
 import { jobApiService } from '@/services/jobApi.service';
 import { smartBack } from '@/utils/navigation';
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: SCROLL_BOTTOM_PADDING,
   },
   section: {
     backgroundColor: '#fff',

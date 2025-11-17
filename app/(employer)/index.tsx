@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { db, auth } from "@/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -567,7 +568,7 @@ const styles = StyleSheet.create({
   contentWrapper: {
     paddingHorizontal: HORIZONTAL_PADDING,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: SCROLL_BOTTOM_PADDING,
   },
 
   statsGrid: {

@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import type { JobMatchScore } from '@/services/jobMatching.service';
 import {
   type Job,
   type Company,
@@ -137,9 +138,13 @@ CompanyCard.displayName = 'CompanyCard';
 export const JobCard = memo(({
   item,
   company,
+  matchScore,
+  isHighMatch,
 }: {
   item: Job;
   company?: Company;
+  matchScore?: JobMatchScore;
+  isHighMatch?: boolean;
 }) => (
   <TouchableOpacity
     style={styles.jobCard}
@@ -155,6 +160,13 @@ export const JobCard = memo(({
       contentFit="cover"
       transition={200}
     />
+    {/* High Match Badge */}
+    {isHighMatch && (
+      <View style={styles.highMatchBadge}>
+        <Ionicons name="star" size={12} color="#fff" />
+        <Text style={styles.highMatchText}>Phù hợp {Math.round((matchScore?.totalScore || 0) * 100)}%</Text>
+      </View>
+    )}
     {/* Badge for external jobs */}
     {item.source === 'viecoi' && (
       <View style={styles.externalBadge}>
@@ -389,6 +401,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  highMatchBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  highMatchText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
   quickPostBadge: {
     position: 'absolute',

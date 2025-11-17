@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 
 import { applicationApiService } from "@/services/applicationApi.service";
 import { jobApiService } from "@/services/jobApi.service";
@@ -272,7 +273,7 @@ export default function Applications() {
         data={apps}
         keyExtractor={(it) => it.id}
         renderItem={({ item }) => <Row item={item} />}
-        contentContainerStyle={{ padding: 14 }}
+        contentContainerStyle={{ padding: 14, paddingBottom: SCROLL_BOTTOM_PADDING }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={fetchData} />
         }

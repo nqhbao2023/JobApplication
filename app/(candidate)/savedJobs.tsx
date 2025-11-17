@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db, auth } from '../../src/config/firebase';
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { collection, doc, getDocs, getDoc, query, where, addDoc, deleteDoc } from 'firebase/firestore';
 
 const Job = () => {
@@ -196,7 +197,7 @@ const Job = () => {
           data={filteredJobs}
           renderItem={renderJobItem}
           keyExtractor={(item) => item.$id}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: SCROLL_BOTTOM_PADDING }}
         />
       )}
     </SafeAreaView>

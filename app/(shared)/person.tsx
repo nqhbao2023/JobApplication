@@ -23,6 +23,7 @@ import { authApiService } from '@/services/authApi.service';
 import { userApiService } from '@/services';
 import { useRole } from '@/contexts/RoleContext';
 import { handleApiError, handleSuccess } from '@/utils/errorHandler';
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 
 const Person = () => {
   const ActionBtn = ({
@@ -269,7 +270,7 @@ const Person = () => {
       <SafeAreaView style={styles.container}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: SCROLL_BOTTOM_PADDING }}
         >
           <View style={styles.avatarSection}>
             <Pressable
@@ -341,11 +342,19 @@ const Person = () => {
 
           <View style={styles.buttonContainer}>
             {dataUser?.role === 'candidate' && (
-              <ActionBtn
-                icon="checkmark-done"
-                label="Applied Jobs"
-                onPress={() => router.push('/(shared)/appliedJob' as RelativePathString)}
-              />
+              <>
+                <ActionBtn
+                  icon="person-outline"
+                  label="Hồ sơ sinh viên"
+                  onPress={() => router.push('/(candidate)/studentProfile' as RelativePathString)}
+                  color="#10b981"
+                />
+                <ActionBtn
+                  icon="checkmark-done"
+                  label="Applied Jobs"
+                  onPress={() => router.push('/(shared)/appliedJob' as RelativePathString)}
+                />
+              </>
             )}
 
             {dataUser?.role === 'employer' && (

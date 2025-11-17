@@ -20,21 +20,21 @@ import { useRole } from "@/contexts/RoleContext";
 import { useJobDescription } from "@/hooks/useJobDescription";
 import { useJobStatus } from "@/hooks/useJobStatus";
 import { smartBack } from "@/utils/navigation";
-import ContactEmployerButton from "@/components/ContactEmployerButton";
 import JobApplySection from "@/components/JobApplySection";
 import * as Haptics from "expo-haptics";
 import { formatSalary } from "@/utils/salary.utils";
+import { getJobSections, isViecoiJob } from "@/utils/jobContent.utils";
+import { SCROLL_BOTTOM_PADDING } from "@/utils/layout.utils";
 import { Job } from "@/types";
 import { auth } from "@/config/firebase";
 
 const JobDescription = () => {
-  const [selected, setSelected] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const params = useLocalSearchParams<{ 
     jobId?: string; 
     id?: string;
-    applicationStatus?: string; // ✅ Status từ appliedJob
-    applicationId?: string; // ✅ Application ID
+    applicationStatus?: string;
+    applicationId?: string;
   }>();
   const jobId = (params.jobId || params.id || "") as string;
   const applicationStatus = params.applicationStatus as string | undefined;
@@ -53,41 +53,33 @@ const JobDescription = () => {
     refresh,
     hasDraft,
   } = useJobDescription(jobId);
-  // ✅ Re-fetch lại khi màn hình JobDescription được focus lại
+
   useFocusEffect(
     React.useCallback(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      refresh(); // luôn đồng bộ khi focus lại
+      refresh();
     }, [refresh])
   );
+
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
 
   const showCandidateUI = userRole === "candidate";
   
-  // ✅ Check if user is employer and owns this job
   const showEmployerUI = React.useMemo(() => {
     if (userRole !== "employer" || !jobData) return false;
-    
     const currentUserId = auth.currentUser?.uid;
     if (!currentUserId) return false;
-    
-    // Check if current user owns this job
     const jobEmployerId = (jobData as Job)?.employerId || (jobData as Job)?.ownerId;
     return jobEmployerId === currentUserId;
   }, [userRole, jobData]);
 
-  // ✅ Xác định xem có cho phép withdraw không
   const canWithdraw = React.useMemo(() => {
-    // Nếu có applicationStatus từ params, check theo đó
     if (applicationStatus) {
-      // Chỉ cho withdraw nếu status = pending
       return applicationStatus === 'pending';
     }
-    // Nếu không có status từ params, cho phép withdraw (old behavior)
     return true;
   }, [applicationStatus]);
 
-  // ✅ Get status label cho UI
   const statusLabel = React.useMemo(() => {
     if (!applicationStatus) return null;
     switch (applicationStatus) {
@@ -103,6 +95,12 @@ const JobDescription = () => {
     await refresh();
     setRefreshing(false);
   };
+
+  // Parse job sections
+  const sections = React.useMemo(() => {
+    if (!jobData) return null;
+    return getJobSections(jobData);
+  }, [jobData]);
 
   // ✅ ERROR
   if (error) {
@@ -129,28 +127,30 @@ const JobDescription = () => {
 
   return (
     <View style={styles.container}>
+      {/* Fixed Header - Luôn hiển thị ở top */}
+      <View style={styles.fixedHeader}>
+        <TouchableOpacity style={styles.buttons} onPress={() => smartBack()}>
+          <Ionicons name="arrow-back" size={24} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.buttons}
+          onPress={() => router.push("/")}
+        >
+          <Ionicons name="share-social" size={24} />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: SCROLL_BOTTOM_PADDING, paddingTop: 60 }}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.topView}>
-          <TouchableOpacity style={styles.buttons} onPress={() => smartBack()}>
-            <Ionicons name="arrow-back" size={24} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.buttons}
-            onPress={() => router.push("/")}
-          >
-            <Ionicons name="share-social" size={24} />
-          </TouchableOpacity>
-        </View>
 
-        {/* Thông tin Job */}
-        <View style={styles.headerContainer}>
+        {/* Job Header Card */}
+        <View style={styles.headerCard}>
           <View style={styles.jobImageContainer}>
             <Image
               style={styles.jobImage}
@@ -160,177 +160,157 @@ const JobDescription = () => {
             />
           </View>
 
-          <View style={styles.companyName}>
-            <Text style={styles.companyNameText}>{jobData?.title}</Text>
-            <Text
-              style={[styles.companyNameText, { fontSize: 16, color: "#555" }]}
-            >
+          <Text style={styles.jobTitle}>{jobData?.title}</Text>
+          
+          <View style={styles.companyRow}>
+            <Ionicons name="business-outline" size={16} color="#666" />
+            <Text style={styles.companyName}>
               {(() => {
-                // ✅ Type-safe company name extraction
-                const company = (jobData as Job)?.company;
-                if (!company) return "Đang tải...";
+                const job = jobData as Job;
+                // Thử company_name trước (cho viecoi jobs)
+                if (job?.company_name) return job.company_name;
+                // Sau đó thử company object
+                const company = job?.company;
+                if (!company) return "";
                 if (typeof company === 'string') return company;
-                return company.corp_name || "Không rõ công ty";
+                return company.corp_name || "";
               })()}
             </Text>
           </View>
 
-          <View style={styles.companyInfoBox}>
-            <Text style={styles.companyInfoText}>
-              💰 Lương: {formatSalary((jobData as Job)?.salary) || "Thoả thuận"}
-            </Text>
-          </View>
-        </View>
-
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          {["Giới thiệu", "Yêu cầu", "Trách nhiệm"].map((label, i) => (
-            <TouchableOpacity
-              key={i}
-              style={[
-                styles.tabBox,
-                selected === i ? styles.tabActive : styles.tabNormal,
-              ]}
-              onPress={() => setSelected(i)}
-            >
-              <Text
-                style={[
-                  selected === i ? styles.tabActiveText : styles.tabNormalText,
-                ]}
-              >
-                {label}
+          {/* Job Type Badge */}
+          {(jobData as Job)?.type && (
+            <View style={styles.typeBadge}>
+              <Text style={styles.typeBadgeText}>
+                {(jobData as Job)?.type}
               </Text>
-            </TouchableOpacity>
-          ))}
+            </View>
+          )}
+
+          {/* Meta Info Grid */}
+          <View style={styles.metaGrid}>
+            <View style={styles.metaItem}>
+              <Ionicons name="cash-outline" size={18} color="#4A80F0" />
+              <Text style={styles.metaText}>
+                {formatSalary((jobData as Job)?.salary) || "Thoả thuận"}
+              </Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Ionicons name="location-outline" size={18} color="#4A80F0" />
+              <Text style={styles.metaText}>
+                {(jobData as Job)?.location || "Chưa cập nhật"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Source Badge */}
+          {isViecoiJob(jobData) && (
+            <View style={styles.sourceBadge}>
+              <Ionicons name="globe-outline" size={14} color="#4A80F0" />
+              <Text style={styles.sourceBadgeText}>Nguồn: viecoi.vn</Text>
+            </View>
+          )}
         </View>
 
-        {/* Nội dung tab */}
-        <View style={styles.contentTab}>
-          <Text style={styles.descriptionContent}>
-            Người đăng: {posterInfo.name || posterInfo.email || "Ẩn danh"}
-          </Text>
-          {selected === 0 && (
-            <Text style={styles.descriptionContent}>
-              {(jobData as Job)?.description || "Không có mô tả công việc."}
-            </Text>
-          )}
-          {selected === 1 && (
-            <Text style={styles.descriptionContent}>
-              {(() => {
-                // ✅ Format requirements array hoặc string
-                const requirements = (jobData as Job)?.requirements;
-                if (!requirements) return "Không có thông tin kỹ năng yêu cầu.";
-                if (Array.isArray(requirements)) {
-                  return requirements.map((req, idx) => `• ${req}`).join('\n');
-                }
-                return requirements;
-              })()}
-            </Text>
-          )}
-          {selected === 2 && (
-            <Text style={styles.descriptionContent}>
-              {(jobData as Job)?.benefits || "Không có quyền lợi công việc."}
-            </Text>
-          )}
-        </View>
-      </ScrollView>
-
-      {/* Thanh hành động dưới */}
-      <View style={styles.bottomBar}>
-        {showCandidateUI && (
-          <>
-            {/* ✅ Hiển thị status badge nếu đã ứng tuyển */}
-            {statusLabel && (
-              <View style={styles.statusBadge}>
-                <Text style={[
-                  styles.statusBadgeText,
-                  { color: applicationStatus === 'accepted' ? '#34C759' : 
-                           applicationStatus === 'rejected' ? '#FF3B30' : '#FF9500' }
-                ]}>
-                  {statusLabel}
-                </Text>
+        {/* Job Sections - Single Scroll */}
+        {sections && (
+          <View style={styles.sectionsContainer}>
+            {/* Overview Section */}
+            {sections.overview && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="information-circle-outline" size={22} color="#2F264F" />
+                  <Text style={styles.sectionTitle}>Tổng quan</Text>
+                </View>
+                <Text style={styles.sectionContent}>{sections.overview}</Text>
               </View>
             )}
 
-            {/* ✅ New: Apply Section with 3 workflows */}
-            {/* Debug: Log job data */}
-            {__DEV__ && console.log('🔍 Job data in JobDescription:', {
-              source: (jobData as Job)?.source,
-              external_url: (jobData as Job)?.external_url,
-              jobSource: (jobData as Job)?.jobSource,
-              title: (jobData as Job)?.title
-            })}
-            <JobApplySection
-              job={jobData as Job}
-              onApplyFeatured={handleApply}
-            />
-
-            {/* Lưu tin */}
-            <TouchableOpacity
-              style={styles.saveBtn}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                toggleSave();
-              }}
-              disabled={saveLoading}
-            >
-              <Ionicons
-                name={isSaved ? "heart" : "heart-outline"}
-                size={24}
-                color={isSaved ? "#F97459" : "#999"}
-              />
-            </TouchableOpacity>
-
-            {/* Liên hệ nhà tuyển dụng - ✅ Fixed: Truyền đúng params */}
-            {((jobData as Job)?.employerId || (jobData as Job)?.ownerId) && (
-              <TouchableOpacity
-                style={styles.chatBtn}
-                activeOpacity={0.8}
-                onPress={() => {
-                  const employerId = (jobData as Job)?.employerId || (jobData as Job)?.ownerId;
-                  const companyName = (() => {
-                    const company = (jobData as Job)?.company;
-                    if (!company) return "Nhà tuyển dụng";
-                    if (typeof company === 'string') return company;
-                    return company.corp_name || "Nhà tuyển dụng";
-                  })();
-
-                  if (!employerId) {
-                    Alert.alert("Lỗi", "Thiếu thông tin nhà tuyển dụng");
-                    return;
-                  }
-
-                  router.push({
-                    pathname: "/(shared)/chat",
-                    params: { 
-                      partnerId: employerId, // ✅ Truyền employerId làm partnerId
-                      partnerName: companyName,
-                    },
-                  });
-                }}
-              >
-                <Ionicons name="chatbubbles-outline" size={20} color="#fff" />
-                <Text style={styles.chatText}>Liên hệ nhà tuyển dụng</Text>
-              </TouchableOpacity>
+            {/* Responsibilities Section */}
+            {sections.responsibilities && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="list-outline" size={22} color="#2F264F" />
+                  <Text style={styles.sectionTitle}>Chi tiết công việc</Text>
+                </View>
+                <Text style={styles.sectionContent}>{sections.responsibilities}</Text>
+              </View>
             )}
-          </>
-        )}
 
-        {/* Giao diện cho nhà tuyển dụng */}
-        {showEmployerUI && (
+            {/* Requirements Section */}
+            {sections.requirements && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="checkmark-circle-outline" size={22} color="#2F264F" />
+                  <Text style={styles.sectionTitle}>Yêu cầu ứng viên</Text>
+                </View>
+                <Text style={styles.sectionContent}>{sections.requirements}</Text>
+              </View>
+            )}
+
+            {/* Benefits Section */}
+            {sections.benefits && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="gift-outline" size={22} color="#2F264F" />
+                  <Text style={styles.sectionTitle}>Quyền lợi</Text>
+                </View>
+                <Text style={styles.sectionContent}>{sections.benefits}</Text>
+              </View>
+            )}
+
+            {/* Company Info Section */}
+            {sections.companyInfo && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="business-outline" size={22} color="#2F264F" />
+                  <Text style={styles.sectionTitle}>Thông tin công ty</Text>
+                </View>
+                <Text style={styles.sectionContent}>{sections.companyInfo}</Text>
+              </View>
+            )}
+
+            {/* Poster Info - Chỉ hiển thị cho internal jobs */}
+            {posterInfo && (posterInfo.name || posterInfo.email) && (
+              <View style={styles.posterSection}>
+                <Ionicons name="person-circle-outline" size={18} color="#666" />
+                <Text style={styles.posterText}>
+                  Người đăng: {posterInfo.name || posterInfo.email}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Fixed Bottom Bar - Compact UI */}
+      {showCandidateUI && (
+        <View style={styles.floatingBottomBar}>
+          <JobApplySection
+            job={jobData as Job}
+            onApplyFeatured={handleApply}
+            isSaved={isSaved}
+            saveLoading={saveLoading}
+            onToggleSave={toggleSave}
+          />
+        </View>
+      )}
+
+      {showEmployerUI && (
+        <View style={styles.floatingBottomBar}>
           <View style={styles.employerButtons}>
             <TouchableOpacity
               style={[styles.editButton, { backgroundColor: "#4A80F0" }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                console.log('🔧 Navigating to editJob with jobId:', jobId);
+                console.log('[Chỉnh sửa] Navigating to editJob with jobId:', jobId);
                 router.push({
                   pathname: "/(employer)/editJob",
                   params: { jobId: jobId },
                 });
               }}
             >
-              <Ionicons name="create-outline" size={20} color="#fff" />
+              <Ionicons name="create-outline" size={18} color="#fff" />
               <Text style={styles.employerText}>Chỉnh sửa</Text>
             </TouchableOpacity>
 
@@ -338,12 +318,12 @@ const JobDescription = () => {
               style={[styles.editButton, { backgroundColor: "#EF4444" }]}
               onPress={handleDelete}
             >
-              <Ionicons name="trash-outline" size={20} color="#fff" />
+              <Ionicons name="trash-outline" size={18} color="#fff" />
               <Text style={styles.employerText}>Xóa</Text>
             </TouchableOpacity>
           </View>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -351,10 +331,22 @@ const JobDescription = () => {
 export default JobDescription;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: "#F8F9FA" },
   scrollContent: { flex: 1 },
 
-  // Header
+  // Fixed Header - Always on top
+  fixedHeader: {
+    position: "absolute",
+    top: Platform.OS === "android" ? (StatusBar.currentHeight || 24) + 10 : 50,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    zIndex: 1000,
+  },
+  // Old topView (deprecated)
   topView: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -375,146 +367,178 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
 
-  headerContainer: {
-    margin: 20,
-    padding: 15,
-    borderRadius: 10,
-    backgroundColor: "#EBF2FC",
+  // Header Card
+  headerCard: {
+    backgroundColor: "#fff",
+    margin: 16,
+    padding: 20,
+    borderRadius: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   jobImageContainer: {
-    marginTop: 10,
-    height: 120,
-    justifyContent: "center",
-    alignItems: "center",
+    marginBottom: 16,
   },
-  jobImage: { height: 100, width: 100, borderRadius: 50 },
-  companyName: { alignItems: "center", justifyContent: "center", padding: 10 },
-  companyNameText: { fontSize: 20, fontWeight: "bold" },
-  companyInfoBox: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginVertical: 10,
+  jobImage: { 
+    height: 80, 
+    width: 80, 
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "#F0F0F0",
   },
-  companyInfoText: { fontSize: 16, fontWeight: "600", color: "#333" },
-
-  // Tabs
-  tabs: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginBottom: 10,
-    gap: 10,
-  },
-  tabBox: {
-    borderRadius: 15,
-    height: 40,
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tabNormal: { backgroundColor: "#EEEEEE" },
-  tabNormalText: { color: "#777" },
-  tabActive: { backgroundColor: "#2F264F" },
-  tabActiveText: { color: "white", fontWeight: "bold" },
-
-  // Nội dung
-  contentTab: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 10,
-    padding: 14,
-    marginHorizontal: 20,
-    marginBottom: 20,
-  },
-  descriptionContent: {
-    fontSize: 15,
-    color: "#222",
-    textAlign: "justify",
+  jobTitle: { 
+    fontSize: 22, 
+    fontWeight: "700",
+    color: "#1A1A1A",
+    textAlign: "center",
     marginBottom: 8,
   },
-
-  // Bottom bar
-  bottomBar: {
+  companyRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-    gap: 10,
+    gap: 6,
+    marginBottom: 8,
   },
-  statusBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  statusBadgeText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  saveBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  actionBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  applyBtn: { backgroundColor: "#F97459" },
-  cancelBtn: { backgroundColor: "#999" },
-  disabledBtn: { backgroundColor: "#eee" },
-  actionText: {
+  companyName: { 
     fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
+    color: "#666",
+    fontWeight: "500",
   },
-
-  chatBtn: {
-    flex: 1,
-    backgroundColor: "#4A80F0",
-    height: 50,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
+  typeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: "#FFF4E6",
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  typeBadgeText: {
+    fontSize: 12,
+    color: "#FF9500",
+    fontWeight: "600",
+  },
+  metaGrid: {
     flexDirection: "row",
-    paddingHorizontal: 10,
+    gap: 16,
+    marginTop: 8,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
-  chatText: {
-    color: "#fff",
-    fontWeight: "600",
+  metaText: {
     fontSize: 14,
-    marginTop: 1,
+    color: "#4A80F0",
+    fontWeight: "600",
+  },
+  sourceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#EBF2FC",
+    borderRadius: 20,
+  },
+  sourceBadgeText: {
+    fontSize: 12,
+    color: "#4A80F0",
+    fontWeight: "600",
   },
 
+  // Sections Container
+  sectionsContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  section: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#2F264F",
+  },
+  sectionContent: {
+    fontSize: 15,
+    color: "#333",
+    lineHeight: 24,
+    textAlign: "justify",
+  },
+
+  // Floating Bottom Bar - Compact Modern UI
+  floatingBottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+
+  // Poster Info
+  posterSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F8F9FA",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  posterText: {
+    fontSize: 13,
+    color: "#666",
+    fontStyle: "italic",
+  },
+
+  // Employer Buttons
   employerButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 10,
+    gap: 8,
+    flex: 1,
   },
   editButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
     flex: 1,
   },
-  employerText: { color: "#fff", fontWeight: "600", marginLeft: 6 },
+  employerText: { color: "#fff", fontWeight: "600", marginLeft: 4, fontSize: 14 },
 
+  // Error & Loading States
   errorContainer: {
     flex: 1,
     justifyContent: "center",

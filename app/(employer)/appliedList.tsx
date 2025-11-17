@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 
 import { applicationApiService } from "@/services/applicationApi.service";
 import { jobApiService } from "@/services/jobApi.service";
@@ -225,6 +226,7 @@ export default function AppliedList() {
         }
         contentContainerStyle={[
           styles.list,
+          { paddingBottom: SCROLL_BOTTOM_PADDING },
           apps.length === 0 && { flex: 1 },
         ]}
         ListEmptyComponent={

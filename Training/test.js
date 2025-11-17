@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { findAncestor } from 'typescript';
 // 3. TEMPLATE LITERALS (dấu backtick `)
 const name = "John";
 const age = 25;
@@ -47,6 +48,7 @@ const jobs = [
 
 // map: Biến đổi mỗi phần tử
 const jobTitles = jobs.map(job => job.title);
+console.log("map: bien doi moi phan tu");
 console.log(jobTitles);
 
 const jobID = jobs.map(job => job.id);
@@ -58,5 +60,27 @@ console.log(jobSalary);
 // filter: Lọc phần tử
 const highSalaryJobs = jobs.filter(job => job.salary >= 20000);
 const jobIDs = jobs.filter(job => job.id >= 3);
+console.log("\n filter: loc phan tu");
 console.log(highSalaryJobs);
 console.log(jobIDs);
+
+//find: tim mot phan tu
+const dev = jobs.find(job => job.title === "Developer");
+console.log("\n find: tim mot phan tu");
+console.log(dev);
+
+const des = jobs.find(job => job.title ==="Designer");
+console.log(des); 
+// reduce: gộp mảng thành một giá trị duy nhất
+const totalSalary = jobs.reduce((total,job)=> total + job.salary,0);
+console.log("\n reduce: gop mang thanh mot gia tri duy nhat");
+console.log(totalSalary);
+// some: kiểm tra ít nhất một phần tử
+const hasHighSalary = jobs.some(job => job.salary >= 25000);
+console.log("\n some: kiem tra it nhat mot phan tu");
+console.log(hasHighSalary);
+// every: kiểm tra tất cả phần tử
+const allHighSalary = jobs.every(job => job.salary >= 5000);
+console.log("\n every: kiem tra tat ca phan tu");
+console.log(allHighSalary);
+

@@ -30,6 +30,7 @@ import { auth } from '@/config/firebase';
 import { authApiService } from '@/services/authApi.service';
 import { StudentProfile } from '@/types';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
+import { DrawerMenuButton } from '@/components/candidate/DrawerMenu';
 
 const DAYS_OF_WEEK = [
   { key: 'monday', label: 'T2', fullName: 'Thứ 2' },
@@ -240,9 +241,7 @@ const StudentProfileSettings = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#1e293b" />
-        </TouchableOpacity>
+        <DrawerMenuButton />
         <Text style={styles.headerTitle}>Hồ sơ sinh viên</Text>
         <TouchableOpacity onPress={saveProfile} disabled={loading}>
           <Text style={[styles.saveText, loading && { opacity: 0.5 }]}>
@@ -625,6 +624,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#1e293b',
+    flex: 1,
+    textAlign: 'center',
   },
   saveText: {
     fontSize: 16,

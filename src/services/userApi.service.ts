@@ -42,23 +42,35 @@ class UserApiService {
    * Upload user avatar
    */
   async uploadAvatar(fileUri: string, mimeType?: string): Promise<{ photoURL: string }> {
-    const formData = new FormData();
-    
-    // Create file object from URI
-    const filename = fileUri.split('/').pop() || 'avatar.jpg';
-    formData.append('avatar', {
-      uri: fileUri,
-      type: mimeType || 'image/jpeg',
-      name: filename,
-    } as any);
+    try {
+      const formData = new FormData();
+      
+      // Create file object from URI
+      const filename = fileUri.split('/').pop() || 'avatar.jpg';
+      formData.append('avatar', {
+        uri: fileUri,
+        type: mimeType || 'image/jpeg',
+        name: filename,
+      } as any);
 
-    const response: AxiosResponse<{ photoURL: string }> = await apiClient.post('/api/users/me/avatar', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+      console.log('🌐 Sending avatar to API:', { filename, mimeType: mimeType || 'image/jpeg' });
 
-    return response.data;
+      // Use apiClient.post which returns data directly
+      const data = await apiClient.post<{ photoURL: string }>('/api/users/me/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      console.log('✅ API Response data:', data);
+
+      return data;
+    } catch (error: any) {
+      console.error('❌ Upload API error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      throw error;
+    }
   }
 
   /**

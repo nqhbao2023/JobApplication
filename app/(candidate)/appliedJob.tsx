@@ -140,14 +140,7 @@ export default function AppliedJob() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.back} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTxt}>Công việc đã ứng tuyển</Text>
-      </View>
-
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       <FlatList
         data={applications}
         keyExtractor={(it) => it.$id || it.jobId}
@@ -247,15 +240,15 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     elevation: 2,
   },
-  back: { position: 'absolute', left: 16, padding: 6 },
-  headerTxt: { fontSize: 18, fontWeight: '700', color: '#007AFF' },
+  headerTxt: { fontSize: 18, fontWeight: '700', color: '#007AFF', flex: 1, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     backgroundColor: '#fff',

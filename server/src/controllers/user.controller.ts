@@ -39,17 +39,26 @@ export const userController = {
    */
   async uploadAvatar(req: Request, res: Response) {
     try {
+      console.log('📥 Upload avatar request received');
+      console.log('👤 User ID:', req.user?.uid);
+      console.log('📁 File:', req.file ? { name: req.file.originalname, size: req.file.size, type: req.file.mimetype } : 'NO FILE');
+      
       const userId = req.user!.uid;
       const file = req.file;
       
       if (!file) {
+        console.error('❌ No file in request');
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
+      console.log('🚀 Calling userService.uploadAvatar...');
       const photoURL = await userService.uploadAvatar(userId, file);
+      
+      console.log('✅ Upload successful, returning:', { photoURL });
       return res.json({ photoURL });
     } catch (error: any) {
-      console.error('Upload avatar error:', error);
+      console.error('❌ Upload avatar controller error:', error);
+      console.error('❌ Error stack:', error.stack);
       return res.status(500).json({ error: error.message });
     }
   },

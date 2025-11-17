@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db, auth } from '../../src/config/firebase';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
+import { DrawerMenuButton } from '@/components/candidate/DrawerMenu';
 import { collection, doc, getDocs, getDoc, query, where, addDoc, deleteDoc } from 'firebase/firestore';
 
 const Job = () => {
@@ -142,15 +143,13 @@ const Job = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>Save Job List</Text>
+        <DrawerMenuButton />
+        <Text style={styles.headerText}>Việc làm của tôi</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.savedText}>You Saved {savedJobs.length} Jobs</Text>
-        <Image
-          source={{ uri: 'https://via.placeholder.com/30' }}
-          style={styles.subHeaderIcon}
-        />
+        <Text style={styles.savedText}>Bạn đã lưu {savedJobs.length} việc làm</Text>
       </View>
 
       <View style={styles.tabsWrapper}>
@@ -213,10 +212,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F9FB',
   },
   header: {
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     backgroundColor: '#34C759',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -227,26 +227,21 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   headerText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
+    flex: 1,
     textAlign: 'center',
   },
   subHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
   },
   savedText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
-    fontWeight: '500',
-    flex: 1,
-  },
-  subHeaderIcon: {
-    width: 30,
-    height: 30,
+    fontWeight: '600',
   },
   tabsWrapper: {
     paddingVertical: 10,

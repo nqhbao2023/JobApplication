@@ -32,6 +32,7 @@ import {
   JobAlertCTA,
 } from '@/components/candidate/HomeComponents';
 import { StudentAdvancedFilters } from '@/components/candidate/StudentAdvancedFilters';
+import { DrawerMenuButton } from '@/components/candidate/DrawerMenu';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import {
   HEADER_MAX_HEIGHT,
@@ -151,6 +152,11 @@ const CandidateHome = () => {
         />
 
         <View style={styles.topView}>
+          {/* Drawer Menu Button */}
+          <View style={styles.drawerButtonContainer}>
+            <DrawerMenuButton />
+          </View>
+
           <Animated.View style={[styles.welcomeTextContainer, welcomeTextAnimatedStyle]}>
             <Text style={styles.hello}>Xin chào 👋</Text>
             <Text style={styles.hello2}>
@@ -317,6 +323,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 14,
+  },
+  drawerButtonContainer: {
+    marginRight: 8,
+    marginTop: -4,
   },
   welcomeTextContainer: { flex: 1 },
   hello: { fontSize: 15, color: '#FFFFFF', opacity: 0.95, fontWeight: '500' },

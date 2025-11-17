@@ -243,10 +243,27 @@ const Person = () => {
 
       const asset = res.assets![0];
       
+      console.log('📸 Selected image URI:', asset.uri);
       console.log('📸 Uploading avatar via API...');
       
       // Upload via User API instead of direct Firebase Storage
-      const response = await userApiService.uploadAvatar(asset.uri);
+      let response;
+      try {
+        response = await userApiService.uploadAvatar(asset.uri);
+      } catch (apiError: any) {
+        console.error('❌ API call failed:', apiError);
+        console.error('❌ API error response:', apiError.response);
+        throw apiError;
+      }
+      
+      console.log('✅ Upload response:', response);
+      
+      // Handle response - it should be { photoURL: string }
+      if (!response || !response.photoURL) {
+        console.error('❌ Invalid response structure:', response);
+        throw new Error('Invalid response from server');
+      }
+      
       const photoURL = response.photoURL;
 
       console.log('✅ Avatar uploaded:', photoURL);
@@ -260,6 +277,9 @@ const Person = () => {
       handleSuccess('Ảnh đại diện đã được cập nhật!');
     } catch (err: any) {
       console.error('❌ Avatar upload error:', err);
+      console.error('❌ Error message:', err.message);
+      console.error('❌ Error response data:', err.response?.data);
+      console.error('❌ Error response status:', err.response?.status);
       handleApiError(err, 'update_profile');
     }
   };

@@ -44,27 +44,46 @@ export const userService = {
    * Upload user avatar
    */
   async uploadAvatar(userId: string, file: any): Promise<string> {
-    const bucket = storage.bucket();
-    const fileName = `avatars/${userId}/${Date.now()}_${file.originalname}`;
-    const fileUpload = bucket.file(fileName);
+    try {
+      console.log('🔄 Starting avatar upload for user:', userId);
+      console.log('📁 File info:', { name: file.originalname, size: file.size, type: file.mimetype });
+      
+      const bucket = storage.bucket();
+      console.log('📦 Bucket name:', bucket.name);
+      
+      const fileName = `avatars/${userId}/avatar.jpg`;
+      const fileUpload = bucket.file(fileName);
 
-    await fileUpload.save(file.buffer, {
-      metadata: {
-        contentType: file.mimetype,
-      },
-      public: true,
-    });
+      console.log('💾 Saving file to storage...');
+      await fileUpload.save(file.buffer, {
+        metadata: {
+          contentType: file.mimetype,
+        },
+      });
 
-    // Make file publicly accessible
-    await fileUpload.makePublic();
+      console.log('🔓 Making file public...');
+      // Make file publicly accessible
+      await fileUpload.makePublic();
 
-    // Get public URL
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+      console.log('🔗 Generating public URL...');
+      // Get public URL with token
+      const [metadata] = await fileUpload.getMetadata();
+      const token = metadata.metadata?.firebaseStorageDownloadTokens || Date.now();
+      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
 
-    // Update user photoURL
-    await this.updateUser(userId, { photoURL: publicUrl });
+      console.log('✅ Public URL generated:', publicUrl);
 
-    return publicUrl;
+      console.log('📝 Updating user photoURL...');
+      // Update user photoURL
+      await this.updateUser(userId, { photoURL: publicUrl });
+
+      console.log('✅ Avatar upload complete!');
+      return publicUrl;
+    } catch (error: any) {
+      console.error('❌ Upload avatar error:', error);
+      console.error('❌ Error stack:', error.stack);
+      throw new Error(`Failed to upload avatar: ${error.message}`);
+    }
   },
 
   /**

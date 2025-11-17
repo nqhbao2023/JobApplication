@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { useEffect, useState, useCallback } from 'react';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -42,6 +42,7 @@ interface Company {
 
 export default function SearchScreen() {
   const { q } = useLocalSearchParams();
+  const [searchQuery, setSearchQuery] = useState(typeof q === 'string' ? q : '');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +73,7 @@ export default function SearchScreen() {
         console.log('🔍 Using Algolia search');
         
         const result = await searchJobs({
-          query: typeof q === 'string' ? q : '',
+          query: searchQuery,
           jobType: selectedTypeId || undefined,
           category: selectedCategoryId || undefined,
           companyId: selectedCompanyId || undefined,
@@ -107,8 +108,8 @@ export default function SearchScreen() {
           });
 
         // Client-side filtering
-        if (q && typeof q === 'string') {
-          const searchLower = q.toLowerCase().trim();
+        if (searchQuery && searchQuery.trim()) {
+          const searchLower = searchQuery.toLowerCase().trim();
           formattedJobs = formattedJobs.filter(job =>
             job.title?.toLowerCase().includes(searchLower) ||
             job.company?.toLowerCase().includes(searchLower)
@@ -139,7 +140,7 @@ export default function SearchScreen() {
     } finally {
       setLoading(false);
     }
-  }, [q, selectedTypeId, selectedCategoryId, selectedCompanyId, useAlgolia]);
+  }, [searchQuery, selectedTypeId, selectedCategoryId, selectedCompanyId, useAlgolia]);
 
   const fetchFilters = async () => {
     try {
@@ -185,8 +186,14 @@ export default function SearchScreen() {
   }, []);
 
   useEffect(() => {
+    if (typeof q === 'string') {
+      setSearchQuery(q);
+    }
+  }, [q]);
+
+  useEffect(() => {
     fetchJobs();
-  }, [q, selectedTypeId, selectedCategoryId, selectedCompanyId]);
+  }, [searchQuery, selectedTypeId, selectedCategoryId, selectedCompanyId]);
 
   return (
     <PaperProvider>
@@ -195,7 +202,7 @@ export default function SearchScreen() {
         <View style={styles.header}>
           <Text style={styles.heading}>
             Kết quả tìm kiếm
-            {q && <Text style={styles.queryText}> "{q}"</Text>}
+            {searchQuery && <Text style={styles.queryText}> "{searchQuery}"</Text>}
           </Text>
           {!loading && (
             <View style={styles.resultCount}>
@@ -205,6 +212,24 @@ export default function SearchScreen() {
                 {useAlgolia && ' (Algolia)'}
               </Text>
             </View>
+          )}
+        </View>
+
+        {/* Search Input */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="#64748b" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm công việc..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            onSubmitEditing={() => fetchJobs()}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#94a3b8" />
+            </TouchableOpacity>
           )}
         </View>
 
@@ -554,5 +579,26 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontWeight: '600',
     alignSelf: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1e293b',
   },
 });

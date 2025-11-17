@@ -8,6 +8,7 @@ import { JobData } from './job-crawler';
 interface NormalizedJob {
   title: string;
   company_name: string;
+  company_logo?: string;
   location: string;
   salary_min?: number;
   salary_max?: number;
@@ -143,6 +144,7 @@ export function normalizeJob(job: JobData): NormalizedJob {
   return {
     title: job.title,
     company_name: job.company,
+    company_logo: job.companyLogo,
     location: job.location,
     salary_min: salary.min,
     salary_max: salary.max,

@@ -169,7 +169,6 @@ const AllJobs = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F9F9FB" }}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -189,7 +188,6 @@ const AllJobs = () => {
       ) : (
         <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
           <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Category Tabs */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -233,7 +231,6 @@ const AllJobs = () => {
               ))}
             </ScrollView>
 
-            {/* Type Tabs */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -277,7 +274,6 @@ const AllJobs = () => {
               ))}
             </ScrollView>
 
-            {/* Job List */}
             <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
               {filteredJobs.map((job) => (
                 <TouchableOpacity

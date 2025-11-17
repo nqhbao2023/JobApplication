@@ -59,6 +59,10 @@ function mapDocToJob(doc: FirebaseFirestore.DocumentSnapshot): Job {
     contactInfo: data.contactInfo,
     workSchedule: data.workSchedule,
     hourlyRate: data.hourlyRate,
+    // ✅ Viecoi aggregator fields
+    company_name: data.company_name,
+    company_logo: data.company_logo,
+    salary_text: data.salary_text,
   } as Job;
 }
 

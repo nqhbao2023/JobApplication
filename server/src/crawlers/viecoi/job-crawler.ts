@@ -17,6 +17,7 @@ export interface JobData {
   url: string;
   title: string;
   company: string;
+  companyLogo?: string;
   location: string;
   salary: string;
   jobType: string;
@@ -50,6 +51,21 @@ export async function crawlJobPage(url: string): Promise<JobData | null> {
     // Extract job data using correct viecoi.vn selectors
     const title = $('h1.title_container, h1').first().text().trim();
     const company = $('h2.name-cpn-title, .name-cpn-title').first().text().trim();
+    
+    // Extract company logo
+    const companyLogoSrc = $('img.logo-company').first().attr('src');
+    let companyLogo: string | undefined;
+    if (companyLogoSrc && !companyLogoSrc.includes('loadingImg')) {
+      // Make sure the URL is absolute
+      if (companyLogoSrc.startsWith('http')) {
+        companyLogo = companyLogoSrc;
+      } else if (companyLogoSrc.startsWith('/')) {
+        companyLogo = 'https://cdn.viecoi.vn' + companyLogoSrc;
+      } else {
+        companyLogo = 'https://cdn.viecoi.vn/' + companyLogoSrc;
+      }
+    }
+    
     const location = $('[class*="location"]').first().text().trim().split('\n').filter(s => s.trim())[0] || '';
     const salary = $('[class*="salary"]').first().text().trim().split('\n')[0].trim();
     
@@ -104,6 +120,7 @@ export async function crawlJobPage(url: string): Promise<JobData | null> {
       url,
       title,
       company,
+      companyLogo,
       location: location || 'Việt Nam',
       salary: salary || 'Thỏa thuận',
       jobType,
@@ -204,10 +221,10 @@ if (require.main === module) {
       // Import updated URL fetcher
       const { fetchJobURLs } = await import('./fetch-job-urls');
       
-      // Get job URLs (default: 5 for testing)
+      // Get job URLs (mặc định crawl 50 job nếu không truyền --limit)
       const limit = process.argv.includes('--limit') 
         ? parseInt(process.argv[process.argv.indexOf('--limit') + 1], 10) 
-        : 5;
+        : 50;
       
       const jobURLs = await fetchJobURLs(limit);
       

@@ -43,6 +43,12 @@ export const normalizeJob = (job: any): Job => {
     isFeatured: job.isFeatured,
     workSchedule: job.workSchedule,
     hourlyRate: job.hourlyRate,
+    // ✅ Viecoi aggregator fields
+    source: job.source,
+    external_url: job.external_url,
+    company_name: job.company_name,
+    company_logo: job.company_logo, // Preserve company logo from viecoi jobs
+    salary_text: job.salary_text,
   };
 };
 

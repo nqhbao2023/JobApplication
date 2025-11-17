@@ -122,6 +122,7 @@ export interface Job {
   jobSource?: 'crawled' | 'quick-post' | 'featured'; // Legacy/alternative field for job source type
   sourceUrl?: string; // Legacy/alternative field for URL gốc nếu crawled
   company_name?: string; // Viecoi jobs use this field for company name
+  company_logo?: string; // Viecoi jobs use this field for company logo URL
   salary_text?: string; // Viecoi jobs use this field for salary display
   contactInfo?: {
     phone?: string;

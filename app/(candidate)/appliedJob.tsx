@@ -67,7 +67,7 @@ export default function AppliedJob() {
                 title: job.title,
                 company: getCompanyName(job.company),
                 location: job.location || getCompanyCity(job.company) || 'Không rõ',
-                image: job.image,
+                image: job.company_logo || job.image,
               },
             };
           },

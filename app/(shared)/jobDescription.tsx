@@ -155,7 +155,23 @@ const JobDescription = () => {
             <Image
               style={styles.jobImage}
               source={{
-                uri: jobData?.image || "https://via.placeholder.com/100",
+                uri: (() => {
+                  const job = jobData as Job;
+                  // Priority: company_logo (viecoi) > image > company.image > placeholder
+                  if (job?.company_logo) return job.company_logo;
+                  if (job?.image) return job.image;
+                  
+                  const company = job?.company;
+                  if (company && typeof company === 'object' && (company as any).image) {
+                    return (company as any).image;
+                  }
+                  
+                  // Fallback to placeholder with company name
+                  const companyName = job?.company_name || 
+                    (company && typeof company === 'object' ? company.corp_name : '') || 
+                    'Job';
+                  return `https://via.placeholder.com/100?text=${encodeURIComponent(companyName)}`;
+                })(),
               }}
             />
           </View>

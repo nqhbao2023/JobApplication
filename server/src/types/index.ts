@@ -46,6 +46,9 @@ export interface Job {
   is_verified?: boolean; // Verified status from Firestore (snake_case)
   jobSource?: 'crawled' | 'quick-post' | 'featured'; // Legacy: Nguồn job
   sourceUrl?: string; // Legacy: URL gốc nếu crawled
+  company_name?: string; // Company name for viecoi jobs (snake_case to match Firestore)
+  company_logo?: string; // Company logo URL for viecoi jobs (snake_case to match Firestore)
+  salary_text?: string; // Salary display text for viecoi jobs (snake_case to match Firestore)
   contactInfo?: {
     phone?: string;
     zalo?: string;

@@ -92,13 +92,22 @@ const Job = () => {
 
   const renderJobItem = ({ item }: { item: any }) => {
     const isSaved = savedJobs.some(job => job.$id === item.$id);
+    
+    // Priority: company_logo (viecoi) > image > company.image > placeholder
+    const imageUrl = item.company_logo || item.image || 
+      (item.company && typeof item.company === 'object' ? item.company.image : undefined) ||
+      `https://via.placeholder.com/80x80.png?text=${encodeURIComponent(
+        item.company_name || 
+        (item.company && typeof item.company === 'object' ? item.company.corp_name : '') || 
+        'Job'
+      )}`;
 
     return (
       <TouchableOpacity
         style={styles.jobItem}
         onPress={() => router.push(`/jobDescription?jobId=${item.$id}`)}
       >
-        <Image source={{ uri: item.image }} style={styles.jobImage} />
+        <Image source={{ uri: imageUrl }} style={styles.jobImage} />
         <View style={styles.jobInfo}>
           <Text style={styles.jobTitle}>{item.title}</Text>
           <Text style={styles.jobCompany}>{item.company?.corp_name}</Text>

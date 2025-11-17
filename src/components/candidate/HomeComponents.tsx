@@ -145,7 +145,13 @@ export const JobCard = memo(({
   company?: Company;
   matchScore?: JobMatchScore;
   isHighMatch?: boolean;
-}) => (
+}) => {
+  // Determine the best image to display
+  // Priority: item.company_logo (for viecoi) > item.image > company.image > placeholder
+  const imageUrl = item.company_logo || item.image || company?.image || 
+    `https://via.placeholder.com/80x80.png?text=${encodeURIComponent(company?.corp_name || item.company_name || 'Job')}`;
+  
+  return (
   <TouchableOpacity
     style={styles.jobCard}
     activeOpacity={0.7}
@@ -156,7 +162,7 @@ export const JobCard = memo(({
   >
     <Image
       style={styles.jobImage}
-      source={{ uri: item.image || PLACEHOLDER_JOB_IMG }}
+      source={{ uri: imageUrl }}
       contentFit="cover"
       transition={200}
     />
@@ -185,7 +191,7 @@ export const JobCard = memo(({
       <View style={styles.jobInfoRow}>
         <Ionicons name="business-outline" size={14} color="#64748b" />
         <Text style={styles.jobCompany} numberOfLines={1}>
-          {company?.corp_name ?? 'Không rõ công ty'}
+          {company?.corp_name ?? item.company_name ?? 'Không rõ công ty'}
         </Text>
       </View>
       {item.location && (
@@ -206,7 +212,8 @@ export const JobCard = memo(({
       )}
     </View>
   </TouchableOpacity>
-));
+  );
+});
 
 JobCard.displayName = 'JobCard';
 
@@ -389,7 +396,7 @@ const styles = StyleSheet.create({
   },
   externalBadge: {
     position: 'absolute',
-    top: 8,
+    bottom: 8,
     right: 8,
     backgroundColor: '#3b82f6',
     paddingHorizontal: 8,

@@ -55,15 +55,15 @@ export async function searchJobs(params: {
   // Build filters
   const filters: string[] = [];
   
-  if (jobType) filters.push(`jobType:"${jobType}"`);
-  if (category) filters.push(`jobCategory:"${category}"`);
+  if (jobType) filters.push(`job_type_id:"${jobType}"`);
+  if (category) filters.push(`category:"${category}"`);
   if (companyId) filters.push(`companyId:"${companyId}"`);
-  if (location) filters.push(`jobLocation:"${location}"`);
+  if (location) filters.push(`location:"${location}"`);
   
-  // Always filter by active status
-  filters.push('status:active');
+  // Không filter status vì job crawl có thể là draft
+  // filters.push('status:active');
 
-  const filterString = filters.join(' AND ');
+  const filterString = filters.length > 0 ? filters.join(' AND ') : '';
 
   console.log('🔍 Algolia search:', { query, filters: filterString });
 
@@ -143,7 +143,6 @@ export async function getJobSuggestions(query: string, limit: number = 5) {
           query: query.trim(),
           hitsPerPage: limit,
           attributesToRetrieve: ['title', 'company'],
-          filters: 'status:active',
         },
       ],
     });
@@ -177,7 +176,6 @@ export async function getFacetValues(facetName: 'jobType' | 'jobCategory' | 'job
           query: '',
           hitsPerPage: 0,
           facets: [facetName],
-          filters: 'status:active',
         },
       ],
     });

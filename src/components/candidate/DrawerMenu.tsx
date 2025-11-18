@@ -34,6 +34,7 @@ export function DrawerMenuButton() {
     { id: 'saved', title: 'Việc đã lưu', icon: 'bookmark', route: '/(candidate)/savedJobs' },
     { id: 'applied', title: 'Hồ sơ ứng tuyển', icon: 'document-text', route: '/(candidate)/appliedJob' },
     { id: 'chat', title: 'Tin nhắn', icon: 'chatbubbles', route: '/(candidate)/chat' },
+    { id: 'cv', title: 'Quản lý CV', icon: 'documents', route: '/(candidate)/cvManagement' },
     { id: 'student', title: 'Hồ sơ sinh viên', icon: 'school', route: '/(candidate)/studentProfile' },
     { id: 'profile', title: 'Thông tin cá nhân', icon: 'person', route: '/(candidate)/profile' },
   ];

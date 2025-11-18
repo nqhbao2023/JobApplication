@@ -18,7 +18,7 @@ type User = {
 type UserCardProps = {
   user: User;
   onEdit: (userId: string) => void;
-  onDelete: (userId: string, name: string) => void;
+  onDelete: (userId: string, name: string, user: User) => void;
 };
 
 const getRoleBadgeVariant = (role?: string) => {
@@ -69,7 +69,7 @@ export const UserCard = ({ user, onEdit, onDelete }: UserCardProps) => {
           <IconButton 
             icon="trash-outline" 
             color="#ef4444" 
-            onPress={() => onDelete(user.$id, user.name || user.email || '')} 
+            onPress={() => onDelete(user.$id, user.name || user.email || '', user)} 
           />
         </View>
       </View>

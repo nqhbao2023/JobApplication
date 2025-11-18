@@ -118,6 +118,26 @@ export default function CandidateLayout() {
           headerShown: false, // Use custom header with Save button
         }}
       />
+
+      <Tabs.Screen
+        name="cvManagement"
+        options={{
+          href: null, // Hide from tab bar
+          title: "Quản lý CV",
+          headerTitle: "Quản lý CV",
+          headerShown: false,
+        }}
+      />
+
+      <Tabs.Screen
+        name="cvEditor"
+        options={{
+          href: null, // Hide from tab bar
+          title: "Chỉnh sửa CV",
+          headerTitle: "Chỉnh sửa CV",
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 }

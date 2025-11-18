@@ -15,7 +15,7 @@ MÔ HÌNH HOẠT ĐỘNG
 A. Crawled Jobs (70% - Nguồn chính)
 Crawl từ:
 - viecoi.vn (part-time cho sinh viên)
-- timviec365.vn
+- timviec365.vn // bị chặn robots.txt 
 - Facebook Groups việc làm SV
 - Fanpages tuyển dụng Bình Dương
 - Zalo groups (nếu có API)

@@ -21,7 +21,7 @@ interface NormalizedJob {
   skills: string[];
   source: 'viecoi';
   external_url: string;
-  status: 'draft' | 'active';
+  status: 'pending' | 'active' | 'draft';
   is_verified: boolean;
   expires_at?: string;
   contact_email?: string;
@@ -157,7 +157,7 @@ export function normalizeJob(job: JobData): NormalizedJob {
     skills: job.skills,
     source: 'viecoi',
     external_url: job.url,
-    status: 'draft', // Admin cần duyệt
+    status: 'pending', // Admin cần duyệt trước khi publish
     is_verified: false,
     expires_at: job.expiresAt,
     contact_email: job.contactEmail,

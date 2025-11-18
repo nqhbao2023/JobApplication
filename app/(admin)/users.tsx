@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { deleteDoc, doc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db, auth } from '@/config/firebase';
 import { Button } from '@/components/base/Button';
 import { SearchBar } from '@/components/base/SearchBar';
 import { EmptyState } from '@/components/base/EmptyState';
@@ -41,8 +41,21 @@ const UsersScreen = () => {
     router.push({ pathname: '/(admin)/user-detail', params: { userId } } as any);
   };
 
-  const handleDelete = (userId: string, name: string) => {
-    Alert.alert('Xác nhận', `Bạn có chắc muốn xóa user "${name}"?`, [
+  const handleDelete = (userId: string, name: string, user: User) => {
+    // Ngăn admin tự xóa chính mình
+    const currentUserId = auth.currentUser?.uid;
+    if (userId === currentUserId) {
+      Alert.alert('Không thể xóa', 'Bạn không thể xóa chính tài khoản của mình!');
+      return;
+    }
+
+    // Cảnh báo khi xóa admin khác
+    const isAdminUser = user.isAdmin === true;
+    const warningMessage = isAdminUser
+      ? `⚠️ CẢNH BÁO: "${name}" là ADMIN!\n\nBạn có chắc chắn muốn xóa tài khoản admin này?`
+      : `Bạn có chắc muốn xóa user "${name}"?`;
+
+    Alert.alert('Xác nhận', warningMessage, [
       { text: 'Hủy', style: 'cancel' },
       {
         text: 'Xóa',

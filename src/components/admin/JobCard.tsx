@@ -14,9 +14,16 @@ type Salary = {
 type Job = {
   $id: string;
   title?: string;
+  company_name?: string;
   location?: string;
   salary?: string | Salary;
+  salary_text?: string;
+  salary_min?: number;
+  salary_max?: number;
   status?: string;
+  source?: string;
+  job_type_id?: string;
+  category?: string;
   ownerName?: string;
   ownerEmail?: string;
   created_at?: string;
@@ -37,7 +44,22 @@ const getStatusBadgeVariant = (status?: string) => {
   }
 };
 
-const formatSalary = (salary?: string | Salary): string => {
+const formatSalary = (job: Job): string => {
+  // Ưu tiên salary_text từ crawler
+  if (job.salary_text) return job.salary_text;
+  
+  // Nếu có salary_min/max từ crawler
+  if (job.salary_min || job.salary_max) {
+    const min = job.salary_min ? (job.salary_min / 1_000_000).toFixed(0) : '';
+    const max = job.salary_max ? (job.salary_max / 1_000_000).toFixed(0) : '';
+    
+    if (min && max) return `${min}-${max} triệu`;
+    if (min) return `Từ ${min} triệu`;
+    if (max) return `Tối đa ${max} triệu`;
+  }
+  
+  // Legacy salary format
+  const salary = job.salary;
   if (!salary) return 'Thỏa thuận';
   
   if (typeof salary === 'string') return salary;
@@ -72,22 +94,44 @@ export const JobCard = ({ job, onEdit, onDelete }: JobCardProps) => {
             />
           </View>
 
-          <View style={styles.owner}>
-            <Ionicons name="person-circle-outline" size={16} color="#64748b" />
-            <Text style={styles.ownerText} numberOfLines={1}>
-              {job.ownerName} • {job.ownerEmail}
-            </Text>
+          {/* Company Name - hiển thị cho job crawl */}
+          {job.company_name && (
+            <View style={styles.companyRow}>
+              <Ionicons name="business-outline" size={16} color="#3b82f6" />
+              <Text style={styles.companyText} numberOfLines={1}>
+                {job.company_name}
+              </Text>
+            </View>
+          )}
+
+          {/* Source Badge */}
+          {job.source && (
+            <View style={styles.sourceRow}>
+              <Badge label={`📡 ${job.source}`} variant="primary" />
+              {job.job_type_id && <Badge label={job.job_type_id} variant="gray" />}
+              {job.category && <Badge label={job.category} variant="warning" />}
+            </View>
+          )}
+
+          {/* Owner info - chỉ hiển thị cho job thường */}
+          {!job.source && job.ownerName && (
+            <View style={styles.owner}>
+              <Ionicons name="person-circle-outline" size={16} color="#64748b" />
+              <Text style={styles.ownerText} numberOfLines={1}>
+                {job.ownerName} • {job.ownerEmail}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.detailRow}>
+            <Ionicons name="location-outline" size={14} color="#64748b" />
+            <Text style={styles.detail}>{job.location || 'Chưa có'}</Text>
           </View>
 
           <View style={styles.detailRow}>
-  <Ionicons name="location-outline" size={14} color="#64748b" />
-  <Text style={styles.detail}>{job.location || 'Chưa có'}</Text>
-</View>
-
-<View style={styles.detailRow}>
-  <Ionicons name="cash-outline" size={14} color="#64748b" />
-  <Text style={styles.detail}>{formatSalary(job.salary)}</Text>
-</View>
+            <Ionicons name="cash-outline" size={14} color="#64748b" />
+            <Text style={styles.detail}>{formatSalary(job)}</Text>
+          </View>
 
           {job.created_at && (
             <Text style={styles.meta}>
@@ -166,5 +210,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 4,
+  },
+  companyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    backgroundColor: '#eff6ff',
+    padding: 8,
+    borderRadius: 8,
+  },
+  companyText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e40af',
+    flex: 1,
+  },
+  sourceRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 8,
+    flexWrap: 'wrap',
   },
 });

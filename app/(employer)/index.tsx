@@ -35,9 +35,9 @@ import { authApiService } from '@/services/authApi.service';
 import { jobApiService } from '@/services/jobApi.service';
 import { applicationApiService } from '@/services/applicationApi.service';
 import { handleApiError } from '@/utils/errorHandler';
-type RecentApp = { 
-  userName: string; 
-  jobTitle: string; 
+type RecentApp = {
+  userName: string;
+  jobTitle: string;
   id: string;
   candidateId?: string;
   userAvatar?: string;
@@ -76,13 +76,13 @@ export default function EmployerHome() {
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
 
-useEffect(() => {
-  const logToken = async () => {
-    const token = await auth.currentUser?.getIdToken();
-    console.log(" FIREBASE TOKEN : ", token);
-  };
-  logToken();
-}, []);
+  useEffect(() => {
+    const logToken = async () => {
+      const token = await auth.currentUser?.getIdToken();
+      console.log(" FIREBASE TOKEN : ", token);
+    };
+    logToken();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -121,7 +121,7 @@ useEffect(() => {
 
     try {
 
-       const [profileResult, jobsResult, appsResult] = await Promise.allSettled([
+      const [profileResult, jobsResult, appsResult] = await Promise.allSettled([
         authApiService.getProfile(),
         jobApiService.getMyJobs(),
         applicationApiService.getEmployerApplications(),
@@ -165,13 +165,13 @@ useEffect(() => {
           // Fetch recent applications with rate limiting
           const recent: any[] = [];
           const recentApps = sorted.slice(0, 5);
-          
+
           for (let i = 0; i < recentApps.length; i++) {
             const app = recentApps[i];
-            
+
             // Add 200ms delay between requests (except first one)
             if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
-            
+
             let userName = 'Không rõ tên';
             let userAvatar: string | undefined;
             try {
@@ -236,7 +236,7 @@ useEffect(() => {
         setLoading(false);
       }
     }
-    
+
   }, [toDate]);
 
   useEffect(() => {

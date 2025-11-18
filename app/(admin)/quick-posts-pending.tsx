@@ -114,7 +114,37 @@ const QuickPostsPending = () => {
       (item.spamScore || 0) >= 30 ? '#F59E0B' : '#10B981';
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => {
+          // Hiển thị chi tiết đầy đủ trong Alert
+          Alert.alert(
+            item.title,
+            `📝 Mô tả:\n${item.description}\n\n` +
+            `📞 Liên hệ:\n` +
+            `${item.contactInfo?.phone ? `Phone: ${item.contactInfo.phone}\n` : ''}` +
+            `${item.contactInfo?.email ? `Email: ${item.contactInfo.email}\n` : ''}` +
+            `${item.contactInfo?.zalo ? `Zalo: ${item.contactInfo.zalo}\n` : ''}` +
+            `${item.contactInfo?.facebook ? `Facebook: ${item.contactInfo.facebook}\n` : ''}` +
+            `\n⚠️ Spam Score: ${item.spamScore || 0}\n` +
+            `\n🌐 IP: ${item.metadata?.ip || 'N/A'}\n` +
+            `📅 ${item.metadata?.timestamp ? new Date(item.metadata.timestamp).toLocaleString('vi-VN') : ''}`,
+            [
+              { text: 'Đóng', style: 'cancel' },
+              { 
+                text: '✓ Approve', 
+                style: 'default',
+                onPress: () => handleApprove(item.id)
+              },
+              { 
+                text: '✗ Reject', 
+                style: 'destructive',
+                onPress: () => handleReject(item.id)
+              },
+            ]
+          );
+        }}
+      >
         {/* Header */}
         <View style={styles.cardHeader}>
           <Text style={styles.title} numberOfLines={2}>
@@ -154,11 +184,17 @@ const QuickPostsPending = () => {
           </View>
         )}
 
+        {/* Tap to view detail hint */}
+        <Text style={styles.tapHint}>Nhấn để xem chi tiết đầy đủ</Text>
+
         {/* Action Buttons */}
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.button, styles.approveButton]}
-            onPress={() => handleApprove(item.id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleApprove(item.id);
+            }}
           >
             <Ionicons name="checkmark-circle" size={20} color="#FFF" />
             <Text style={styles.buttonText}>Approve</Text>
@@ -166,13 +202,16 @@ const QuickPostsPending = () => {
 
           <TouchableOpacity
             style={[styles.button, styles.rejectButton]}
-            onPress={() => handleReject(item.id)}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleReject(item.id);
+            }}
           >
             <Ionicons name="close-circle" size={20} color="#FFF" />
             <Text style={styles.buttonText}>Reject</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -306,6 +345,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#92400E',
     marginBottom: 2,
+  },
+  tapHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 8,
   },
   actions: {
     flexDirection: 'row',

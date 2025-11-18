@@ -39,11 +39,78 @@ interface UpsertStats {
 }
 
 /**
+ * Auto-create company if not exists
+ */
+async function ensureCompany(companyName: string): Promise<string | null> {
+  if (!companyName) return null;
+  
+  const normalized = companyName.trim().toLowerCase();
+  
+  // Check if company exists
+  const companiesSnap = await db.collection('companies').get();
+  
+  // Try exact match
+  for (const doc of companiesSnap.docs) {
+    const data = doc.data();
+    const corpName = (data.corp_name || '').toLowerCase();
+    
+    if (corpName === normalized) {
+      return doc.id;
+    }
+  }
+  
+  // Try partial match
+  for (const doc of companiesSnap.docs) {
+    const data = doc.data();
+    const corpName = (data.corp_name || '').toLowerCase();
+    
+    if (corpName.includes(normalized) || normalized.includes(corpName)) {
+      return doc.id;
+    }
+  }
+  
+  // No match - create new company
+  const companyId = companyName
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 50);
+  
+  await db.collection('companies').doc(companyId).set({
+    corp_name: companyName,
+    city: 'Chưa xác định',
+    nation: 'Việt Nam',
+    corp_description: `Công ty ${companyName}`,
+    image: `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=random&size=200`,
+    color: '#' + Math.floor(Math.random()*16777215).toString(16),
+    created_at: new Date().toISOString(),
+    source: 'auto-generated',
+  });
+  
+  return companyId;
+}
+
+/**
  * Upsert single job to Firestore
  */
 async function upsertJob(job: any): Promise<'inserted' | 'updated' | 'skipped' | 'error'> {
   try {
     const jobsRef = db.collection('jobs');
+    
+    // Auto-create company if needed
+    let companyId = null;
+    if (job.company_name) {
+      companyId = await ensureCompany(job.company_name);
+    }
+    
+    // Prepare job data with company ID
+    const jobData = {
+      ...job,
+      company: companyId, // Add company ID
+    };
     
     // Check if job already exists (by external_url)
     const existingQuery = await jobsRef
@@ -55,14 +122,14 @@ async function upsertJob(job: any): Promise<'inserted' | 'updated' | 'skipped' |
       // Job exists, update it
       const docId = existingQuery.docs[0].id;
       await jobsRef.doc(docId).update({
-        ...job,
+        ...jobData,
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
       return 'updated';
     } else {
       // Job doesn't exist, create new
       await jobsRef.add({
-        ...job,
+        ...jobData,
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });

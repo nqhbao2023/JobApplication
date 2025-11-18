@@ -14,7 +14,7 @@ interface NormalizedJob {
   salary_max?: number;
   salary_text: string;
   job_type_id: string;
-  category: string;
+  jobCategories: string; // ✅ Changed: category ID instead of category string
   description: string;
   requirements: string[];
   benefits: string[];
@@ -37,7 +37,7 @@ function normalizeJobType(rawType: string): string {
   
   if (type.includes('full') || type.includes('toàn')) return 'full-time';
   if (type.includes('part') || type.includes('bán')) return 'part-time';
-  if (type.includes('intern') || type.includes('thực tập')) return 'intern';
+  if (type.includes('intern') || type.includes('thực tập')) return 'internship'; // ✅ Fixed: internship instead of intern
   if (type.includes('contract') || type.includes('hợp đồng')) return 'contract';
   if (type.includes('remote')) return 'remote';
   
@@ -117,22 +117,22 @@ function parseSalary(salaryText: string): {
 }
 
 /**
- * Normalize category
+ * Normalize category → category ID
  */
 function normalizeCategory(rawCategory: string): string {
   const category = rawCategory.toLowerCase().trim();
   
-  // Map common categories
-  if (category.includes('it') || category.includes('công nghệ')) return 'IT/Software';
-  if (category.includes('marketing')) return 'Marketing/PR';
-  if (category.includes('sale') || category.includes('bán hàng')) return 'Sales';
-  if (category.includes('design') || category.includes('thiết kế')) return 'Design';
-  if (category.includes('kế toán') || category.includes('account')) return 'Accounting';
-  if (category.includes('nhân sự') || category.includes('hr')) return 'HR';
-  if (category.includes('kinh doanh')) return 'Business';
-  if (category.includes('dịch vụ')) return 'Service';
+  // Map to category IDs that exist in Firestore
+  if (category.includes('it') || category.includes('công nghệ') || category.includes('phần mềm')) return 'it-software';
+  if (category.includes('marketing') || category.includes('truyền thông')) return 'marketing';
+  if (category.includes('sale') || category.includes('bán hàng') || category.includes('kinh doanh')) return 'sales';
+  if (category.includes('design') || category.includes('thiết kế')) return 'design';
+  if (category.includes('kế toán') || category.includes('account') || category.includes('tài chính')) return 'finance';
+  if (category.includes('nhân sự') || category.includes('hr') || category.includes('hành chính')) return 'hr';
+  if (category.includes('y tế') || category.includes('dược')) return 'healthcare';
+  if (category.includes('giáo dục')) return 'education';
   
-  return rawCategory || 'Other';
+  return 'other';
 }
 
 /**
@@ -150,7 +150,7 @@ export function normalizeJob(job: JobData): NormalizedJob {
     salary_max: salary.max,
     salary_text: salary.text,
     job_type_id: normalizeJobType(job.jobType),
-    category: normalizeCategory(job.category),
+    jobCategories: normalizeCategory(job.category), // ✅ Changed: now returns category ID
     description: job.description,
     requirements: job.requirements,
     benefits: job.benefits,

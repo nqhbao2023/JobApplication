@@ -71,10 +71,14 @@ client.interceptors.response.use(
           config.headers!.Authorization = `Bearer ${newToken}`;
           return client(config);
         }
-      } catch (refreshErr) {
-        console.error('❌ Token refresh failed, forcing logout');
-        await auth.signOut();
-        // Reject with error - errorHandler will handle the message
+      } catch (refreshErr: any) {
+        // Only force logout if it's NOT a network error
+        if (refreshErr?.code !== 'auth/network-request-failed') {
+          console.error('❌ Token refresh failed (auth error), forcing logout');
+          await auth.signOut();
+        } else {
+          console.warn('⚠️ Network error during token refresh, will retry later');
+        }
         return Promise.reject(error);
       }
     }

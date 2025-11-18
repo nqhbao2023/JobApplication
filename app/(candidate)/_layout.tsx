@@ -138,6 +138,16 @@ export default function CandidateLayout() {
           headerShown: false,
         }}
       />
+
+      <Tabs.Screen
+        name="applicationTracker"
+        options={{
+          href: null, // Hide from tab bar
+          title: "Theo dõi ứng tuyển",
+          headerTitle: "Theo dõi ứng tuyển",
+          headerShown: false,
+        }}
+      />
     </Tabs>
   );
 }

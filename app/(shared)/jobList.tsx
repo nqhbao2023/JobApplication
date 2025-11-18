@@ -19,9 +19,14 @@ type Job = {
   $id: string;
   title: string;
   image?: string;
+  company_logo?: string; // ✅ Thêm field từ viecoi
+  company_name?: string; // ✅ Thêm field từ viecoi
+  salary_text?: string;  // ✅ Thêm field từ viecoi
+  location?: string;     // ✅ Thêm field từ viecoi
   jobCategories?: any;
   jobTypes?: any;
   company?: any;
+  salary?: any;
 };
 
 type JobCategory = {
@@ -56,57 +61,119 @@ const AllJobs = () => {
       const categoriesSnap = await getDocs(collection(db, "job_categories"));
       const typesSnap = await getDocs(collection(db, "job_types"));
 
+      // ✅ Normalize jobs data
       const jobsData: Job[] = (
         await Promise.all(
           jobsSnap.docs.map(async (jobDoc) => {
             const jobData = jobDoc.data();
             console.log('🔵 [3] Processing job:', jobDoc.id, jobData.title);
+            
             if (!jobData.title) return null;
 
-            let companyData = {};
-            if (jobData.company) {
-              const companyId =
-                typeof jobData.company === "string"
-                  ? jobData.company
-                  : jobData.company.id || jobData.company.$id || "";
+            // ✅ Xử lý company data
+            let companyData: any = {};
+            let companyName = '';
+            let companyLogo = '';
+
+            if (jobData.company_name) {
+              // Viecoi job - có sẵn company_name
+              companyName = jobData.company_name;
+              companyLogo = jobData.company_logo || '';
+            } else if (jobData.company) {
+              // Internal job - cần fetch company
+              const companyId = typeof jobData.company === "string" 
+                ? jobData.company 
+                : jobData.company.id || jobData.company.$id || "";
+              
               if (companyId) {
-                const companySnap = await getDoc(doc(db, "companies", companyId));
-                if (companySnap.exists())
-                  companyData = { $id: companySnap.id, ...companySnap.data() };
-              } else companyData = jobData.company;
+                try {
+                  const companySnap = await getDoc(doc(db, "companies", companyId));
+                  if (companySnap.exists()) {
+                    companyData = { $id: companySnap.id, ...companySnap.data() };
+                    companyName = companyData.corp_name || companyData.name || '';
+                    companyLogo = companyData.image || '';
+                  }
+                } catch (err) {
+                  console.warn('⚠️ Failed to fetch company:', companyId);
+                }
+              } else if (typeof jobData.company === 'object') {
+                companyData = jobData.company;
+                companyName = companyData.corp_name || companyData.name || '';
+                companyLogo = companyData.image || '';
+              }
             }
 
+            // ✅ Xử lý category
             let categoryData = undefined;
             if (jobData.jobCategories) {
-              const catId =
-                typeof jobData.jobCategories === "string"
-                  ? jobData.jobCategories
-                  : jobData.jobCategories.id ||
-                    jobData.jobCategories.jobCategoryId ||
-                    "";
+              const catId = typeof jobData.jobCategories === "string"
+                ? jobData.jobCategories
+                : jobData.jobCategories.id || jobData.jobCategories.jobCategoryId || "";
+              
               if (catId) {
-                const catSnap = await getDoc(doc(db, "job_categories", catId));
-                if (catSnap.exists())
-                  categoryData = { $id: catSnap.id, ...catSnap.data() };
-              } else categoryData = jobData.jobCategories;
+                try {
+                  const catSnap = await getDoc(doc(db, "job_categories", catId));
+                  if (catSnap.exists()) {
+                    categoryData = { $id: catSnap.id, ...catSnap.data() };
+                  }
+                } catch (err) {
+                  console.warn('⚠️ Failed to fetch category:', catId);
+                }
+              } else {
+                categoryData = jobData.jobCategories;
+              }
             }
 
+            // ✅ Xử lý job type
             let typeData = undefined;
             if (jobData.jobTypes) {
-              const typeId =
-                typeof jobData.jobTypes === "string"
-                  ? jobData.jobTypes
-                  : jobData.jobTypes.id || jobData.jobTypes.jobTypeId || "";
+              const typeId = typeof jobData.jobTypes === "string"
+                ? jobData.jobTypes
+                : jobData.jobTypes.id || jobData.jobTypes.jobTypeId || "";
+              
               if (typeId) {
-                const typeSnap = await getDoc(doc(db, "job_types", typeId));
-                if (typeSnap.exists())
-                  typeData = { $id: typeSnap.id, ...typeSnap.data() };
-              } else typeData = jobData.jobTypes;
+                try {
+                  const typeSnap = await getDoc(doc(db, "job_types", typeId));
+                  if (typeSnap.exists()) {
+                    typeData = { $id: typeSnap.id, ...typeSnap.data() };
+                  }
+                } catch (err) {
+                  console.warn('⚠️ Failed to fetch type:', typeId);
+                }
+              } else {
+                typeData = jobData.jobTypes;
+              }
             }
+
+            // ✅ Xử lý salary
+            let salaryDisplay = '';
+            if (jobData.salary_text) {
+              // Viecoi job
+              salaryDisplay = jobData.salary_text;
+            } else if (jobData.salary) {
+              if (typeof jobData.salary === 'string') {
+                salaryDisplay = jobData.salary;
+              } else if (jobData.salary.min && jobData.salary.max) {
+                salaryDisplay = `${jobData.salary.min.toLocaleString()} - ${jobData.salary.max.toLocaleString()} ${jobData.salary.currency || 'VND'}`;
+              } else {
+                salaryDisplay = 'Thỏa thuận';
+              }
+            } else {
+              salaryDisplay = 'Thỏa thuận';
+            }
+
+            // ✅ Xử lý location
+            const locationDisplay = jobData.location || 
+                                   (companyData?.city ? `${companyData.city}, ${companyData.nation || 'Việt Nam'}` : 'Không rõ');
 
             return {
               $id: jobDoc.id,
               ...jobData,
+              // ✅ Normalized fields
+              displayImage: jobData.company_logo || jobData.image || companyLogo || '',
+              displayCompanyName: companyName || 'Ẩn danh',
+              displaySalary: salaryDisplay,
+              displayLocation: locationDisplay,
               company: companyData,
               jobCategories: categoryData,
               jobTypes: typeData,
@@ -157,6 +224,7 @@ const AllJobs = () => {
     setActiveCategory(id);
     applyFilters(id, activeType);
   };
+  
   const handleTypeChange = (id: string) => {
     setActiveType(id);
     applyFilters(activeCategory, id);
@@ -188,24 +256,17 @@ const AllJobs = () => {
       ) : (
         <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
           <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Category Tabs */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.tabScroll}
             >
               <TouchableOpacity
-                style={[
-                  styles.tabButton,
-                  activeCategory === "all" && styles.tabButtonActive,
-                ]}
+                style={[styles.tabButton, activeCategory === "all" && styles.tabButtonActive]}
                 onPress={() => handleCategoryChange("all")}
               >
-                <Text
-                  style={[
-                    styles.tabText,
-                    activeCategory === "all" && styles.tabTextActive,
-                  ]}
-                >
+                <Text style={[styles.tabText, activeCategory === "all" && styles.tabTextActive]}>
                   Tất cả danh mục
                 </Text>
               </TouchableOpacity>
@@ -213,96 +274,99 @@ const AllJobs = () => {
               {categories.map((cat) => (
                 <TouchableOpacity
                   key={cat.$id}
-                  style={[
-                    styles.tabButton,
-                    activeCategory === cat.$id && styles.tabButtonActive,
-                  ]}
+                  style={[styles.tabButton, activeCategory === cat.$id && styles.tabButtonActive]}
                   onPress={() => handleCategoryChange(cat.$id)}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeCategory === cat.$id && styles.tabTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.tabText, activeCategory === cat.$id && styles.tabTextActive]}>
                     {cat.category_name}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
+            {/* Type Tabs */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.tabScroll}
             >
               <TouchableOpacity
-                style={[
-                  styles.tabButton,
-                  activeType === "all" && styles.tabButtonActive,
-                ]}
+                style={[styles.tabButton, activeType === "all" && styles.tabButtonActive]}
                 onPress={() => handleTypeChange("all")}
               >
-                <Text
-                  style={[
-                    styles.tabText,
-                    activeType === "all" && styles.tabTextActive,
-                  ]}
-                >
-                  Tất cả loại công việc
+                <Text style={[styles.tabText, activeType === "all" && styles.tabTextActive]}>
+                  Tất cả loại hình
                 </Text>
               </TouchableOpacity>
 
               {types.map((type) => (
                 <TouchableOpacity
                   key={type.$id}
-                  style={[
-                    styles.tabButton,
-                    activeType === type.$id && styles.tabButtonActive,
-                  ]}
+                  style={[styles.tabButton, activeType === type.$id && styles.tabButtonActive]}
                   onPress={() => handleTypeChange(type.$id)}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      activeType === type.$id && styles.tabTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.tabText, activeType === type.$id && styles.tabTextActive]}>
                     {type.type_name}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            {/* Jobs List */}
+            <View style={{ padding: 16, gap: 12 }}>
               {filteredJobs.map((job) => (
                 <TouchableOpacity
                   key={job.$id}
-                  style={styles.jobItem}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(shared)/jobDescription",
-                      params: { jobId: job.$id },
-                    })
-                  }
+                  style={styles.jobCard}
                   activeOpacity={0.8}
+                  onPress={() => router.push({ pathname: "/(shared)/jobDescription", params: { jobId: job.$id } })}
                 >
-                  <Image
-                    source={{
-                      uri:
-                        job.image ||
-                        "https://via.placeholder.com/100x100.png?text=Job",
-                    }}
-                    style={styles.jobImage}
-                  />
-                  <View style={styles.jobInfo}>
-                    <Text style={styles.jobTitle}>{job.title}</Text>
-                    <Text style={styles.jobCompany}>
-                      {job.company?.corp_name ?? "Không rõ công ty"}
+                  {/* ✅ Job Image with fallback */}
+                  {job.displayImage ? (
+                    <Image source={{ uri: job.displayImage }} style={styles.jobImage} />
+                  ) : (
+                    <View style={[styles.jobImage, styles.placeholderImage]}>
+                      <Ionicons name="briefcase-outline" size={32} color="#94a3b8" />
+                    </View>
+                  )}
+
+                  <View style={styles.jobDetails}>
+                    <Text style={styles.jobTitle} numberOfLines={2}>
+                      {job.title}
                     </Text>
-                    <Text style={styles.jobLocation}>
-                      {job.company?.city ?? "—"}, {job.company?.nation ?? "—"}
-                    </Text>
+                    
+                    {/* ✅ Company Name */}
+                    <View style={styles.infoRow}>
+                      <Ionicons name="business-outline" size={14} color="#64748b" />
+                      <Text style={styles.jobCompany} numberOfLines={1}>
+                        {job.displayCompanyName}
+                      </Text>
+                    </View>
+
+                    {/* ✅ Location */}
+                    <View style={styles.infoRow}>
+                      <Ionicons name="location-outline" size={14} color="#64748b" />
+                      <Text style={styles.jobLocation} numberOfLines={1}>
+                        {job.displayLocation}
+                      </Text>
+                    </View>
+
+                    {/* ✅ Salary */}
+                    <View style={styles.infoRow}>
+                      <Ionicons name="cash-outline" size={14} color="#10b981" />
+                      <Text style={styles.jobSalary} numberOfLines={1}>
+                        {job.displaySalary}
+                      </Text>
+                    </View>
+
+                    {/* ✅ Job Type Badge */}
+                    {job.jobTypes && (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>
+                          {job.jobTypes.type_name || 'Full-time'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </TouchableOpacity>
               ))}
@@ -330,81 +394,109 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    elevation: 2,
   },
   backBtn: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 10,
-    padding: 6,
-    marginRight: 8,
+    marginRight: 12,
+    padding: 4,
   },
   headerTitle: {
-    color: "#fff",
     fontSize: 18,
     fontWeight: "700",
+    color: "#fff",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   tabScroll: {
-    flexDirection: "row",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    gap: 8,
   },
   tabButton: {
-    paddingVertical: 8,
     paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "#fff",
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
+    backgroundColor: "#f1f5f9",
+    marginRight: 8,
   },
   tabButtonActive: {
     backgroundColor: "#4A80F0",
-    borderColor: "#4A80F0",
   },
   tabText: {
     fontSize: 14,
-    color: "#1e293b",
+    fontWeight: "600",
+    color: "#64748b",
   },
   tabTextActive: {
     color: "#fff",
-    fontWeight: "700",
   },
-  jobItem: {
-    flexDirection: "row",
+  jobCard: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    alignItems: "center",
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
     shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 2,
   },
   jobImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
   },
-  jobInfo: {
+  placeholderImage: {
+    backgroundColor: "#f1f5f9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  jobDetails: {
     flex: 1,
-    marginLeft: 12,
+    gap: 4,
   },
   jobTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   jobCompany: {
-    fontSize: 14,
-    color: "#475569",
+    fontSize: 13,
+    color: "#64748b",
+    flex: 1,
   },
   jobLocation: {
     fontSize: 12,
     color: "#94a3b8",
+    flex: 1,
+  },
+  jobSalary: {
+    fontSize: 13,
+    color: "#10b981",
+    fontWeight: "600",
+    flex: 1,
+  },
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#eff6ff",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  badgeText: {
+    fontSize: 11,
+    color: "#3b82f6",
+    fontWeight: "600",
   },
   emptyContainer: {
     alignItems: "center",
@@ -414,10 +506,5 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     fontSize: 16,
     marginTop: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
   },
 });

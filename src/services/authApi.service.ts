@@ -92,7 +92,11 @@ export const authApiService = {
 
         return { role: 'candidate', isAdmin: false };
       }
-      console.error('❌ getCurrentRole error:', err.message);
+      
+      // Chỉ log error khi KHÔNG phải 401 (401 là normal khi chưa login hoặc token hết hạn)
+      if (!axios.isAxiosError(err) || err.response?.status !== 401) {
+        console.error('❌ getCurrentRole error:', err.message);
+      }
       throw err;
     }
   },

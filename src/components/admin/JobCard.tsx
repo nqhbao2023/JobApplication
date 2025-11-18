@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../base/Card';
 import { Badge } from '../base/Badge';
+import { StatusBadge } from '../base/StatusBadge';
 import { IconButton } from '../base/IconButton';
 
 type Salary = {
@@ -88,9 +89,10 @@ export const JobCard = ({ job, onEdit, onDelete }: JobCardProps) => {
             <Text style={styles.title} numberOfLines={1}>
               {job.title || 'N/A'}
             </Text>
-            <Badge 
-              label={job.status || 'active'} 
-              variant={getStatusBadgeVariant(job.status)} 
+            {/* Sử dụng StatusBadge mới thay vì Badge */}
+            <StatusBadge 
+              status={(job.status as any) || 'active'} 
+              size="small"
             />
           </View>
 

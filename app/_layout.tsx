@@ -7,6 +7,20 @@ import { SavedJobsProvider } from "@/contexts/saveJobsContext";
 import { RoleProvider } from "@/contexts/RoleContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { getCurrentUserRole } from "@/utils/roles";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
+
+function AppContent() {
+  // Initialize push notifications (only works with EAS project ID configured)
+  const { expoPushToken, permissionStatus } = usePushNotifications();
+
+  useEffect(() => {
+    if (expoPushToken) {
+      console.log('📱 Push token ready:', expoPushToken.slice(0, 20) + '...');
+    }
+  }, [expoPushToken]);
+
+  return <Slot />;
+}
 
 export default function RootLayout() {
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -113,7 +127,7 @@ export default function RootLayout() {
     <SavedJobsProvider>
       <RoleProvider>
         <AuthProvider>
-          <Slot />
+          <AppContent />
         </AuthProvider>
       </RoleProvider>
     </SavedJobsProvider>

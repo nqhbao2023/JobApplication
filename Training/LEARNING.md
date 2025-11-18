@@ -220,7 +220,7 @@ const JobList = () => {
   const [loading, setLoading] = useState(false);
   
   // Thay đổi state:
-  const addJob = (newJob: Job) => {
+  const addJob = (newJob: Job) => { 
     setJobs([...jobs, newJob]); // Thêm job mới
   };
   

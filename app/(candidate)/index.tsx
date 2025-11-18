@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useCandidateHome } from '@/hooks/useCandidateHome';
 import { useStudentFilters } from '@/hooks/useStudentFilters';
+import { useJobNotifications } from '@/hooks/useJobNotifications';
 import {
   LoadingScreen,
   ErrorView,
@@ -66,6 +67,14 @@ const CandidateHome = () => {
     forYouJobs,
     data?.user?.studentProfile
   );
+
+  // ✅ Setup job notifications (only works on physical device with EAS project ID)
+  useJobNotifications({
+    jobs: forYouJobs,
+    studentProfile: data?.user?.studentProfile,
+    enabled: true,
+  });
+
   const displayName = useMemo(
     () => data?.user?.displayName || data?.user?.name || '',
     [data?.user?.displayName, data?.user?.name]
@@ -231,6 +240,32 @@ const CandidateHome = () => {
             />
           </View>
 
+          {/* Application Tracker Quick Access */}
+          <TouchableOpacity
+            style={styles.trackerWidget}
+            activeOpacity={0.8}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push('/(candidate)/applicationTracker');
+            }}
+          >
+            <LinearGradient
+              colors={['#667eea', '#764ba2']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.trackerGradient}
+            >
+              <View style={styles.trackerLeft}>
+                <Ionicons name="stats-chart" size={28} color="#fff" />
+                <View style={styles.trackerTextContainer}>
+                  <Text style={styles.trackerTitle}>Theo dõi ứng tuyển</Text>
+                  <Text style={styles.trackerSubtitle}>Xem thống kê & lịch sử apply</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+
           <SectionHeader 
             title={studentFilters.isActive ? "Kết quả lọc" : "Dành cho bạn"} 
             onPressShowAll={() => router.push('/(shared)/jobList')} 
@@ -371,6 +406,39 @@ const styles = StyleSheet.create({
   advancedFiltersContainer: {
     marginTop: 12,
     marginBottom: 16,
+  },
+  trackerWidget: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  trackerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 18,
+  },
+  trackerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  trackerTextContainer: {
+    gap: 4,
+  },
+  trackerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  trackerSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
   },
   horizontalList: { paddingRight: 20 },
 });

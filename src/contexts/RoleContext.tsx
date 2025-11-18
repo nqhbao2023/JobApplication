@@ -87,7 +87,10 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
           await AsyncStorage.multiRemove([ROLE_CACHE_KEY, ROLE_TIMESTAMP_KEY]);
         }
       } catch (apiError: any) {
-        console.error('❌ Load role from API failed:', apiError);
+        // Chỉ log error khi KHÔNG phải 401 (401 là bình thường khi chưa auth)
+        if (apiError?.response?.status !== 401) {
+          console.error('❌ Load role from API failed:', apiError.message || apiError);
+        }
 
         // Use cache only if fresh
         if (cachedRole && cacheAge < CACHE_MAX_AGE) {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { db, auth } from "@/config/firebase";
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
+import { pushNotificationService } from "@/services/pushNotification.service";
 
 export const useJobStatus = (jobId?: string) => {
   const [userId, setUserId] = useState<string>("");
@@ -52,10 +53,25 @@ export const useJobStatus = (jobId?: string) => {
         const docRef = await addDoc(collection(db, "saved_jobs"), {
           userId,
           jobId,
+          savedAt: new Date(),
           created_at: new Date().toISOString(),
         });
         setIsSaved(true);
         setSaveDocId(docRef.id);
+
+        // ✅ Schedule reminder notification (3 days later)
+        try {
+          const jobDoc = await getDoc(doc(db, "jobs", jobId));
+          if (jobDoc.exists()) {
+            const jobData = jobDoc.data();
+            await pushNotificationService.scheduleSavedJobReminder(
+              jobData.title || 'Công việc đã lưu',
+              jobId
+            );
+          }
+        } catch (notifErr) {
+          console.log('Failed to schedule reminder:', notifErr);
+        }
       }
     } catch (err) {
       console.error("toggleSave error:", err);

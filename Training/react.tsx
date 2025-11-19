@@ -74,5 +74,5 @@ import {useEffect} from 'react';
             const data = await response.json();
             setJobs (data);
         };
-
+        return <View>{/* Render jobs */}</View>;
 }

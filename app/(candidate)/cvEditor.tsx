@@ -32,6 +32,8 @@ import { cvService } from '@/services/cv.service';
 import { cvExportService } from '@/services/cvExport.service';
 import CVPreviewModal from '@/components/CVPreviewModal';
 import * as Haptics from 'expo-haptics';
+import { AddressInput } from '@/components/cv/AddressInput';
+import { EducationSection } from '@/components/cv/EducationSection';
 
 const CVEditorScreen = () => {
   const params = useLocalSearchParams();
@@ -316,12 +318,12 @@ const CVEditorScreen = () => {
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Địa chỉ</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Thành phố Thủ Dầu Một, Bình Dương"
-                    value={cvData.personalInfo.address}
+                  <AddressInput
+                    value={cvData.personalInfo.address || ''}
                     onChangeText={(text) => updatePersonalInfo('address', text)}
+                    placeholder="Thành phố Thủ Dầu Một, Bình Dương"
                   />
+                  <Text style={styles.hint}>💡 Gợi ý tự động 63 tỉnh thành VN</Text>
                 </View>
               </View>
             )}
@@ -380,80 +382,12 @@ const CVEditorScreen = () => {
 
             {expandedSections.education && (
               <View style={styles.sectionContent}>
-                {cvData.education.map((edu, index) => (
-                  <View key={edu.id} style={styles.entryCard}>
-                    <View style={styles.entryHeader}>
-                      <Text style={styles.entryIndex}>Học vấn {index + 1}</Text>
-                      <TouchableOpacity
-                        onPress={() => removeEducation(edu.id)}
-                        style={styles.removeButton}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Tên trường *</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Đại học Thủ Dầu Một"
-                        value={edu.school}
-                        onChangeText={(text) => updateEducation(edu.id, 'school', text)}
-                      />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Bằng cấp *</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Cử nhân"
-                        value={edu.degree}
-                        onChangeText={(text) => updateEducation(edu.id, 'degree', text)}
-                      />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Chuyên ngành</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Công nghệ thông tin"
-                        value={edu.major || ''}
-                        onChangeText={(text) => updateEducation(edu.id, 'major', text)}
-                      />
-                    </View>
-
-                    <View style={styles.row}>
-                      <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                        <Text style={styles.label}>Từ</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="2021-09"
-                          value={edu.startDate}
-                          onChangeText={(text) => updateEducation(edu.id, 'startDate', text)}
-                        />
-                      </View>
-
-                      <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                        <Text style={styles.label}>Đến</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Hiện tại"
-                          value={edu.endDate || ''}
-                          onChangeText={(text) => updateEducation(edu.id, 'endDate', text)}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                ))}
-
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={addEducation}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add-circle-outline" size={20} color="#4A80F0" />
-                  <Text style={styles.addButtonText}>Thêm học vấn</Text>
-                </TouchableOpacity>
+                <EducationSection
+                  education={cvData.education}
+                  onAdd={addEducation}
+                  onUpdate={updateEducation}
+                  onRemove={removeEducation}
+                />
               </View>
             )}
           </View>
@@ -797,5 +731,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#64748b',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
 });

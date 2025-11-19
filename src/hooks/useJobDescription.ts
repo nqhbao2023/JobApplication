@@ -233,8 +233,19 @@ export const useJobDescription = (jobId: string) => {
       // ✅ Validate employerId trước khi gửi request
       const employerId = jobData.employerId || jobData.ownerId;
       if (!employerId) {
-        Alert.alert('Lỗi', 'Không tìm thấy thông tin nhà tuyển dụng. Vui lòng thử lại.');
-        console.error('❌ Missing employerId in jobData:', jobData);
+        Alert.alert(
+          'Không thể ứng tuyển',
+          'Công việc này chưa có thông tin nhà tuyển dụng. Đây có thể là việc làm từ nguồn bên ngoài hoặc dữ liệu tạm thời.\\n\\nVui lòng thử các công việc khác hoặc liên hệ trực tiếp với công ty.',
+          [{ text: 'Đóng' }]
+        );
+        if (__DEV__) {
+          console.warn('⚠️ Job missing employerId:', {
+            jobId: jobData.$id,
+            title: jobData.title,
+            source: jobData.source,
+            jobSource: jobData.jobSource,
+          });
+        }
         return;
       }
 

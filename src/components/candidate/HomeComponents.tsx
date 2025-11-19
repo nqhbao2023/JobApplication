@@ -27,6 +27,16 @@ import {
 } from '@/constants/candidate_Home.constants';
 import { formatSalary } from '@/utils/salary.utils';
 
+// Helper function to adjust color brightness for gradients
+const adjustColorBrightness = (color: string, amount: number): string => {
+  const hex = color.replace('#', '');
+  const num = parseInt(hex, 16);
+  const r = Math.max(0, Math.min(255, (num >> 16) + amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
+  const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+};
+
 export const LoadingScreen = memo(() => (
   <View style={styles.loadingContainer}>
     <ActivityIndicator size="large" color="#4A80F0" />
@@ -148,8 +158,22 @@ export const JobCard = memo(({
 }) => {
   // Determine the best image to display
   // Priority: item.company_logo (for viecoi) > item.image > company.image > placeholder
-  const imageUrl = item.company_logo || item.image || company?.image || 
-    `https://via.placeholder.com/80x80.png?text=${encodeURIComponent(company?.corp_name || item.company_name || 'Job')}`;
+  const getCompanyLogo = () => {
+    const logo = item.company_logo || item.image || company?.image;
+    
+    // Validate URL
+    if (logo && typeof logo === 'string' && 
+        (logo.startsWith('http://') || logo.startsWith('https://'))) {
+      return logo;
+    }
+    
+    // Use placeholder with company initial
+    const companyName = company?.corp_name || item.company_name || 'Company';
+    const initial = companyName.charAt(0).toUpperCase();
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&size=200&background=4A80F0&color=fff&bold=true&format=png`;
+  };
+  
+  const imageUrl = getCompanyLogo();
   
   return (
   <TouchableOpacity
@@ -163,7 +187,7 @@ export const JobCard = memo(({
     <Image
       style={styles.jobImage}
       source={{ uri: imageUrl }}
-      contentFit="cover"
+      contentFit="contain"
       transition={200}
     />
     {/* High Match Badge */}
@@ -217,28 +241,52 @@ export const JobCard = memo(({
 
 JobCard.displayName = 'JobCard';
 
-export const CategoryCard = memo(({ item, jobCount }: { item: Category & { jobCount?: number }; jobCount?: number }) => (
+export const CategoryCard = memo(({ item, jobCount }: { item: Category & { jobCount?: number }; jobCount?: number }) => {
+  // Generate gradient colors based on category color
+  const baseColor = item.color || '#4A80F0';
+  const gradientColors: [string, string] = [
+    baseColor,
+    adjustColorBrightness(baseColor, -20),
+  ];
+  
+  return (
   <TouchableOpacity
-    style={[styles.categoryCard, { backgroundColor: item.color || '#f0f4ff' }]}
+    activeOpacity={0.8}
     onPress={() => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       router.push({
         pathname: '/(shared)/categoryJobs',
         params: { id: item.$id, name: item.category_name },
       });
     }}
   >
-    <View style={[styles.categoryIconContainer, { backgroundColor: getContrastColor(item.color) + '15' }]}>
-      <Ionicons name={(item.icon_name as any) || 'briefcase-outline'} size={24} color={getContrastColor(item.color)} />
-    </View>
-    <Text style={[styles.categoryTitle, { color: getContrastColor(item.color) }]} numberOfLines={2}>
-      {item.category_name || 'Danh mục'}
-    </Text>
-    <Text style={[styles.categorySub, { color: getContrastColor(item.color) }]}>
-      {jobCount || 0} việc làm
-    </Text>
+    <LinearGradient
+      colors={gradientColors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.categoryCard}
+    >
+      <View style={styles.categoryIconContainer}>
+        <View style={styles.categoryIconBg}>
+          <Ionicons name={(item.icon_name as any) || 'briefcase-outline'} size={32} color="#fff" />
+        </View>
+      </View>
+      <Text style={styles.categoryTitle} numberOfLines={2}>
+        {item.category_name || 'Danh mục'}
+      </Text>
+      <View style={styles.categoryJobCountContainer}>
+        <Ionicons name="briefcase" size={14} color="rgba(255,255,255,0.9)" />
+        <Text style={styles.categorySub}>
+          {jobCount || 0} việc làm
+        </Text>
+      </View>
+      <View style={styles.categoryArrow}>
+        <Ionicons name="arrow-forward" size={16} color="rgba(255,255,255,0.8)" />
+      </View>
+    </LinearGradient>
   </TouchableOpacity>
-));
+  );
+});
 
 CategoryCard.displayName = 'CategoryCard';
 
@@ -480,39 +528,64 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   categoryCard: {
-    width: 140,
-    height: 140,
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    width: 160,
+    height: 180,
+    padding: 20,
+    borderRadius: 20,
+    justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
     marginRight: CARD_GAP,
+    overflow: 'hidden',
   },
   categoryIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    alignItems: 'flex-start',
+  },
+  categoryIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   categoryTitle: {
     fontWeight: '700',
-    fontSize: 13,
-    textAlign: 'center',
-    marginBottom: 6,
-    lineHeight: 18,
+    fontSize: 15,
+    color: '#fff',
+    marginTop: 12,
+    lineHeight: 20,
+  },
+  categoryJobCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
   },
   categorySub: {
-    fontSize: 11,
-    opacity: 0.75,
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '600',
+    opacity: 0.9,
+  },
+  categoryArrow: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyContainer: {
     alignItems: 'center',

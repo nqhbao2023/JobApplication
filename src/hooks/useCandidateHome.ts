@@ -266,6 +266,10 @@ export const useCandidateHome = () => {
     if (selectedFilter === 'all') return dataJob;
     return dataJob.filter(job => {
       const type = job.type?.toLowerCase() || '';
+      const location = job.location?.toLowerCase() || '';
+      const title = job.title?.toLowerCase() || '';
+      const description = job.description?.toLowerCase() || '';
+      
       if (selectedFilter === 'intern') {
         return type.includes('intern') || type.includes('thực tập');
       }
@@ -273,7 +277,18 @@ export const useCandidateHome = () => {
         return type.includes('part') || type.includes('bán thời gian');
       }
       if (selectedFilter === 'remote') {
-        return type.includes('remote') || type.includes('từ xa');
+        return type.includes('remote') || type.includes('từ xa') || 
+               location.includes('remote') || location.includes('từ xa') ||
+               title.includes('tại nhà') || description.includes('work from home');
+      }
+      if (selectedFilter === 'nearby') {
+        // Nearby keywords for Bình Dương area (TDMU students)
+        const nearbyKeywords = [
+          'thủ dầu một', 'tdm', 'bình dương', 'dĩ an', 'thuận an',
+          'tân uyên', 'bàu bàng', 'bến cát', 'phú giáo', 'dầu tiếng'
+        ];
+        const locationText = location + ' ' + title + ' ' + description;
+        return nearbyKeywords.some(keyword => locationText.includes(keyword));
       }
       return true;
     });

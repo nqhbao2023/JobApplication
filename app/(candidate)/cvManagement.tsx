@@ -59,6 +59,9 @@ const CVManagementScreen = () => {
   }, []);
 
   const handleCreateCV = async () => {
+    // Prevent duplicate creation
+    if (loading) return;
+    
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setLoading(true);
@@ -213,20 +216,29 @@ const CVManagementScreen = () => {
       >
         {/* Create New CV Button */}
         <TouchableOpacity
-          style={styles.createButton}
+          style={[styles.createButton, loading && styles.createButtonDisabled]}
           onPress={handleCreateCV}
           activeOpacity={0.8}
+          disabled={loading}
         >
           <View style={styles.createIconContainer}>
-            <Ionicons name="add-circle-outline" size={32} color="#4A80F0" />
+            {loading ? (
+              <ActivityIndicator size="small" color="#4A80F0" />
+            ) : (
+              <Ionicons name="add-circle-outline" size={32} color="#4A80F0" />
+            )}
           </View>
           <View style={styles.createTextContainer}>
-            <Text style={styles.createTitle}>Tạo CV mới</Text>
+            <Text style={styles.createTitle}>
+              {loading ? 'Đang tạo CV...' : 'Tạo CV mới'}
+            </Text>
             <Text style={styles.createSubtitle}>
               Tự động điền từ hồ sơ sinh viên
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#94a3b8" />
+          {!loading && (
+            <Ionicons name="chevron-forward" size={24} color="#94a3b8" />
+          )}
         </TouchableOpacity>
 
         {/* CV List */}
@@ -393,6 +405,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#4A80F0',
     borderStyle: 'dashed',
+  },
+  createButtonDisabled: {
+    opacity: 0.6,
+    borderColor: '#94a3b8',
   },
   createIconContainer: {
     marginRight: 12,

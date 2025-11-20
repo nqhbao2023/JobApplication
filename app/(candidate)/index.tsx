@@ -246,7 +246,7 @@ const CandidateHome = () => {
             activeOpacity={0.8}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push('/(candidate)/applicationTracker');
+              router.push('/(candidate)/applicationTracker' as any);
             }}
           >
             <LinearGradient
@@ -346,7 +346,7 @@ const CandidateHome = () => {
         style={styles.floatingAIButton}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.push('/(shared)/ai-assistant');
+          router.push('/(shared)/ai-assistant' as any);
         }}
         activeOpacity={0.8}
       >

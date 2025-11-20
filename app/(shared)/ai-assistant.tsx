@@ -49,7 +49,7 @@ export default function AIAssistant() {
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    // Scroll to bottom when new message added
+    // cuộn xuống dưới khi tin nhắn được thêm vào
     if (messages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });

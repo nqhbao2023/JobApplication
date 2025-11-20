@@ -127,7 +127,7 @@ const JobDescription = () => {
                 await quickPostService.notifyQuickPostApplication(jobId, {
                   name: profile.name || user.displayName || 'Ứng viên',
                   email: user.email || profile.email || '',
-                  phone: profile.phone,
+                  phone: profile.phone || undefined,
                   // TODO: Add CV URL if user has uploaded CV
                   cvUrl: undefined,
                 });

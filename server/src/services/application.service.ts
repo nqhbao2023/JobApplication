@@ -1,6 +1,7 @@
 import { db } from '../config/firebase';
 import { Application } from '../types';
 import { AppError } from '../middleware/errorHandler';
+import emailService from './email.service';
 
 const APPLICATIONS_COLLECTION = 'applications';
 
@@ -39,6 +40,31 @@ export class ApplicationService {
       await jobRef.update({
         applicantCount: currentApplicantCount + 1,
       });
+
+      // ✅ Send email notification to employer
+      try {
+        const jobData = jobDoc.data();
+        const candidateDoc = await db.collection('users').doc(applicationData.candidateId).get();
+        const employerDoc = await db.collection('users').doc(applicationData.employerId).get();
+        
+        const candidateData = candidateDoc.data();
+        const employerData = employerDoc.data();
+        
+        if (employerData?.email && jobData?.title) {
+          await emailService.sendJobApplicationNotification(
+            employerData.email,
+            jobData.title,
+            candidateData?.fullName || candidateData?.email || 'Ứng viên',
+            candidateData?.email || '',
+            candidateData?.phoneNumber,
+            applicationData.cvUrl
+          );
+          console.log(`📧 Email notification sent to employer: ${employerData.email}`);
+        }
+      } catch (emailError) {
+        console.error('⚠️  Failed to send email notification (non-critical):', emailError);
+        // Don't throw error - application was created successfully
+      }
 
       return newApplication;
     } catch (error: any) {

@@ -212,6 +212,21 @@ async function main() {
     console.log(`   ❌ Errors: ${stats.errors}`);
 
     console.log('\n✅ Upsert completed!');
+    
+    // ✅ Auto-sync to Algolia after successful upsert
+    if (stats.inserted > 0 || stats.updated > 0) {
+      console.log('\n🔄 Auto-syncing to Algolia...\n');
+      try {
+        const { fetchViecoiJobs, syncToAlgolia } = await import('./sync-algolia');
+        const jobs = await fetchViecoiJobs();
+        await syncToAlgolia(jobs);
+        console.log('✅ Algolia sync completed!\n');
+      } catch (algoliaError) {
+        console.error('⚠️  Algolia sync failed (non-critical):', algoliaError);
+        console.log('   You can manually sync later with: npm run sync:algolia\n');
+      }
+    }
+    
     process.exit(0);
   } catch (error) {
     console.error('❌ Upsert failed:', error);

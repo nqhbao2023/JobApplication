@@ -27,29 +27,29 @@ class EmailService {
 
   /**
    * Initialize email transporter
-   * Requires env variables: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS
+   * Requires env variables: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
    */
   private initializeTransporter() {
     const {
-      EMAIL_HOST = 'smtp.gmail.com',
-      EMAIL_PORT = '587',
-      EMAIL_USER,
-      EMAIL_PASS,
+      SMTP_HOST = 'smtp.gmail.com',
+      SMTP_PORT = '587',
+      SMTP_USER,
+      SMTP_PASS,
     } = process.env;
 
-    if (!EMAIL_USER || !EMAIL_PASS) {
-      console.warn('⚠️  Email service not configured. Set EMAIL_USER and EMAIL_PASS in .env');
+    if (!SMTP_USER || !SMTP_PASS) {
+      console.warn('⚠️  Email service not configured. Set SMTP_USER and SMTP_PASS in .env');
       return;
     }
 
     try {
       this.transporter = nodemailer.createTransport({
-        host: EMAIL_HOST,
-        port: parseInt(EMAIL_PORT),
+        host: SMTP_HOST,
+        port: parseInt(SMTP_PORT),
         secure: false, // true for 465, false for other ports
         auth: {
-          user: EMAIL_USER,
-          pass: EMAIL_PASS,
+          user: SMTP_USER,
+          pass: SMTP_PASS,
         },
       });
 
@@ -170,6 +170,95 @@ Email tự động từ Job4S
     return this.sendEmail({
       to: posterEmail,
       subject: `[Job4S] Có ứng viên mới: ${jobTitle}`,
+      html,
+      text,
+    });
+  }
+
+  /**
+   * Send application notification to employer (for regular jobs)
+   */
+  async sendJobApplicationNotification(
+    employerEmail: string,
+    jobTitle: string,
+    candidateName: string,
+    candidateEmail: string,
+    candidatePhone?: string,
+    cvUrl?: string
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #fff; padding: 30px; border: 1px solid #e0e0e0; }
+          .footer { background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 10px 10px; }
+          .button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+          .info-box { background: #f8f9fa; padding: 15px; border-left: 4px solid #667eea; margin: 15px 0; }
+          h1 { margin: 0; font-size: 24px; }
+          h2 { color: #667eea; font-size: 20px; margin-top: 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Ứng viên mới ứng tuyển!</h1>
+          </div>
+          
+          <div class="content">
+            <h2>Thông tin ứng tuyển</h2>
+            <p>Có ứng viên mới ứng tuyển vào vị trí:</p>
+            
+            <div class="info-box">
+              <strong>📋 Vị trí:</strong> ${jobTitle}
+            </div>
+            
+            <h2>Thông tin ứng viên</h2>
+            <div class="info-box">
+              <p><strong>👤 Họ tên:</strong> ${candidateName}</p>
+              <p><strong>📧 Email:</strong> ${candidateEmail}</p>
+              ${candidatePhone ? `<p><strong>📱 Số điện thoại:</strong> ${candidatePhone}</p>` : ''}
+            </div>
+            
+            ${cvUrl ? `
+              <p style="text-align: center;">
+                <a href="${cvUrl}" class="button">📄 Xem CV của ứng viên</a>
+              </p>
+            ` : ''}
+            
+            <p>Đăng nhập vào Job4S để xem chi tiết hồ sơ và quản lý ứng viên.</p>
+          </div>
+          
+          <div class="footer">
+            <p>Email tự động từ <strong>Job4S</strong></p>
+            <p>Ứng dụng tìm việc cho sinh viên</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `
+Ứng viên mới ứng tuyển: ${jobTitle}
+
+Thông tin ứng viên:
+- Họ tên: ${candidateName}
+- Email: ${candidateEmail}
+${candidatePhone ? `- Số điện thoại: ${candidatePhone}` : ''}
+${cvUrl ? `- CV: ${cvUrl}` : ''}
+
+Đăng nhập vào Job4S để xem chi tiết.
+
+---
+Email tự động từ Job4S
+    `;
+
+    return this.sendEmail({
+      to: employerEmail,
+      subject: `[Job4S] Ứng viên mới: ${jobTitle}`,
       html,
       text,
     });

@@ -340,6 +340,25 @@ const CandidateHome = () => {
           </Animated.View>
         </View>
       </Animated.ScrollView>
+
+      {/* Floating AI Assistant Button */}
+      <TouchableOpacity
+        style={styles.floatingAIButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.push('/(shared)/ai-assistant');
+        }}
+        activeOpacity={0.8}
+      >
+        <LinearGradient
+          colors={['#8B5CF6', '#7C3AED']}
+          style={styles.floatingAIGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+        </LinearGradient>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -441,4 +460,22 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
   },
   horizontalList: { paddingRight: 20 },
+  floatingAIButton: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    borderRadius: 30,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingAIGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

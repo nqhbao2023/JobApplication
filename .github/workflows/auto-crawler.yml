@@ -1,0 +1,86 @@
+name: Auto Crawler - Viecoi.vn Jobs
+
+on:
+  schedule:
+    # Run every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 */6 * * *'
+  
+  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  crawl-jobs:
+    name: Crawl Jobs from Viecoi.vn
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      
+      - name: Install dependencies
+        run: |
+          cd server
+          npm ci
+      
+      - name: Run crawler
+        run: |
+          cd server
+          npm run crawl:viecoi-full
+        env:
+          # Firebase credentials (stored in GitHub Secrets)
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          
+          # Algolia credentials (stored in GitHub Secrets)
+          ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
+          ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+          ALGOLIA_INDEX_NAME: ${{ secrets.ALGOLIA_INDEX_NAME }}
+          
+          # AI API (optional, for auto-categorization)
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_URL: ${{ secrets.AI_API_URL }}
+      
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "✅ Crawler completed successfully at $(date)"
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Crawler failed at $(date)"
+          exit 1
+
+  # Optional: Send notification to Discord/Slack
+  notify:
+    name: Send Notification
+    needs: crawl-jobs
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Send Discord notification (optional)
+        if: env.DISCORD_WEBHOOK_URL != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ "${{ needs.crawl-jobs.result }}" == "success" ]; then
+            MESSAGE="✅ Auto-crawler completed successfully!"
+            COLOR="3066993"
+          else
+            MESSAGE="❌ Auto-crawler failed!"
+            COLOR="15158332"
+          fi
+          
+          curl -H "Content-Type: application/json" \
+            -d "{\"embeds\": [{\"title\": \"Job4S Auto Crawler\", \"description\": \"$MESSAGE\", \"color\": $COLOR}]}" \
+            $DISCORD_WEBHOOK_URL

@@ -64,6 +64,10 @@ export const API_ENDPOINTS = {
     recommend: '/api/ai/recommend',
     enhance: '/api/ai/enhance-description',
     extractSkills: '/api/ai/extract-skills',
+    ask: '/api/ai/ask',
+    categorize: '/api/ai/categorize',
+    analyzeCV: '/api/ai/analyze-cv',
+    predictSalary: '/api/ai/predict-salary',
   },
   news: '/api/news',
   applications: {

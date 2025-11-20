@@ -13,6 +13,8 @@ import { authApiService } from '@/services/authApi.service';
 import { Job, Company, Category } from '@/types';
 import { normalizeJob, sortJobsByDate } from '@/utils/job.utils';
 import { handleApiError } from '@/utils/errorHandler';
+import { calculateJobMatchScore, JobWithScore } from '@/services/jobMatching.service';
+import * as Location from 'expo-location';
 
 export type QuickFilter = 'all' | 'intern' | 'part-time' | 'remote' | 'nearby';
 
@@ -29,6 +31,7 @@ export const useCandidateHome = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<QuickFilter>('all');
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | undefined>();
 
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
@@ -36,6 +39,24 @@ export const useCandidateHome = () => {
   const isLoadingRef = useRef(false);
   const lastLoadTimeRef = useRef<number>(0);
   const CACHE_DURATION = 30000; // 30 seconds cache
+
+  // Load current location for distance-based matching
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({});
+          setCurrentLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+        }
+      } catch (error) {
+        if (__DEV__) console.warn('[Location] Could not get current location', error);
+      }
+    })();
+  }, []);
 
   const load_user_id = useCallback(async () => {
     try {
@@ -294,9 +315,36 @@ export const useCandidateHome = () => {
     });
   }, [dataJob, selectedFilter]);
 
-  const forYouJobs = useMemo(() => filteredJobs.slice(0, 5), [filteredJobs]);
+  // ✅ Calculate match scores for jobs using AI matching
+  const jobsWithMatchScores = useMemo((): JobWithScore[] => {
+    if (!dataUser?.studentProfile) {
+      // No profile yet, return jobs without scores
+      return dataJob.map(job => ({ ...job, matchScore: undefined, isHighMatch: false }));
+    }
 
-  const latestJobs = useMemo(() => dataJob.slice(0, 6), [dataJob]);
+    return dataJob.map(job => {
+      const matchScore = calculateJobMatchScore(job, dataUser.studentProfile, currentLocation);
+      const isHighMatch = matchScore.totalScore >= 0.7; // 70% or higher
+
+      return {
+        ...job,
+        matchScore,
+        isHighMatch,
+      };
+    });
+  }, [dataJob, dataUser?.studentProfile, currentLocation]);
+
+  // Sort by match score for "For You" section
+  const forYouJobs = useMemo(() => {
+    const scored = jobsWithMatchScores
+      .filter(job => selectedFilter === 'all' ? true : filteredJobs.some(fj => fj.$id === job.$id))
+      .sort((a, b) => (b.matchScore?.totalScore || 0) - (a.matchScore?.totalScore || 0))
+      .slice(0, 10); // Top 10 matched jobs
+    
+    return scored;
+  }, [jobsWithMatchScores, selectedFilter, filteredJobs]);
+
+  const latestJobs = useMemo(() => jobsWithMatchScores.slice(0, 6), [jobsWithMatchScores]);
 
   const trendingCategories = useMemo((): CategoryWithCount[] => {
     return dataCategories

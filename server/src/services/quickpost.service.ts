@@ -1,6 +1,7 @@
 import { db } from '../config/firebase';
 import { Job } from '../types';
 import { FieldValue } from 'firebase-admin/firestore';
+import emailService from './email.service';
 
 class QuickPostService {
   private jobsCollection = db.collection('jobs');
@@ -33,6 +34,14 @@ class QuickPostService {
 
     const docRef = await this.jobsCollection.add(newJob);
     const doc = await docRef.get();
+    
+    // Send confirmation email to poster
+    if (jobData.contactInfo?.email) {
+      await emailService.sendQuickPostConfirmation(
+        jobData.contactInfo.email,
+        jobData.title || 'Tin tuyển dụng mới'
+      ).catch(err => console.error('Failed to send confirmation email:', err));
+    }
     
     return { id: doc.id, ...doc.data() } as Job;
   }
@@ -113,6 +122,50 @@ class QuickPostService {
       .get();
 
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Job));
+  }
+
+  /**
+   * Send application notification for quick-post job
+   */
+  async notifyQuickPostApplication(
+    jobId: string,
+    candidateData: {
+      name: string;
+      email: string;
+      phone?: string;
+      cvUrl?: string;
+    }
+  ): Promise<boolean> {
+    const jobRef = this.jobsCollection.doc(jobId);
+    const doc = await jobRef.get();
+
+    if (!doc.exists) {
+      throw new Error('Job not found');
+    }
+
+    const job = doc.data() as Job;
+    
+    // Check if it's a quick-post job
+    if (job.jobSource !== 'quick-post' && job.source !== 'quick-post') {
+      throw new Error('Not a quick-post job');
+    }
+
+    // Get poster email
+    const posterEmail = job.contactInfo?.email;
+    if (!posterEmail) {
+      console.warn('Quick-post job has no email. Cannot send notification.');
+      return false;
+    }
+
+    // Send email notification
+    return await emailService.notifyQuickPostApplication(
+      posterEmail,
+      job.title || 'Tin tuyển dụng',
+      candidateData.name,
+      candidateData.email,
+      candidateData.phone,
+      candidateData.cvUrl
+    );
   }
 }
 

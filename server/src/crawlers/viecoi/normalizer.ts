@@ -4,6 +4,7 @@
  */
 
 import { JobData } from './job-crawler';
+import aiService from '../../services/ai.service';
 
 interface NormalizedJob {
   title: string;
@@ -117,7 +118,36 @@ function parseSalary(salaryText: string): {
 }
 
 /**
- * Normalize category → category ID
+ * Normalize category → category ID (with AI fallback)
+ */
+async function normalizeCategoryWithAI(rawCategory: string, jobTitle: string, description: string): Promise<string> {
+  const category = rawCategory.toLowerCase().trim();
+  
+  // Try rule-based first (faster)
+  if (category.includes('it') || category.includes('công nghệ') || category.includes('phần mềm')) return 'it-software';
+  if (category.includes('marketing') || category.includes('truyền thông')) return 'marketing';
+  if (category.includes('sale') || category.includes('bán hàng') || category.includes('kinh doanh')) return 'sales';
+  if (category.includes('design') || category.includes('thiết kế')) return 'design';
+  if (category.includes('kế toán') || category.includes('account') || category.includes('tài chính')) return 'finance';
+  if (category.includes('nhân sự') || category.includes('hr') || category.includes('hành chính')) return 'hr';
+  if (category.includes('y tế') || category.includes('dược')) return 'healthcare';
+  if (category.includes('giáo dục')) return 'education';
+  if (category.includes('f&b') || category.includes('phục vụ') || category.includes('nhà hàng')) return 'fb';
+  if (category.includes('retail') || category.includes('bán lẻ')) return 'retail';
+  
+  // If rule-based failed, use AI
+  try {
+    const aiCategory = await aiService.autoCategorizeJob(jobTitle, description);
+    console.log(`🤖 AI categorized "${jobTitle}" → ${aiCategory}`);
+    return aiCategory.toLowerCase().replace(/\s+/g, '-');
+  } catch (error) {
+    console.warn('⚠️ AI categorization failed, using fallback:', error);
+    return 'other';
+  }
+}
+
+/**
+ * Legacy synchronous version for backward compatibility
  */
 function normalizeCategory(rawCategory: string): string {
   const category = rawCategory.toLowerCase().trim();
@@ -136,7 +166,39 @@ function normalizeCategory(rawCategory: string): string {
 }
 
 /**
- * Main normalize function
+ * Main normalize function (async for AI support)
+ */
+export async function normalizeJobAsync(job: JobData): Promise<NormalizedJob> {
+  const salary = parseSalary(job.salary);
+  const category = await normalizeCategoryWithAI(job.category, job.title, job.description);
+  
+  return {
+    title: job.title,
+    company_name: job.company,
+    company_logo: job.companyLogo,
+    location: job.location,
+    salary_min: salary.min,
+    salary_max: salary.max,
+    salary_text: salary.text,
+    job_type_id: normalizeJobType(job.jobType),
+    jobCategories: category,
+    description: job.description,
+    requirements: job.requirements,
+    benefits: job.benefits,
+    skills: job.skills,
+    source: 'viecoi',
+    external_url: job.url,
+    status: 'pending',
+    is_verified: false,
+    expires_at: job.expiresAt,
+    contact_email: job.contactEmail,
+    contact_phone: job.contactPhone,
+    created_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Main normalize function (sync, uses rule-based only)
  */
 export function normalizeJob(job: JobData): NormalizedJob {
   const salary = parseSalary(job.salary);
@@ -167,7 +229,15 @@ export function normalizeJob(job: JobData): NormalizedJob {
 }
 
 /**
- * Normalize multiple jobs
+ * Normalize multiple jobs (async)
+ */
+export async function normalizeJobsAsync(jobs: JobData[]): Promise<NormalizedJob[]> {
+  const promises = jobs.map(job => normalizeJobAsync(job));
+  return Promise.all(promises);
+}
+
+/**
+ * Normalize multiple jobs (sync)
  */
 export function normalizeJobs(jobs: JobData[]): NormalizedJob[] {
   return jobs.map(normalizeJob);

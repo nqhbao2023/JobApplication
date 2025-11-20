@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 interface JobApplySectionProps {
   job: Job;
   onApplyFeatured?: () => void;
+  onApplyQuickPost?: () => void; // NEW: For quick-post CV submission
   isSaved?: boolean;
   saveLoading?: boolean;
   onToggleSave?: () => void;
@@ -17,6 +18,7 @@ interface JobApplySectionProps {
 const JobApplySection: React.FC<JobApplySectionProps> = ({ 
   job, 
   onApplyFeatured,
+  onApplyQuickPost,
   isSaved = false,
   saveLoading = false,
   onToggleSave
@@ -67,6 +69,8 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({
           sourceUrl={job.external_url || job.sourceUrl}
           contactInfo={job.contactInfo}
           onApplyFeatured={onApplyFeatured}
+          onApplyQuickPost={onApplyQuickPost}
+          jobId={job.$id || job.id}
           compact={true}
         />
         

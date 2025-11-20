@@ -22,7 +22,9 @@ interface ApplyButtonProps {
   sourceUrl?: string;
   contactInfo?: ContactInfo;
   onApplyFeatured?: () => void; // Callback để gửi CV
+  onApplyQuickPost?: () => void; // Callback để gửi CV qua email cho quick-post
   compact?: boolean; // Compact mode for bottom bar
+  jobId?: string; // Job ID for quick-post notification
 }
 
 const ApplyButton: React.FC<ApplyButtonProps> = ({
@@ -30,7 +32,9 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
   sourceUrl,
   contactInfo,
   onApplyFeatured,
+  onApplyQuickPost,
   compact = false,
+  jobId,
 }) => {
   /**
    * Type 1: Crawled Jobs - Redirect to source
@@ -69,6 +73,14 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
 
     const buttons: any[] = [];
 
+    // Option: Send CV via email (ưu tiên)
+    if (contactInfo.email && onApplyQuickPost) {
+      buttons.push({
+        text: `📧 Gửi CV qua Email`,
+        onPress: onApplyQuickPost,
+      });
+    }
+
     if (contactInfo.phone) {
       buttons.push({
         text: `📞 Gọi: ${contactInfo.phone}`,
@@ -95,7 +107,7 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
       });
     }
 
-    if (contactInfo.email) {
+    if (contactInfo.email && !onApplyQuickPost) {
       buttons.push({
         text: `📧 Email: ${contactInfo.email}`,
         onPress: () => Linking.openURL(`mailto:${contactInfo.email}`),

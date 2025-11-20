@@ -24,6 +24,7 @@ import { userApiService } from '@/services';
 import { useRole } from '@/contexts/RoleContext';
 import { handleApiError, handleSuccess } from '@/utils/errorHandler';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
+import StudentProfileSettings from '@/components/candidate/StudentProfileSettings';
 
 const Person = () => {
   const ActionBtn = ({
@@ -56,6 +57,7 @@ const Person = () => {
   const [userName, setUserName] = useState('');
   const [dataUser, setDataUser] = useState<any>();
   const [loading, setLoading] = useState(false);
+  const [showStudentProfile, setShowStudentProfile] = useState(false);
   const { role } = useRole();
 
   /**
@@ -364,10 +366,16 @@ const Person = () => {
             {dataUser?.role === 'candidate' && (
               <>
                 <ActionBtn
+                  icon="briefcase-outline"
+                  label="Thông tin tìm việc"
+                  onPress={() => setShowStudentProfile(true)}
+                  color="#10b981"
+                />
+                <ActionBtn
                   icon="person-outline"
                   label="Hồ sơ sinh viên"
                   onPress={() => router.push('/(candidate)/studentProfile' as RelativePathString)}
-                  color="#10b981"
+                  color="#6366f1"
                 />
                 <ActionBtn
                   icon="checkmark-done"
@@ -396,6 +404,20 @@ const Person = () => {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {/* Student Profile Settings Modal */}
+      {dataUser?.role === 'candidate' && (
+        <StudentProfileSettings
+          visible={showStudentProfile}
+          onClose={() => setShowStudentProfile(false)}
+          currentProfile={dataUser?.studentProfile}
+          onSave={async (profile) => {
+            // Reload user data after save
+            await loadDataUser();
+            setShowStudentProfile(false);
+          }}
+        />
+      )}
 
       <Modal visible={!!editField} transparent animationType="slide">
         <View style={styles.modalContainer}>

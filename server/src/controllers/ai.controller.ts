@@ -79,3 +79,62 @@ export const askAI = async (
   }
 };
 
+export const categorizeJob = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { title, description } = req.body;
+
+    if (!title || !description) {
+      res.status(400).json({ error: 'Title and description are required' });
+      return;
+    }
+
+    const category = await aiService.autoCategorizeJob(title, description);
+    res.json({ category });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const analyzeCV = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const cvData = req.body;
+
+    if (!cvData) {
+      res.status(400).json({ error: 'CV data is required' });
+      return;
+    }
+
+    const analysis = await aiService.analyzeCVStrength(cvData);
+    res.json(analysis);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const predictSalary = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const jobData = req.body;
+
+    if (!jobData || !jobData.title || !jobData.category || !jobData.location || !jobData.type) {
+      res.status(400).json({ error: 'Job data (title, category, location, type) is required' });
+      return;
+    }
+
+    const prediction = await aiService.predictJobSalary(jobData);
+    res.json(prediction);
+  } catch (error) {
+    next(error);
+  }
+};

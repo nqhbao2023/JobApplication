@@ -65,4 +65,21 @@ export const quickPostService = {
   async rejectQuickPost(jobId: string, reason?: string): Promise<void> {
     await apiClient.patch(`/api/quick-posts/${jobId}/reject`, { reason });
   },
+
+  /**
+   * Send application notification for quick-post job
+   */
+  async notifyQuickPostApplication(
+    jobId: string,
+    candidateData: {
+      name: string;
+      email: string;
+      phone?: string;
+      cvUrl?: string;
+    }
+  ): Promise<{ success: boolean; message: string }> {
+    return apiClient.post(`/api/quick-posts/${jobId}/notify`, candidateData);
+  },
 };
+
+export default quickPostService;

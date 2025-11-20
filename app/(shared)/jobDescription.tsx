@@ -27,6 +27,8 @@ import { getJobSections, isViecoiJob } from "@/utils/jobContent.utils";
 import { SCROLL_BOTTOM_PADDING } from "@/utils/layout.utils";
 import { Job } from "@/types";
 import { auth } from "@/config/firebase";
+import { quickPostService } from "@/services/quickPostApi.service";
+import { authApiService } from "@/services/authApi.service";
 
 const JobDescription = () => {
   const [refreshing, setRefreshing] = useState(false);
@@ -94,6 +96,58 @@ const JobDescription = () => {
     setRefreshing(true);
     await refresh();
     setRefreshing(false);
+  };
+
+  /**
+   * Handle Quick-Post Application
+   * Send CV notification via email to poster
+   */
+  const handleQuickPostApply = async () => {
+    try {
+      // Get current user info
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert('Lỗi', 'Vui lòng đăng nhập để ứng tuyển');
+        return;
+      }
+
+      // Get user profile
+      const profile = await authApiService.getProfile();
+      
+      // Show confirmation
+      Alert.alert(
+        'Gửi CV ứng tuyển',
+        'CV của bạn sẽ được gửi đến nhà tuyển dụng qua email. Bạn có muốn tiếp tục?',
+        [
+          { text: 'Hủy', style: 'cancel' },
+          {
+            text: 'Gửi ngay',
+            onPress: async () => {
+              try {
+                await quickPostService.notifyQuickPostApplication(jobId, {
+                  name: profile.name || user.displayName || 'Ứng viên',
+                  email: user.email || profile.email || '',
+                  phone: profile.phone,
+                  // TODO: Add CV URL if user has uploaded CV
+                  cvUrl: undefined,
+                });
+
+                Alert.alert(
+                  'Thành công!',
+                  'Thông tin của bạn đã được gửi đến nhà tuyển dụng. Họ sẽ liên hệ lại với bạn sớm.'
+                );
+                
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (error: any) {
+                Alert.alert('Lỗi', error.message || 'Không thể gửi CV. Vui lòng thử lại sau.');
+              }
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert('Lỗi', error.message || 'Đã xảy ra lỗi');
+    }
   };
 
   // Parse job sections
@@ -305,6 +359,7 @@ const JobDescription = () => {
           <JobApplySection
             job={jobData as Job}
             onApplyFeatured={handleApply}
+            onApplyQuickPost={handleQuickPostApply}
             isSaved={isSaved}
             saveLoading={saveLoading}
             onToggleSave={toggleSave}

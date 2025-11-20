@@ -75,4 +75,11 @@ import {useEffect} from 'react';
             setJobs (data);
         };
         return <View>{/* Render jobs */}</View>;
-}
+};
+
+
+//2.2 Expo Router (Điều hướng)
+
+//typescript
+// CẤU TRÚC FOLDER = CẤU TRÚC URL
+

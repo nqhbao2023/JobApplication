@@ -6,12 +6,16 @@ import {
   getPendingQuickPosts,
   approveQuickPost,
   rejectQuickPost,
+  notifyQuickPostApplication,
 } from '../controllers/quickpost.controller';
 
 const router = Router();
 
 // Public route - không cần auth, có rate limit chống spam
 router.post('/', quickPostLimiter, createQuickPostJob);
+
+// Protected routes (auth required)
+router.post('/:id/notify', authenticate, notifyQuickPostApplication);
 
 // Admin routes
 router.get('/pending', authenticate, authorize('admin'), getPendingQuickPosts);

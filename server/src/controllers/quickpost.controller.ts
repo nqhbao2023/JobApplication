@@ -98,7 +98,41 @@ export const rejectQuickPost = async (
     const { id } = req.params;
     const { reason } = req.body;
     await quickPostService.rejectQuickPost(id, reason);
-    res.json({ message: 'Job rejected.' });
+    res.json({ message: 'Job rejected and removed.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Send application notification for quick-post job
+ * Requires auth (candidate only)
+ */
+export const notifyQuickPostApplication = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, cvUrl } = req.body;
+
+    if (!name || !email) {
+      res.status(400).json({ error: 'Name and email are required' });
+      return;
+    }
+
+    const success = await quickPostService.notifyQuickPostApplication(
+      id,
+      { name, email, phone, cvUrl }
+    );
+
+    res.json({ 
+      success, 
+      message: success 
+        ? 'Application notification sent successfully' 
+        : 'Failed to send notification (no email configured)'
+    });
   } catch (error) {
     next(error);
   }

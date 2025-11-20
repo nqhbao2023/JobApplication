@@ -304,7 +304,6 @@ const { jobId } = useLocalSearchParams();
 
 // 3. BUTTON - Nút bấm
 <Button title="Click me" onPress={() => console.log('Clicked')} />
-
 // 4. TEXTINPUT - Nhập liệu
 <TextInput
   value={email}

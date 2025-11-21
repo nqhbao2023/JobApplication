@@ -15,6 +15,14 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyDWOpfdH_wDYHzdRgQBW1DEEvUrBQuUkdo",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "job4s-app.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "job4s-app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "519470633273",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:519470633273:android:ba73e62a82896f3e6598e8",
+        "EXPO_PUBLIC_API_URL": "https://job4s-server.onrender.com"
       }
     },
     "production": {

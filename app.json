@@ -7,13 +7,15 @@
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.JobApplication",
+      "package": "com.hoangbao.job4s",
+      "googleServicesFile": "./google-services.json",
+
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
@@ -51,11 +53,11 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 34,
-            "targetSdkVersion": 34,
-            "buildToolsVersion": "34.0.0",
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
             "usesCleartextTraffic": true,
-            "minSdkVersion": 21
+            "minSdkVersion": 24
           }
         }
       ]

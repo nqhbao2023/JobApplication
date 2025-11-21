@@ -279,9 +279,21 @@ export const useAddJobForm = () => {
   };
 
   const validateForm = useCallback(() => {
-    if (!formData.title.trim()) return { valid: false, msg: 'Vui lòng nhập tiêu đề công việc' };
-    if (!formData.jobDescription.trim()) return { valid: false, msg: 'Vui lòng nhập mô tả công việc' };
-    if (!formData.salaryMin.trim()) return { valid: false, msg: 'Vui lòng nhập lương tối thiểu' };
+    if (!formData.title.trim()) {
+      return { valid: false, msg: 'Vui lòng nhập tiêu đề công việc' };
+    }
+    if (formData.title.trim().length < 5) {
+      return { valid: false, msg: 'Tiêu đề công việc phải có ít nhất 5 ký tự' };
+    }
+    if (!formData.jobDescription.trim()) {
+      return { valid: false, msg: 'Vui lòng nhập mô tả công việc' };
+    }
+    if (formData.jobDescription.trim().length < 20) {
+      return { valid: false, msg: 'Mô tả công việc phải có ít nhất 20 ký tự' };
+    }
+    if (!formData.salaryMin.trim()) {
+      return { valid: false, msg: 'Vui lòng nhập lương tối thiểu' };
+    }
 
     const min = parseFloat(formData.salaryMin);
     if (Number.isNaN(min) || min < 0) return { valid: false, msg: 'Lương tối thiểu không hợp lệ' };
@@ -471,14 +483,14 @@ export const useAddJobForm = () => {
         .map(s => s.trim())
         .filter(s => s.length > 0);
 
-      // ✅ Ensure requirements và skills không rỗng
+      // ✅ Ensure requirements và skills không rỗng và đủ dài
       const finalRequirements = requirements.length > 0 
-        ? requirements 
+        ? requirements.map(r => r.length < 10 ? `Yêu cầu: ${r}` : r) // Ensure min length
         : ['Mô tả công việc: ' + formData.jobDescription.trim()];
       
       const finalSkills = skills.length > 0 
-        ? skills 
-        : ['Kỹ năng cơ bản'];
+        ? skills.map(s => s.length < 2 ? `Kỹ năng: ${s}` : s) // Ensure min length
+        : ['Kỹ năng cơ bản'];      
 
       // ✅ Map job type từ form sang API format
       const jobTypeMap: Record<string, 'full-time' | 'part-time' | 'contract' | 'internship'> = {

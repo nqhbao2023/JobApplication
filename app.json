@@ -49,8 +49,11 @@
     "experiments": {
       "typedRoutes": true
     },
-    "install": {
-      "exclude": ["@types/react-native"]
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0f9a49c5-b440-4611-a006-e216779c267b"
+      }
     }
   }
 }

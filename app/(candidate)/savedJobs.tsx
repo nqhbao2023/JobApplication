@@ -102,6 +102,23 @@ const Job = () => {
         'Job'
       )}`;
 
+    // ✅ Format salary - handle both object and string formats
+    const formatSalary = (salary: any) => {
+      if (!salary) return 'Thỏa thuận';
+      
+      // If salary is an object with min/max
+      if (typeof salary === 'object' && salary.min !== undefined) {
+        const currency = salary.currency === 'VND' ? '₫' : '$';
+        if (salary.min === salary.max) {
+          return `${salary.min.toLocaleString()} ${currency}`;
+        }
+        return `${salary.min.toLocaleString()}-${salary.max.toLocaleString()} ${currency}`;
+      }
+      
+      // If salary is a string or number
+      return `${salary}`;
+    };
+
     return (
       <TouchableOpacity
         style={styles.jobItem}
@@ -114,7 +131,7 @@ const Job = () => {
           <Text style={styles.jobLocation}>{item.company?.city}, {item.company?.nation}</Text>
         </View>
         <View style={styles.jobRight}>
-          <Text style={styles.jobSalary}>$ {item.salary}</Text>
+          <Text style={styles.jobSalary}>{formatSalary(item.salary)}</Text>
           <Text style={styles.jobType}>{item.jobTypes?.type_name}</Text>
           <TouchableOpacity onPress={() => handleSaveJob(item.$id)} style={{ padding: 4 }}>
   <Ionicons

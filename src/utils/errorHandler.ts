@@ -181,7 +181,7 @@ export function handleApiError(
 ): string {
   const { silent = false, haptic = true, callback, fallbackMessage } = options;
 
-  // Log error for debugging
+  // Log error for debugging with validation details
   console.error(`❌ [${context}]`, {
     error,
     message: error?.message,
@@ -189,6 +189,15 @@ export function handleApiError(
     status: error?.response?.status,
     data: error?.response?.data,
   });
+
+  // ✅ Extract and log validation details if available
+  const validationDetails = error?.response?.data?.details;
+  if (validationDetails && Array.isArray(validationDetails)) {
+    console.error(`❌ [${context}] Validation Errors:`);
+    validationDetails.forEach((detail: any) => {
+      console.error(`  - ${detail.field}: ${detail.message}`);
+    });
+  }
 
   // Haptic feedback
   if (haptic) {

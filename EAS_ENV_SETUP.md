@@ -11,7 +11,7 @@ Chạy lần lượt các lệnh sau trong PowerShell:
 
 ```powershell
 # 1. Firebase API Key
-eas secret:create --scope project --name EXPO_PUBLIC_FIREBASE_API_KEY --value process.env.EXPO_PUBLIC_FIREBASE_API_KEY --type string
+eas secret:create --scope project --name EXPO_PUBLIC_FIREBASE_API_KEY --value AIzaSyDWOpfdH_wDYHzdRgQBW1DEEvUrBQuUkdo --type string
 
 # 2. Firebase Auth Domain
 eas secret:create --scope project --name EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN --value job4s-app.firebaseapp.com --type string
@@ -37,7 +37,7 @@ eas secret:create --scope project --name EXPO_PUBLIC_API_URL --value https://job
 
 | Name | Value | Type |
 |------|-------|------|
-| `EXPO_PUBLIC_FIREBASE_API_KEY` | `process.env.EXPO_PUBLIC_FIREBASE_API_KEY` | string |
+| `EXPO_PUBLIC_FIREBASE_API_KEY` | `AIzaSyDWOpfdH_wDYHzdRgQBW1DEEvUrBQuUkdo` | string |
 | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | `job4s-app.firebaseapp.com` | string |
 | `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | `job4s-app` | string |
 | `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | `519470633273` | string |

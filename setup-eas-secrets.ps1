@@ -28,7 +28,7 @@ Write-Host ""
 $secrets = @(
     @{
         Name = "EXPO_PUBLIC_FIREBASE_API_KEY"
-        Value = "AIzaSyDWOpfdH_wDYHzdRgQBW1DEEvUrBQuUkdo"
+        Value = "process.env.EXPO_PUBLIC_FIREBASE_API_KEY"
     },
     @{
         Name = "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN"

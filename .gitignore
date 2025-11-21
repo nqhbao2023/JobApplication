@@ -1,5 +1,3 @@
-# Learn more: https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
 # ─────────────
 # Common dependencies
 # ─────────────
@@ -13,19 +11,27 @@ web-build/
 *.tsbuildinfo
 
 # ─────────────
+# Firebase mobile configs (🔥 RẤT QUAN TRỌNG)
+# ─────────────
+google-services.json
+**/google-services.json
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+
+# ─────────────
 # Environment / secrets
 # ─────────────
 .env
+.env.*
 .env*.local
-# 🔥 Bỏ qua mọi file .env trong các thư mục con (vd: server/.env)
 **/.env
-**/.env.local
 **/.env.*
+**/.env.local
 
-# 🔥 Firebase Admin key hoặc bất kỳ file JSON chứa private key
+# Firebase Admin private SDK (Node server)
+serviceAccountKey.json
 server/serviceAccountKey.json
 server/**/serviceAccountKey.json
-server/*firebase-adminsdk*.json
 **/firebase-adminsdk-*.json
 
 # ─────────────
@@ -35,9 +41,6 @@ server/*firebase-adminsdk*.json
 *.pem
 *.orig.*
 *.log
-
-# macOS
-.DS_Store
 
 # Visual Studio Code
 .vscode/
@@ -51,7 +54,7 @@ yarn-debug.*
 yarn-error.*
 
 # ─────────────
-# Native files
+# Native signing files
 # ─────────────
 *.jks
 *.p8
@@ -64,4 +67,3 @@ yarn-error.*
 # ─────────────
 expo-env.d.ts
 .metro-health-check*
-app-example

@@ -67,3 +67,7 @@ yarn-error.*
 # ─────────────
 expo-env.d.ts
 .metro-health-check*
+
+setup-eas-secrets.ps1
+eas.json
+google-services.json

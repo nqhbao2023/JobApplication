@@ -20,7 +20,8 @@ export const useAddJobForm = () => {
     skillsRequired: '',
     salaryMin: '',
     salaryMax: '',
-    experience: '',
+    experience: 'Chưa có kinh nghiệm', // Default to student-friendly
+    location: 'Hà Nội', // Default location
     quantity: '1',
     deadline: '',
     selectedJobType: null,
@@ -56,10 +57,14 @@ export const useAddJobForm = () => {
     city?: string;
     nation?: string;
   }>>([]);
+  const [locationItems, setLocationItems] = useState<Array<{ label: string; value: string }>>([]);
+  const [experienceItems, setExperienceItems] = useState<Array<{ label: string; value: string }>>([]);
 
   const [openTypeDD, setOpenTypeDD] = useState(false);
   const [openCategoryDD, setOpenCategoryDD] = useState(false);
   const [openCompanyDD, setOpenCompanyDD] = useState(false);
+  const [openLocationDD, setOpenLocationDD] = useState(false);
+  const [openExperienceDD, setOpenExperienceDD] = useState(false);
 
   const [expandedSections, setExpandedSections] = useState<ExpandedSections>({
     basic: true,
@@ -75,10 +80,37 @@ export const useAddJobForm = () => {
   const [aiModalVisible, setAiModalVisible] = useState(false);
 
   useEffect(() => {
-    if (openTypeDD) { setOpenCategoryDD(false); setOpenCompanyDD(false); }
-    if (openCategoryDD) { setOpenTypeDD(false); setOpenCompanyDD(false); }
-    if (openCompanyDD) { setOpenTypeDD(false); setOpenCategoryDD(false); }
-  }, [openTypeDD, openCategoryDD, openCompanyDD]);
+    if (openTypeDD) { 
+      setOpenCategoryDD(false); 
+      setOpenCompanyDD(false); 
+      setOpenLocationDD(false);
+      setOpenExperienceDD(false);
+    }
+    if (openCategoryDD) { 
+      setOpenTypeDD(false); 
+      setOpenCompanyDD(false); 
+      setOpenLocationDD(false);
+      setOpenExperienceDD(false);
+    }
+    if (openCompanyDD) { 
+      setOpenTypeDD(false); 
+      setOpenCategoryDD(false); 
+      setOpenLocationDD(false);
+      setOpenExperienceDD(false);
+    }
+    if (openLocationDD) {
+      setOpenTypeDD(false);
+      setOpenCategoryDD(false);
+      setOpenCompanyDD(false);
+      setOpenExperienceDD(false);
+    }
+    if (openExperienceDD) {
+      setOpenTypeDD(false);
+      setOpenCategoryDD(false);
+      setOpenCompanyDD(false);
+      setOpenLocationDD(false);
+    }
+  }, [openTypeDD, openCategoryDD, openCompanyDD, openLocationDD, openExperienceDD]);
 
   useEffect(() => {
     if (formData.selectedJobCategory !== 'other') {
@@ -216,6 +248,25 @@ export const useAddJobForm = () => {
           nation: data.nation || '',
         };
       }));
+
+      // ✨ Load Vietnam cities from constants
+      const { VIETNAM_CITIES } = await import('@/constants/locations');
+      setLocationItems([
+        { label: '🌏 Toàn quốc', value: 'Toàn quốc' },
+        ...VIETNAM_CITIES.map(city => ({
+          label: city,
+          value: city,
+        })),
+      ]);
+
+      // ✨ Load experience levels from constants
+      const { EXPERIENCE_LEVELS } = await import('@/constants/locations');
+      setExperienceItems(
+        EXPERIENCE_LEVELS.map(exp => ({
+          label: exp.label,
+          value: exp.label,
+        }))
+      );
       
       console.log('📦 Loaded companies:', companiesSnap.docs.length);
     } catch (error) {
@@ -342,18 +393,21 @@ export const useAddJobForm = () => {
     try {
       setLoading(true);
 
-      let jobImageUrl = formData.image;
-      if (formData.imageUri) jobImageUrl = await uploadImageToFirebase(formData.imageUri, "jobs");
-      if (!jobImageUrl) {
-        Alert.alert("Thiếu ảnh", "Vui lòng cung cấp ảnh cho công việc.");
-        return;
-      }
-
       let companyId = formData.selectedCompany;
       if (isAddingNewCompany) {
         let companyImageUrl = newCompany.image;
-        if (newCompanyImageUri)
-          companyImageUrl = await uploadImageToFirebase(newCompanyImageUri, "companies");
+        
+        // Try to upload company image, but don't fail if it doesn't work
+        if (newCompanyImageUri) {
+          try {
+            companyImageUrl = await uploadImageToFirebase(newCompanyImageUri, "companies");
+            console.log('✅ Company image uploaded:', companyImageUrl);
+          } catch (uploadError: any) {
+            console.warn('⚠️ Company image upload failed, continuing without image:', uploadError.message);
+            // Continue without image - use default or empty
+            companyImageUrl = '';
+          }
+        }
 
         const companyDoc = await addDoc(collection(db, "companies"), {
           ...newCompany,
@@ -363,6 +417,7 @@ export const useAddJobForm = () => {
           updated_at: serverTimestamp(),
         });
         companyId = companyDoc.id;
+        console.log('✅ New company created with ID:', companyId);
       }
 
       let jobTypeObj: { id: string; type_name: string } = { id: '', type_name: '' };
@@ -387,13 +442,13 @@ export const useAddJobForm = () => {
         };
       }
 
-      // ✅ Get company name and location
+      // ✅ Get company name and use formData.location
       let companyName = '';
-      let location = '';
+      let location = formData.location || 'Hà Nội'; // Use form location field
       
       if (isAddingNewCompany) {
         companyName = newCompany.corp_name.trim();
-        location = newCompany.city?.trim() || newCompany.nation?.trim() || 'Hà Nội, Việt Nam';
+        // Location already set from formData.location
       } else if (companyId) {
         const companyDoc = await getDoc(doc(db, "companies", companyId));
         console.log('📦 Company Doc exists:', companyDoc.exists());
@@ -403,11 +458,10 @@ export const useAddJobForm = () => {
           console.log('📦 Company Data:', JSON.stringify(companyData, null, 2));
           
           companyName = companyData?.corp_name || companyData?.name || '';
-          location = companyData?.city || companyData?.nation || companyData?.location || '';
+          // Location is already set from formData.location, no need to override
           
-          // Trim và validate
+          // Trim company name
           companyName = companyName.trim();
-          location = location.trim();
         }
       }
 
@@ -424,11 +478,7 @@ export const useAddJobForm = () => {
         const selectedCompanyItem = companyItems.find(item => item.value === companyId);
         if (selectedCompanyItem) {
           companyName = selectedCompanyItem.label;
-          // Also get location from dropdown if available
-          if (!location && selectedCompanyItem.city) {
-            location = selectedCompanyItem.city;
-          }
-          console.log('🔄 Fallback to dropdown - Company:', companyName, 'Location:', location);
+          console.log('🔄 Fallback to dropdown - Company:', companyName);
         } else {
           Alert.alert("Lỗi", `Không tìm thấy tên công ty với ID: ${companyId}. Vui lòng kiểm tra lại.`);
           setLoading(false);
@@ -446,10 +496,11 @@ export const useAddJobForm = () => {
         return;
       }
 
-      // ✅ Set default location if empty
-      if (!location || location === '' || location.length < 2) {
-        location = 'Hà Nội, Việt Nam'; // Default location
-        console.log('🔄 Using default location:', location);
+      // ✅ Validate location
+      if (!location || location === '') {
+        Alert.alert("Lỗi", "Vui lòng chọn địa điểm làm việc.");
+        setLoading(false);
+        return;
       }
       
       console.log('✅ Final company:', companyName);
@@ -517,7 +568,19 @@ export const useAddJobForm = () => {
         return;
       }
 
-      // ✅ Build API payload
+      // ✅ Upload job image (optional - don't fail if upload fails)
+      let jobImageUrl = formData.image;
+      if (formData.imageUri) {
+        try {
+          jobImageUrl = await uploadImageToFirebase(formData.imageUri, "jobs");
+          console.log('✅ Job image uploaded:', jobImageUrl);
+        } catch (uploadError: any) {
+          console.warn('⚠️ Job image upload failed, continuing without image:', uploadError.message);
+          jobImageUrl = '';
+        }
+      }
+
+      // ✅ Build API payload with source marker to distinguish from crawled/quick-post jobs
       const apiPayload = {
         title: formData.title.trim(),
         company: companyName,
@@ -534,6 +597,9 @@ export const useAddJobForm = () => {
         type: mappedType,
         category: categoryName,
         status: 'active' as const,
+        source: 'internal' as const, // Mark as employer-created job
+        image: jobImageUrl || undefined, // Optional job image
+        experience: formData.experience, // Include experience level
       };
 
       // ✅ Log payload để debug
@@ -584,12 +650,20 @@ export const useAddJobForm = () => {
     setJobCategoryItems,
     companyItems,
     setCompanyItems,
+    locationItems,
+    setLocationItems,
+    experienceItems,
+    setExperienceItems,
     openTypeDD,
     setOpenTypeDD,
     openCategoryDD,
     setOpenCategoryDD,
     openCompanyDD,
     setOpenCompanyDD,
+    openLocationDD,
+    setOpenLocationDD,
+    openExperienceDD,
+    setOpenExperienceDD,
     expandedSections,
     toggleSection,
     loading,

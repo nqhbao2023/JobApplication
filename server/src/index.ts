@@ -29,12 +29,12 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:19000',
-  'http://192.168.1.58:19000',
-  'exp://192.168.1.58:8081',
+  'http://192.168.1.35:19000',
+  'exp://192.168.1.35:8081',
 ];
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin?.includes('192.168.1.58')) {
+    if (!origin || allowedOrigins.includes(origin) || origin?.includes('192.168.1.35')) {
       callback(null, true);
     } else {
       console.warn('CORS blocked origin:', origin);

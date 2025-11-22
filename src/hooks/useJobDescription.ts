@@ -4,9 +4,11 @@ import { router } from 'expo-router';
 import { auth } from '@/config/firebase';
 import * as Haptics from 'expo-haptics';
 import { jobApiService } from '@/services/jobApi.service';
+import { companyApiService } from '@/services/companyApi.service';
 import { applicationApiService, Application } from '@/services/applicationApi.service';
-import { Job } from '@/types';
+import { Job, Company } from '@/types';
 import { handleApiError, isPermissionError, isAuthError } from '@/utils/errorHandler';
+import { isOfflineError, withOfflineHandling } from '@/utils/firestore.utils';
 
 interface PosterInfo {
   name?: string;
@@ -47,6 +49,7 @@ const getCompanyEmail = (company: CompanyField): string | undefined => {
 export const useJobDescription = (jobId: string) => {
   const [userId, setUserId] = useState<string>('');
   const [jobData, setJobData] = useState<Job | null>(null);
+  const [companyData, setCompanyData] = useState<Company | null>(null);
   const [posterInfo, setPosterInfo] = useState<PosterInfo>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +81,16 @@ export const useJobDescription = (jobId: string) => {
       setLoading(true);
       setError(null);
 
-      const job = await jobApiService.getJobById(jobId);
+      const job = await withOfflineHandling(
+        () => jobApiService.getJobById(jobId),
+        null
+      );
+      
+      if (!job) {
+        if (!mountedRef.current) return;
+        setError('Không thể tải công việc. Vui lòng kiểm tra kết nối mạng.');
+        return;
+      }
       
       if (!mountedRef.current) return;
 
@@ -96,6 +108,22 @@ export const useJobDescription = (jobId: string) => {
         return job;
       });
 
+      // ✅ Fetch company data from companyId (for employer-created jobs)
+      if (job.companyId) {
+        try {
+          const company = await withOfflineHandling(
+            () => companyApiService.getCompanyById(job.companyId!),
+            null
+          );
+          if (mountedRef.current && company) {
+            setCompanyData(company);
+          }
+        } catch (companyError) {
+          console.warn('⚠️ Could not fetch company:', companyError);
+          // Continue without company data
+        }
+      }
+
       // ✅ Extract poster info với type-safe company handling
       if (job.employerId || job.ownerId) {
         const companyName = getCompanyName(job.company);
@@ -109,7 +137,11 @@ export const useJobDescription = (jobId: string) => {
     } catch (e: any) {
       console.error('❌ Load job error:', e);
       if (mountedRef.current) {
-        setError(e.message || 'Job không tồn tại hoặc đã bị xóa');
+        if (isOfflineError(e)) {
+          setError('Không có kết nối mạng. Vui lòng kiểm tra kết nối và thử lại.');
+        } else {
+          setError(e.message || 'Job không tồn tại hoặc đã bị xóa');
+        }
       }
     } finally {
       if (mountedRef.current) {
@@ -213,6 +245,16 @@ export const useJobDescription = (jobId: string) => {
       return;
     }
 
+    // ✅ Ngăn người dùng nộp lại nếu đã nộp CV
+    if (isApplied) {
+      Alert.alert(
+        'Đã nộp CV',
+        'Bạn đã nộp CV cho công việc này rồi. Vui lòng kiểm tra tại mục "Đơn ứng tuyển" để xem trạng thái.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
@@ -271,12 +313,21 @@ export const useJobDescription = (jobId: string) => {
         return;
       }
       
-      // ✅ Handle 400 error (application đã tồn tại)
-      if (e.response?.status === 400 && applyDocId) {
-        router.navigate(
-          `/submit?jobId=${jobId}&userId=${userId}&applyDocId=${applyDocId}` as any
-        );
-        return;
+      // ✅ Handle 400 error (application đã tồn tại) - Reload status và thông báo
+      if (e.response?.status === 400) {
+        const errorMsg = e.response?.data?.message || e.message || '';
+        
+        if (errorMsg.includes('already applied')) {
+          // Refresh lại trạng thái apply
+          await checkApplyStatus(true);
+          
+          Alert.alert(
+            'Đã nộp CV',
+            'Bạn đã nộp CV cho công việc này rồi. Vui lòng kiểm tra tại mục "Đơn ứng tuyển".',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
       }
       
       // ✅ Other errors
@@ -287,7 +338,7 @@ export const useJobDescription = (jobId: string) => {
         setApplyLoading(false);
       }
     }
-  }, [userId, jobId, jobData, hasDraft, applyDocId]);
+  }, [userId, jobId, jobData, hasDraft, applyDocId, isApplied, checkApplyStatus]);
 
   /**
    * Cancel application
@@ -400,6 +451,7 @@ export const useJobDescription = (jobId: string) => {
 
   return {
     jobData,
+    companyData,
     posterInfo,
     loading,
     error,

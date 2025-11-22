@@ -12,10 +12,14 @@ import {
   initializeFirestore,
   getFirestore,
   memoryLocalCache,
+  persistentLocalCache,
   type Firestore,
+  enableIndexedDbPersistence,
+  enableMultiTabIndexedDbPersistence,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 // ⚙️ Cấu hình Firebase — sử dụng environment variables
 const firebaseConfig = {
@@ -53,12 +57,24 @@ try {
 // ✅ Firestore với cấu hình tối ưu cho React Native
 let db: Firestore;
 try {
+  // Use persistent cache for better offline support
+  const cacheSettings = Platform.OS === 'web' 
+    ? memoryLocalCache() 
+    : persistentLocalCache({ 
+        tabManager: undefined // Disable multi-tab for React Native
+      });
+  
   db = initializeFirestore(app, {
-    localCache: memoryLocalCache(),
-    experimentalForceLongPolling: true,
+    localCache: cacheSettings,
+    // ✅ Use auto-detect instead of forcing long polling
     experimentalAutoDetectLongPolling: true,
+    // ✅ Disable force long polling to avoid timeout issues
+    // experimentalForceLongPolling: true,
   });
-} catch {
+  
+  console.log('✅ Firestore initialized with persistent cache');
+} catch (error) {
+  console.warn('⚠️ Could not initialize Firestore with persistent cache, using default:', error);
   db = getFirestore(app);
 }
 

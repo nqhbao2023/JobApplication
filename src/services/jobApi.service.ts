@@ -33,6 +33,9 @@ interface CreateJobPayload {
   category: string;
   status?: 'active' | 'inactive' | 'closed';
   expiresAt?: string;
+  source?: 'viecoi' | 'internal' | 'quick-post'; // Distinguish job sources
+  image?: string; // Optional job image
+  experience?: string; // Experience level
 }
 
 export const jobApiService = {

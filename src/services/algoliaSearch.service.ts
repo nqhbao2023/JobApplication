@@ -35,6 +35,8 @@ export async function searchJobs(params: {
   category?: string;
   companyId?: string;
   location?: string;
+  radius?: number;
+  experience?: string;
   page?: number;
   hitsPerPage?: number;
 }) {

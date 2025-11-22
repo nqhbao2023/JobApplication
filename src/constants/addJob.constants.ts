@@ -33,6 +33,7 @@ export type JobFormData = {
   salaryMax: string;
   workingType: string;
   experience: string;
+  location: string; // ✨ NEW: Location field
   quantity: string;
   deadline: string;
   selectedJobType: string | null;

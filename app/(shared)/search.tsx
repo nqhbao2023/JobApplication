@@ -1,604 +1,698 @@
-import { useLocalSearchParams } from 'expo-router';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
-import DropDownPicker from 'react-native-dropdown-picker';
-import { Provider as PaperProvider } from 'react-native-paper';
+/**
+ * Trang tìm kiếm việc làm - ViecLam24h Style
+ * Flow: Home -> SearchInputPage -> SearchResultsPage
+ */
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { db } from '@/config/firebase';
-import { collection, getDocs } from 'firebase/firestore';
-import { searchJobs, isAlgoliaAvailable } from '@/services/algoliaSearch.service';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { VIETNAM_CITIES } from '@/constants/locations';
+import { filterJobPositions } from '@/constants/jobPositions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 
-interface Job {
-  $id: string;
-  title: string;
-  company: string;
-  companyId?: string;
-  location?: string;
-  type?: string;
-  category?: string;
-  salary?: any;
-  skills?: string[];
-  description?: string;
-  _highlightResult?: any; // Algolia highlights
+const RECENT_SEARCHES_KEY = '@recent_searches';
+
+interface RecentSearch {
+  position: string;
+  location: string;
+  timestamp: number;
 }
 
-interface JobType {
-  $id: string;
-  type_name: string;
-}
+export default function SearchInputPage() {
+  const [position, setPosition] = useState('');
+  const [location, setLocation] = useState('Toàn quốc'); // Default to all Vietnam
+  const [showPositionSuggestions, setShowPositionSuggestions] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  const [filteredPositions, setFilteredPositions] = useState<string[]>([]);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
-interface JobCategory {
-  $id: string;
-  category_name: string;
-}
-interface Company {
-  $id: string;
-  corp_name: string;
-  nation: string;
-  corp_description: string;
-  city: string;
-}
-
-export default function SearchScreen() {
-  const { q } = useLocalSearchParams();
-  const [searchQuery, setSearchQuery] = useState(typeof q === 'string' ? q : '');
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [totalResults, setTotalResults] = useState(0);
-  
-  const [company, setCompany] = useState<Company[]>([]);
-  const [jobTypes, setJobTypes] = useState<JobType[]>([]);
-  const [jobCategories, setJobCategories] = useState<JobCategory[]>([]);
-
-  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
-
-  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
-
-  // Check if Algolia is available
-  const useAlgolia = isAlgoliaAvailable();
-
-  const fetchJobs = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // ✅ Use Algolia if available, fallback to Firestore
-      if (useAlgolia) {
-        console.log('🔍 Using Algolia search');
-        
-        const result = await searchJobs({
-          query: searchQuery,
-          jobType: selectedTypeId || undefined,
-          category: selectedCategoryId || undefined,
-          companyId: selectedCompanyId || undefined,
-          hitsPerPage: 50,
-        });
-
-        setJobs(result.jobs);
-        setTotalResults(result.total);
-        console.log(`✅ Algolia: Found ${result.total} jobs`);
-      } else {
-        // Fallback: Firestore client-side filtering
-        console.log('⚠️  Algolia unavailable, using Firestore fallback');
-        
-        const qJobs = collection(db, 'jobs');
-        const snapshot = await getDocs(qJobs);
-
-        let formattedJobs: Job[] = snapshot.docs
-          .map((docSnap) => {
-            const data = docSnap.data();
-            return {
-              $id: docSnap.id,
-              title: data.title || '',
-              company: data.company?.corp_name || data.company || '',
-              companyId: data.companyId || data.company?.$id,
-              location: data.location || '',
-              type: data.type || data.jobTypes,
-              category: data.category || data.jobCategories,
-              salary: data.salary,
-              skills: data.skills || [],
-              description: data.description || '',
-            } as Job;
-          });
-
-        // Client-side filtering
-        if (searchQuery && searchQuery.trim()) {
-          const searchLower = searchQuery.toLowerCase().trim();
-          formattedJobs = formattedJobs.filter(job =>
-            job.title?.toLowerCase().includes(searchLower) ||
-            job.company?.toLowerCase().includes(searchLower)
-          );
-        }
-
-        if (selectedTypeId) {
-          formattedJobs = formattedJobs.filter(job => job.type === selectedTypeId);
-        }
-
-        if (selectedCategoryId) {
-          formattedJobs = formattedJobs.filter(job => job.category === selectedCategoryId);
-        }
-
-        if (selectedCompanyId) {
-          formattedJobs = formattedJobs.filter(job => job.companyId === selectedCompanyId);
-        }
-
-        setJobs(formattedJobs);
-        setTotalResults(formattedJobs.length);
-        console.log(`� Firestore fallback: Found ${formattedJobs.length} jobs`);
-      }
-    } catch (error: any) {
-      console.error('❌ Error fetching jobs:', error);
-      setError(error.message || 'Có lỗi xảy ra khi tìm kiếm');
-      setJobs([]);
-      setTotalResults(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, selectedTypeId, selectedCategoryId, selectedCompanyId, useAlgolia]);
-
-  const fetchFilters = async () => {
-    try {
-      const typesSnap = await getDocs(collection(db, 'job_types'));
-      const categoriesSnap = await getDocs(collection(db, 'job_categories'));
-      const companySnap = await getDocs(collection(db, 'companies'));
-
-      setJobTypes(
-        typesSnap.docs.map((doc) => ({
-          $id: doc.id,
-          type_name: doc.data().type_name,
-        }))
-      );
-
-      setJobCategories(
-        categoriesSnap.docs.map((doc) => ({
-          $id: doc.id,
-          category_name: doc.data().category_name,
-        }))
-      );
-      setCompany(
-        companySnap.docs.map((doc) => ({
-          $id: doc.id,
-          corp_name: doc.data().corp_name,
-          nation: doc.data().nation,
-          corp_description: doc.data().corp_description,
-          city: doc.data().city,
-        }))
-      );
-    } catch (err) {
-      console.error('Error loading filters:', err);
-    }
-  };
-
-  const clearFilters = () => {
-    setSelectedTypeId(null);
-    setSelectedCategoryId(null);
-    setSelectedCompanyId(null);
-  };
-
+  // Load recent searches
   useEffect(() => {
-    fetchFilters();
+    loadRecentSearches();
   }, []);
 
+  // Filter positions as user types - CHỈ KHI CÓ INPUT
   useEffect(() => {
-    if (typeof q === 'string') {
-      setSearchQuery(q);
+    if (position.trim().length > 0) {
+      const filtered = filterJobPositions(position);
+      setFilteredPositions(filtered);
+      setShowPositionSuggestions(true);
+    } else {
+      setFilteredPositions([]);
+      setShowPositionSuggestions(false);
     }
-  }, [q]);
+  }, [position]);
 
-  useEffect(() => {
-    fetchJobs();
-  }, [searchQuery, selectedTypeId, selectedCategoryId, selectedCompanyId]);
+  const loadRecentSearches = async () => {
+    try {
+      const data = await AsyncStorage.getItem(RECENT_SEARCHES_KEY);
+      if (data) {
+        const searches: RecentSearch[] = JSON.parse(data);
+        // Sort by timestamp desc, get latest 5
+        setRecentSearches(
+          searches
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 5)
+        );
+      }
+    } catch (error) {
+      console.error('Error loading recent searches:', error);
+    }
+  };
+
+  const saveRecentSearch = async (pos: string, loc: string) => {
+    try {
+      const newSearch: RecentSearch = {
+        position: pos,
+        location: loc,
+        timestamp: Date.now(),
+      };
+
+      // Remove duplicates
+      const filtered = recentSearches.filter(
+        (s) => !(s.position === pos && s.location === loc)
+      );
+
+      const updated = [newSearch, ...filtered].slice(0, 10); // Keep max 10
+      await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+      setRecentSearches(updated.slice(0, 5));
+    } catch (error) {
+      console.error('Error saving recent search:', error);
+    }
+  };
+
+  const handleSearch = () => {
+    if (!position.trim()) {
+      return;
+    }
+
+    // Save to recent searches
+    saveRecentSearch(position, location);
+
+    // Navigate to results page
+    router.push({
+      pathname: '/(shared)/searchResults',
+      params: {
+        position: position.trim(),
+        location: location,
+      },
+    });
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setIsLoadingLocation(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    try {
+      // Request location permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Quyền truy cập vị trí',
+          'Vui lòng cho phép ứng dụng truy cập vị trí để sử dụng tính năng này.',
+          [{ text: 'OK' }]
+        );
+        setIsLoadingLocation(false);
+        return;
+      }
+
+      // Get current position with timeout
+      const currentLocation = await Promise.race([
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 10000)
+        )
+      ]) as Location.LocationObject;
+
+      // Reverse geocode to get city name
+      const geocode = await Location.reverseGeocodeAsync({
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+      });
+
+      if (geocode && geocode.length > 0) {
+        const address = geocode[0];
+        let cityName = address.city || address.region || address.subregion || '';
+
+        // Map common city names to Vietnam cities list
+        const cityMapping: Record<string, string> = {
+          'Ho Chi Minh City': 'TP.HCM',
+          'Hanoi': 'Hà Nội',
+          'Da Nang': 'Đà Nẵng',
+          'Can Tho': 'Cần Thơ',
+          'Hai Phong': 'Hải Phòng',
+        };
+
+        const mappedCity = cityMapping[cityName] || cityName;
+        
+        // Check if city exists in our list
+        const matchedCity = VIETNAM_CITIES.find(
+          city => city.toLowerCase().includes(mappedCity.toLowerCase()) ||
+                  mappedCity.toLowerCase().includes(city.toLowerCase())
+        );
+
+        if (matchedCity) {
+          setLocation(matchedCity);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          // Default to TP.HCM if can't match
+          setLocation('TP.HCM');
+          Alert.alert('Thông báo', `Không xác định được thành phố chính xác. Đã chọn TP.HCM.`);
+        }
+      } else {
+        setLocation('TP.HCM');
+        Alert.alert('Thông báo', 'Không xác định được vị trí. Đã chọn TP.HCM.');
+      }
+      
+      setShowLocationPicker(false);
+    } catch (error: any) {
+      console.log('Location error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      // User-friendly error message
+      if (error.message === 'Timeout') {
+        Alert.alert(
+          'Không lấy được vị trí',
+          'Không thể xác định vị trí hiện tại. Vui lòng:\n\n1. Bật GPS/Location Services\n2. Cho phép ứng dụng truy cập vị trí\n3. Hoặc chọn thành phố thủ công',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Không lấy được vị trí',
+          'Vui lòng bật GPS và cho phép ứng dụng truy cập vị trí, hoặc chọn thành phố thủ công.',
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
+
+  const handleRecentSearchClick = (search: RecentSearch) => {
+    router.push({
+      pathname: '/(shared)/searchResults',
+      params: {
+        position: search.position,
+        location: search.location,
+      },
+    });
+  };
 
   return (
-    <PaperProvider>
-      <View style={styles.container}>
-        {/* Header với search info */}
-        <View style={styles.header}>
-          <Text style={styles.heading}>
-            Kết quả tìm kiếm
-            {searchQuery && <Text style={styles.queryText}> "{searchQuery}"</Text>}
-          </Text>
-          {!loading && (
-            <View style={styles.resultCount}>
-              {useAlgolia && <Ionicons name="flash" size={16} color="#10b981" />}
-              <Text style={styles.resultText}>
-                {totalResults} công việc
-                {useAlgolia && ' (Algolia)'}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Search Input */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#64748b" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm kiếm công việc..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-            onSubmitEditing={() => fetchJobs()}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#94a3b8" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* DropDown Loại công việc */}
-        <View style={{ zIndex: 2000 }}>
-          <DropDownPicker
-            open={typeDropdownOpen}
-            setOpen={setTypeDropdownOpen}
-            value={selectedTypeId}
-            setValue={setSelectedTypeId}
-            items={jobTypes.map((type) => ({
-              label: type.type_name,
-              value: type.$id
-            }))}
-            placeholder="Loại công việc"
-            style={styles.dropdown}
-            dropDownContainerStyle={styles.dropdownContainer}
-          />
-        </View>
-
-        {/* DropDown Danh mục công việc */}
-        <View style={{ zIndex: 1000 }}>
-          <DropDownPicker
-            open={categoryDropdownOpen}
-            setOpen={setCategoryDropdownOpen}
-            value={selectedCategoryId}
-            setValue={setSelectedCategoryId}
-            items={jobCategories.map((cat) => ({
-              label: cat.category_name,
-              value: cat.$id
-            }))}
-            placeholder="Danh mục công việc"
-            style={styles.dropdown}
-            dropDownContainerStyle={styles.dropdownContainer}
-          />
-        </View>
-         {/* DropDown Danh mục công ty */}
-         <View style={{ zIndex: 800 }}>
-          <DropDownPicker
-            open={companyDropdownOpen}
-            setOpen={setCompanyDropdownOpen}
-            value={selectedCompanyId}
-            setValue={setSelectedCompanyId}
-            items={company.map((com) => ({
-              label: com.corp_name,
-              value: com.$id
-            }))}
-            placeholder="Danh mục công ty"
-            style={styles.dropdown}
-            dropDownContainerStyle={styles.dropdownContainer}
-          />
-        </View>
-        <TouchableOpacity style={styles.clearButton} onPress={clearFilters}>
-          <Ionicons name="close-circle" size={16} color="#ef4444" />
-          <Text style={styles.clearButtonText}>Xóa bộ lọc</Text>
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Tìm kiếm việc làm</Text>
+      </View>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A80F0" />
-            <Text style={styles.loadingText}>
-              {useAlgolia ? 'Đang tìm kiếm với Algolia...' : 'Đang tìm kiếm...'}
-            </Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Ionicons name="warning-outline" size={48} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchJobs}>
-              <Text style={styles.retryButtonText}>Thử lại</Text>
-            </TouchableOpacity>
-          </View>
-        ) : jobs.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="search-outline" size={64} color="#94a3b8" />
-            <Text style={styles.emptyText}>Không tìm thấy công việc phù hợp</Text>
-            <Text style={styles.emptySubtext}>
-              Thử điều chỉnh bộ lọc hoặc tìm kiếm với từ khóa khác
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={jobs}
-            keyExtractor={(item) => item.$id}
-            renderItem={({ item }) => (
+      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        {/* Position Input */}
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>
+            <Ionicons name="briefcase-outline" size={16} color="#64748b" /> Vị trí ứng tuyển
+          </Text>
+          <TouchableOpacity
+            style={styles.inputContainer}
+            onPress={() => setShowPositionSuggestions(true)}
+            activeOpacity={1}
+          >
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập vị trí muốn ứng tuyển"
+              placeholderTextColor="#94a3b8"
+              value={position}
+              onChangeText={(text) => {
+                setPosition(text);
+                setShowPositionSuggestions(true);
+              }}
+              onFocus={() => setShowPositionSuggestions(true)}
+            />
+            {position.length > 0 && (
               <TouchableOpacity
-                onPress={() => router.push({ pathname: "/jobDescription", params: { jobId: item.$id } })}
-                activeOpacity={0.7}
+                onPress={() => {
+                  setPosition('');
+                  setShowPositionSuggestions(false);
+                }}
+                style={styles.clearBtn}
               >
-                <View style={styles.jobItem}>
-                  <View style={styles.jobHeader}>
-                    <Text style={styles.jobTitle} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                    {item.type && (
-                      <View style={styles.typeBadge}>
-                        <Text style={styles.typeBadgeText}>
-                          {jobTypes.find(t => t.$id === item.type)?.type_name || item.type}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.jobDetails}>
-                    <View style={styles.detailRow}>
-                      <Ionicons name="business-outline" size={14} color="#64748b" />
-                      <Text style={styles.detailText} numberOfLines={1}>
-                        {item.company}
-                      </Text>
-                    </View>
-                    {item.location && (
-                      <View style={styles.detailRow}>
-                        <Ionicons name="location-outline" size={14} color="#64748b" />
-                        <Text style={styles.detailText} numberOfLines={1}>
-                          {item.location}
-                        </Text>
-                      </View>
-                    )}
-                    {item.salary && (
-                      <View style={styles.detailRow}>
-                        <Ionicons name="cash-outline" size={14} color="#10b981" />
-                        <Text style={[styles.detailText, { color: '#10b981', fontWeight: '600' }]}>
-                          {typeof item.salary === 'object' 
-                            ? `${item.salary.min?.toLocaleString()} - ${item.salary.max?.toLocaleString()} ${item.salary.currency || 'VND'}`
-                            : item.salary.toLocaleString() + ' VND'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  {item.skills && item.skills.length > 0 && (
-                    <View style={styles.skillsContainer}>
-                      {item.skills.slice(0, 3).map((skill, index) => (
-                        <View key={index} style={styles.skillChip}>
-                          <Text style={styles.skillText}>{skill}</Text>
-                        </View>
-                      ))}
-                      {item.skills.length > 3 && (
-                        <Text style={styles.moreSkills}>+{item.skills.length - 3}</Text>
-                      )}
-                    </View>
-                  )}
-                </View>
+                <Ionicons name="close-circle" size={20} color="#94a3b8" />
               </TouchableOpacity>
             )}
-            contentContainerStyle={styles.listContent}
-          />
+          </TouchableOpacity>
+
+          {/* Position Suggestions */}
+          {showPositionSuggestions && (
+            <Animated.View
+              entering={FadeInDown.duration(200)}
+              style={styles.suggestionsContainer}
+            >
+              <FlatList
+                data={filteredPositions}
+                keyExtractor={(item, index) => `${item}-${index}`}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      setPosition(item);
+                      setShowPositionSuggestions(false);
+                    }}
+                  >
+                    <Ionicons
+                      name="briefcase-outline"
+                      size={18}
+                      color="#64748b"
+                    />
+                    <Text style={styles.suggestionText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>
+                      Không tìm thấy vị trí phù hợp
+                    </Text>
+                  </View>
+                }
+              />
+            </Animated.View>
+          )}
+        </View>
+
+        {/* Location Picker */}
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>
+            <Ionicons name="location-outline" size={16} color="#64748b" /> Địa điểm
+          </Text>
+          <TouchableOpacity
+            style={styles.inputContainer}
+            onPress={() => setShowLocationPicker(!showLocationPicker)}
+          >
+            <Text style={styles.selectedLocation}>{location}</Text>
+            <Ionicons
+              name={showLocationPicker ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color="#64748b"
+            />
+          </TouchableOpacity>
+
+          {/* Location Options */}
+          {showLocationPicker && (
+            <Animated.View
+              entering={FadeInDown.duration(200)}
+              style={styles.locationPicker}
+            >
+              {/* Use Current Location Button */}
+              <TouchableOpacity
+                style={[
+                  styles.currentLocationButton,
+                  isLoadingLocation && styles.currentLocationButtonDisabled
+                ]}
+                onPress={handleUseCurrentLocation}
+                disabled={isLoadingLocation}
+                activeOpacity={0.7}
+              >
+                <View style={styles.currentLocationContent}>
+                  <View style={styles.currentLocationIcon}>
+                    {isLoadingLocation ? (
+                      <ActivityIndicator size="small" color="#7c3aed" />
+                    ) : (
+                      <Ionicons name="navigate" size={20} color="#7c3aed" />
+                    )}
+                  </View>
+                  <Text style={styles.currentLocationText}>
+                    {isLoadingLocation ? 'Đang lấy vị trí...' : 'Sử dụng vị trí hiện tại của tôi'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
+              <ScrollView style={styles.locationScroll} nestedScrollEnabled>
+                {/* Toàn quốc option */}
+                <TouchableOpacity
+                  style={[
+                    styles.locationItem,
+                    location === 'Toàn quốc' && styles.locationItemActive,
+                  ]}
+                  onPress={() => {
+                    setLocation('Toàn quốc');
+                    setShowLocationPicker(false);
+                  }}
+                >
+                  <Ionicons
+                    name="globe-outline"
+                    size={18}
+                    color={location === 'Toàn quốc' ? '#4A80F0' : '#64748b'}
+                  />
+                  <Text
+                    style={[
+                      styles.locationText,
+                      location === 'Toàn quốc' && styles.locationTextActive,
+                    ]}
+                  >
+                    Toàn quốc
+                  </Text>
+                  {location === 'Toàn quốc' && (
+                    <Ionicons name="checkmark" size={20} color="#4A80F0" />
+                  )}
+                </TouchableOpacity>
+
+                {VIETNAM_CITIES.map((city) => (
+                  <TouchableOpacity
+                    key={city}
+                    style={[
+                      styles.locationItem,
+                      location === city && styles.locationItemActive,
+                    ]}
+                    onPress={() => {
+                      setLocation(city);
+                      setShowLocationPicker(false);
+                    }}
+                  >
+                    <Ionicons
+                      name="location"
+                      size={18}
+                      color={location === city ? '#4A80F0' : '#64748b'}
+                    />
+                    <Text
+                      style={[
+                        styles.locationText,
+                        location === city && styles.locationTextActive,
+                      ]}
+                    >
+                      {city}
+                    </Text>
+                    {location === city && (
+                      <Ionicons name="checkmark" size={20} color="#4A80F0" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          )}
+        </View>
+
+        {/* Search Button */}
+        <TouchableOpacity
+          style={[
+            styles.searchButton,
+            !position.trim() && styles.searchButtonDisabled,
+          ]}
+          onPress={handleSearch}
+          disabled={!position.trim()}
+        >
+          <Ionicons name="search" size={20} color="#fff" />
+          <Text style={styles.searchButtonText}>Tìm kiếm</Text>
+        </TouchableOpacity>
+
+        {/* Recent Searches */}
+        {recentSearches.length > 0 && !showPositionSuggestions && !showLocationPicker && (
+          <View style={styles.recentSection}>
+            <View style={styles.recentHeader}>
+              <Text style={styles.recentTitle}>Tìm kiếm gần đây</Text>
+              <TouchableOpacity onPress={() => setRecentSearches([])}>
+                <Text style={styles.clearAllText}>Xóa tất cả</Text>
+              </TouchableOpacity>
+            </View>
+            {recentSearches.map((search, index) => (
+              <Animated.View
+                key={index}
+                entering={FadeInDown.delay(index * 50).duration(300)}
+              >
+                <TouchableOpacity
+                  style={styles.recentItem}
+                  onPress={() => handleRecentSearchClick(search)}
+                >
+                  <View style={styles.recentIconContainer}>
+                    <Ionicons name="time-outline" size={20} color="#64748b" />
+                  </View>
+                  <View style={styles.recentInfo}>
+                    <Text style={styles.recentPosition}>{search.position}</Text>
+                    <Text style={styles.recentLocation}>
+                      <Ionicons name="location" size={12} color="#94a3b8" />{' '}
+                      {search.location}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+          </View>
         )}
-    </View>           
-    </PaperProvider>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingTop: 50,
+    backgroundColor: '#F9F9FB',
   },
   header: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  heading: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 4,
+  backBtn: {
+    marginRight: 12,
+    padding: 4,
   },
-  queryText: {
-    color: '#4A80F0',
-    fontStyle: 'italic',
-  },
-  resultCount: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  resultText: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  dropdown: {
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-  },
-  dropdownContainer: {
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    marginHorizontal: 16,
-  },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#fef2f2',
-    alignSelf: 'flex-start',
-  },
-  clearButtonText: {
-    color: '#ef4444',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  loadingText: {
-    marginTop: 12,
-    color: '#64748b',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
-  },
-  errorText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#ef4444',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  retryButton: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    backgroundColor: '#4A80F0',
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
-  },
-  emptyText: {
-    marginTop: 16,
+  headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#475569',
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#94a3b8',
-    textAlign: 'center',
-  },
-  listContent: {
-    padding: 16,
-  },
-  jobItem: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4A80F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  jobHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  jobTitle: {
-    flex: 1,
-    fontSize: 17,
     fontWeight: '700',
     color: '#1e293b',
-    marginRight: 8,
   },
-  typeBadge: {
-    backgroundColor: '#dbeafe',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#1e40af',
-    textTransform: 'uppercase',
-  },
-  jobDetails: {
-    gap: 6,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#64748b',
+  content: {
     flex: 1,
+    padding: 16,
   },
-  skillsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 12,
+  inputSection: {
+    marginBottom: 20,
   },
-  skillChip: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  skillText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '500',
-  },
-  moreSkills: {
-    fontSize: 12,
-    color: '#94a3b8',
+  inputLabel: {
+    fontSize: 14,
     fontWeight: '600',
-    alignSelf: 'center',
+    color: '#475569',
+    marginBottom: 8,
   },
-  searchContainer: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1e293b',
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  selectedLocation: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1e293b',
+    fontWeight: '500',
+  },
+  suggestionsContainer: {
+    marginTop: 8,
+    backgroundColor: '#fff',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    maxHeight: 300,
+    overflow: 'hidden',
   },
-  searchIcon: {
-    marginRight: 8,
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 12,
   },
-  searchInput: {
+  suggestionText: {
+    fontSize: 15,
+    color: '#334155',
     flex: 1,
+  },
+  locationPicker: {
+    marginTop: 8,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    maxHeight: 400,
+    overflow: 'hidden',
+  },
+  currentLocationButton: {
+    padding: 16,
+    backgroundColor: '#faf5ff',
+  },
+  currentLocationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  currentLocationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f3e8ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  currentLocationText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#7c3aed',
+  },
+  currentLocationButtonDisabled: {
+    opacity: 0.6,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    marginVertical: 4,
+  },
+  locationScroll: {
+    maxHeight: 300,
+  },
+  locationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 12,
+  },
+  locationItemActive: {
+    backgroundColor: '#f0f7ff',
+  },
+  locationText: {
+    fontSize: 15,
+    color: '#334155',
+    flex: 1,
+  },
+  locationTextActive: {
+    color: '#4A80F0',
+    fontWeight: '600',
+  },
+  searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#7c3aed',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  searchButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+    shadowOpacity: 0,
+  },
+  searchButtonText: {
     fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  recentSection: {
+    marginTop: 24,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  recentTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1e293b',
+  },
+  clearAllText: {
+    fontSize: 14,
+    color: '#ef4444',
+    fontWeight: '600',
+  },
+  recentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  recentIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  recentInfo: {
+    flex: 1,
+  },
+  recentPosition: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  recentLocation: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#94a3b8',
   },
 });

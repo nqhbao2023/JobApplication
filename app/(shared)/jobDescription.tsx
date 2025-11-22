@@ -44,6 +44,7 @@ const JobDescription = () => {
 
   const {
     jobData,
+    companyData,
     posterInfo,
     loading,
     error,
@@ -211,20 +212,31 @@ const JobDescription = () => {
               source={{
                 uri: (() => {
                   const job = jobData as Job;
-                  // Priority: company_logo (viecoi) > image > company.image > placeholder
+                  // Priority: company_logo (viecoi) > image > companyData.image > company.image > placeholder
                   if (job?.company_logo) return job.company_logo;
                   if (job?.image) return job.image;
                   
-                  const company = job?.company;
-                  if (company && typeof company === 'object' && (company as any).image) {
-                    return (company as any).image;
+                  // Check fetched company data (employer jobs)
+                  if (companyData?.image && 
+                      (companyData.image.startsWith('http://') || companyData.image.startsWith('https://'))) {
+                    return companyData.image;
                   }
                   
-                  // Fallback to placeholder with company name
-                  const companyName = job?.company_name || 
+                  // Check company object in job data
+                  const company = job?.company;
+                  if (company && typeof company === 'object' && (company as any).image) {
+                    const img = (company as any).image;
+                    if (img && (img.startsWith('http://') || img.startsWith('https://'))) {
+                      return img;
+                    }
+                  }
+                  
+                  // Fallback to ui-avatars placeholder
+                  const companyName = companyData?.corp_name || 
+                    job?.company_name || 
                     (company && typeof company === 'object' ? company.corp_name : '') || 
                     'Job';
-                  return `https://via.placeholder.com/100?text=${encodeURIComponent(companyName)}`;
+                  return `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&size=200&background=4A80F0&color=fff&bold=true&format=png`;
                 })(),
               }}
             />
@@ -237,9 +249,10 @@ const JobDescription = () => {
             <Text style={styles.companyName}>
               {(() => {
                 const job = jobData as Job;
-                // Thử company_name trước (cho viecoi jobs)
+                // Priority: companyData (employer jobs) > company_name (viecoi) > company object
+                if (companyData?.corp_name) return companyData.corp_name;
                 if (job?.company_name) return job.company_name;
-                // Sau đó thử company object
+                
                 const company = job?.company;
                 if (!company) return "";
                 if (typeof company === 'string') return company;
@@ -363,6 +376,8 @@ const JobDescription = () => {
             isSaved={isSaved}
             saveLoading={saveLoading}
             onToggleSave={toggleSave}
+            isApplied={isApplied}
+            applyLoading={applyLoading}
           />
         </View>
       )}

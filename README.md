@@ -210,6 +210,43 @@ Body: { "category": "F&B", "type": "part-time", "location": "HCM" }
 
 ---
 
+## 🔧 TROUBLESHOOTING
+
+### ⚠️ Lỗi "Request failed with status code 404" khi cài APK
+
+**Nguyên nhân**: IP máy tính thay đổi, không khớp với IP trong build APK
+
+**Giải pháp nhanh:**
+
+1. **Kiểm tra kết nối:**
+   ```powershell
+   .\test-connection.ps1
+   ```
+
+2. **Build APK với IP mới:**
+   ```powershell
+   # Tự động detect IP và build
+   .\build-with-current-ip.ps1
+   
+   # Hoặc build thủ công
+   eas build --platform android --profile development
+   ```
+
+3. **Cố định IP máy tính** (khuyến nghị):
+   - Xem hướng dẫn chi tiết: [`FIX_IP_404_ERROR.md`](./FIX_IP_404_ERROR.md)
+
+4. **Build với production server** (không cần IP local):
+   ```bash
+   eas build --platform android --profile preview
+   ```
+
+**Tài liệu chi tiết:**
+- [`FIX_IP_404_ERROR.md`](./FIX_IP_404_ERROR.md) - Hướng dẫn fix lỗi 404
+- [`QUICK_BUILD_GUIDE.md`](./QUICK_BUILD_GUIDE.md) - Hướng dẫn build APK
+- [`FIX_404_BUILD_APK.md`](./FIX_404_BUILD_APK.md) - Giải thích chi tiết vấn đề
+
+---
+
 ## 📞 LIÊN HỆ
 
 - **Email**: [your-email]
@@ -225,3 +262,4 @@ MIT License - Dự án tốt nghiệp 2025
 ---
 
 **🎉 Chúc bạn bảo vệ thành công!**
+

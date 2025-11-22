@@ -18,7 +18,15 @@ export class ApplicationService {
         .get();
 
       if (!existingQuery.empty) {
-        throw new AppError('You have already applied to this job', 400);
+        const existingApp = existingQuery.docs[0].data() as Application;
+        const hasSubmittedCV = !!existingApp.cvUrl;
+        
+        if (hasSubmittedCV) {
+          throw new AppError('Bạn đã nộp CV cho công việc này rồi. Vui lòng kiểm tra tại mục "Đơn ứng tuyển".', 400);
+        } else {
+          // Có draft nhưng chưa submit CV - trả về draft để user có thể tiếp tục
+          return existingApp;
+        }
       }
 
       const now = new Date();

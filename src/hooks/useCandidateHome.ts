@@ -10,7 +10,7 @@ import { categoryApiService } from '@/services/categoryApi.service';
 import { notificationApiService } from '@/services/notificationApi.service';
 import { authApiService } from '@/services/authApi.service';
 
-import { Job, Company, Category } from '@/types';
+import type { Job, Company, Category } from '@/types';
 import { normalizeJob, sortJobsByDate } from '@/utils/job.utils';
 import { handleApiError } from '@/utils/errorHandler';
 import { calculateJobMatchScore, JobWithScore } from '@/services/jobMatching.service';
@@ -253,11 +253,19 @@ export const useCandidateHome = () => {
   }, [dataCompany]);
 
   const getJobCompany = useCallback((job: Job): Company | undefined => {
+    // Priority 1: Try companyId field (employer-created jobs)
+    if (job.companyId) {
+      const company = companyMap[job.companyId];
+      if (company) return company;
+    }
+    
+    // Priority 2: Try company field (legacy)
     if (!job.company) return undefined;
     if (typeof job.company === 'string') return companyMap[job.company];
     if (typeof job.company === 'object' && job.company.$id) {
       return companyMap[job.company.$id];
     }
+    
     return undefined;
   }, [companyMap]);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,33 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
+  Modal,
 } from 'react-native';
 import DropDownPicker from 'react-native-dropdown-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAddJobForm } from '@/hooks/addJob/useAddJobForm';
 import { SectionCard, AITemplateModal } from '@/components/employer/AddJobSections';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
+import { filterJobPositions } from '@/constants/jobPositions';
+import { VIETNAM_CITIES } from '@/constants/locations';
+import { Ionicons } from '@expo/vector-icons';
 
 const AddJob = () => {
   const scrollRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  
+  // ✨ Autocomplete for job title
+  const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
+  const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
+  
+  // ✨ Date picker modal
+  const [showDeadlineModal, setShowDeadlineModal] = useState(false);
+  
+  // ✨ City autocomplete for new company
+  const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
 
   const {
     formData,
@@ -37,12 +54,20 @@ const AddJob = () => {
     setJobCategoryItems,
     companyItems,
     setCompanyItems,
+    locationItems,
+    setLocationItems,
+    experienceItems,
+    setExperienceItems,
     openTypeDD,
     setOpenTypeDD,
     openCategoryDD,
     setOpenCategoryDD,
     openCompanyDD,
     setOpenCompanyDD,
+    openLocationDD,
+    setOpenLocationDD,
+    openExperienceDD,
+    setOpenExperienceDD,
     expandedSections,
     toggleSection,
     loading,
@@ -66,6 +91,32 @@ const AddJob = () => {
       useNativeDriver: true,
     }).start();
   }, [fadeAnim]);
+
+  // ✨ Filter title suggestions as user types
+  useEffect(() => {
+    if (formData.title.trim().length > 0) {
+      const filtered = filterJobPositions(formData.title);
+      setTitleSuggestions(filtered.slice(0, 5)); // Show max 5 suggestions
+      setShowTitleSuggestions(true);
+    } else {
+      setTitleSuggestions([]);
+      setShowTitleSuggestions(false);
+    }
+  }, [formData.title]);
+
+  // ✨ Filter city suggestions for new company
+  useEffect(() => {
+    if (newCompany.city.trim().length > 0) {
+      const filtered = VIETNAM_CITIES.filter(city => 
+        city.toLowerCase().includes(newCompany.city.toLowerCase())
+      );
+      setCitySuggestions(filtered.slice(0, 5));
+      setShowCitySuggestions(true);
+    } else {
+      setCitySuggestions([]);
+      setShowCitySuggestions(false);
+    }
+  }, [newCompany.city]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -99,13 +150,42 @@ const AddJob = () => {
             expandedSections={expandedSections}
             toggleSection={toggleSection}
           >
-            <TextInput
-              style={styles.input}
-              placeholder="Tiêu đề công việc *"
-              value={formData.title}
-              onChangeText={(text) => updateFormField('title', text)}
-              placeholderTextColor="#999"
-            />
+            {/* Title Input with Autocomplete */}
+            <View style={{ position: 'relative', zIndex: 5000 }}>
+              <TextInput
+                style={styles.input}
+                placeholder="Tiêu đề công việc *"
+                value={formData.title}
+                onChangeText={(text) => updateFormField('title', text)}
+                placeholderTextColor="#999"
+                onFocus={() => formData.title.trim().length > 0 && setShowTitleSuggestions(true)}
+              />
+              {showTitleSuggestions && titleSuggestions.length > 0 && (
+                <Reanimated.View
+                  entering={FadeInDown.duration(200)}
+                  style={styles.suggestionsContainer}
+                >
+                  <FlatList
+                    data={titleSuggestions}
+                    keyExtractor={(item, index) => `${item}-${index}`}
+                    scrollEnabled={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.suggestionItem}
+                        onPress={() => {
+                          updateFormField('title', item);
+                          setShowTitleSuggestions(false);
+                        }}
+                      >
+                        <Ionicons name="briefcase-outline" size={16} color="#7c3aed" />
+                        <Text style={styles.suggestionText}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </Reanimated.View>
+              )}
+            </View>
+
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Mô tả công việc *"
@@ -158,38 +238,82 @@ const AddJob = () => {
                 placeholderTextColor="#999"
               />
             </View>
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Loại hình"
-                value={formData.workingType}
-                onChangeText={(text) => updateFormField('workingType', text)}
-                placeholderTextColor="#999"
-              />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Kinh nghiệm"
-                value={formData.experience}
-                onChangeText={(text) => updateFormField('experience', text)}
-                placeholderTextColor="#999"
+            
+            {/* Location Dropdown */}
+            <Text style={styles.label}>Địa điểm làm việc *</Text>
+            <View style={{ zIndex: 2500, marginBottom: 12 }}>
+              <DropDownPicker
+                open={openLocationDD}
+                setOpen={setOpenLocationDD}
+                value={formData.location}
+                setValue={(callback) => {
+                  const value = typeof callback === 'function' ? callback(formData.location) : callback;
+                  updateFormField('location', value);
+                }}
+                items={locationItems}
+                setItems={setLocationItems}
+                placeholder="Chọn địa điểm"
+                listMode="MODAL"
+                searchable={true}
+                searchPlaceholder="Tìm kiếm thành phố..."
+                modalTitle="Chọn địa điểm làm việc"
+                modalAnimationType="slide"
+                style={styles.dropdown}
+                dropDownContainerStyle={styles.dropdownMenu}
+                placeholderStyle={styles.dropdownPlaceholder}
+                searchTextInputStyle={styles.searchInput}
+                modalContentContainerStyle={styles.modalContent}
+                zIndex={2500}
               />
             </View>
+
+            {/* Experience Dropdown */}
+            <Text style={styles.label}>Kinh nghiệm yêu cầu *</Text>
+            <View style={{ zIndex: 2400, marginBottom: 12 }}>
+              <DropDownPicker
+                open={openExperienceDD}
+                setOpen={setOpenExperienceDD}
+                value={formData.experience}
+                setValue={(callback) => {
+                  const value = typeof callback === 'function' ? callback(formData.experience) : callback;
+                  updateFormField('experience', value);
+                }}
+                items={experienceItems}
+                setItems={setExperienceItems}
+                placeholder="Chọn mức kinh nghiệm"
+                listMode="MODAL"
+                modalTitle="Chọn kinh nghiệm yêu cầu"
+                modalAnimationType="slide"
+                style={styles.dropdown}
+                dropDownContainerStyle={styles.dropdownMenu}
+                placeholderStyle={styles.dropdownPlaceholder}
+                modalContentContainerStyle={styles.modalContent}
+                zIndex={2400}
+              />
+            </View>
+
+            {/* Quantity and Deadline */}
             <View style={styles.row}>
               <TextInput
                 style={[styles.input, styles.halfInput]}
-                placeholder="Số lượng"
+                placeholder="Số lượng tuyển (tùy chọn)"
                 value={formData.quantity}
                 onChangeText={(text) => updateFormField('quantity', text)}
                 keyboardType="numeric"
                 placeholderTextColor="#999"
               />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Hạn nộp (YYYY-MM-DD)"
-                value={formData.deadline}
-                onChangeText={(text) => updateFormField('deadline', text)}
-                placeholderTextColor="#999"
-              />
+              <TouchableOpacity
+                style={[styles.input, styles.halfInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                onPress={() => {
+                  // Simple date input - let user type in YYYY-MM-DD format
+                  setShowDeadlineModal(true);
+                }}
+              >
+                <Text style={formData.deadline ? { fontSize: 15, color: '#1a1a1a' } : { fontSize: 15, color: '#999' }}>
+                  {formData.deadline || 'Hạn nộp (tùy chọn)'}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color="#7c3aed" />
+              </TouchableOpacity>
             </View>
           </SectionCard>
 
@@ -317,22 +441,43 @@ const AddJob = () => {
                   onChangeText={(t) => setNewCompany({ ...newCompany, corp_name: t })}
                   placeholderTextColor="#999"
                 />
-                <View style={styles.row}>
+                
+                {/* City with Autocomplete */}
+                <View style={{ position: 'relative', zIndex: 4000 }}>
                   <TextInput
-                    style={[styles.input, styles.halfInput]}
-                    placeholder="Quốc gia"
-                    value={newCompany.nation}
-                    onChangeText={(t) => setNewCompany({ ...newCompany, nation: t })}
-                    placeholderTextColor="#999"
-                  />
-                  <TextInput
-                    style={[styles.input, styles.halfInput]}
-                    placeholder="Thành phố"
+                    style={styles.input}
+                    placeholder="Thành phố *"
                     value={newCompany.city}
                     onChangeText={(t) => setNewCompany({ ...newCompany, city: t })}
                     placeholderTextColor="#999"
+                    onFocus={() => newCompany.city.trim().length > 0 && setShowCitySuggestions(true)}
                   />
+                  {showCitySuggestions && citySuggestions.length > 0 && (
+                    <Reanimated.View
+                      entering={FadeInDown.duration(200)}
+                      style={styles.suggestionsContainer}
+                    >
+                      <FlatList
+                        data={citySuggestions}
+                        keyExtractor={(item) => item}
+                        scrollEnabled={false}
+                        renderItem={({ item }) => (
+                          <TouchableOpacity
+                            style={styles.suggestionItem}
+                            onPress={() => {
+                              setNewCompany({ ...newCompany, city: item });
+                              setShowCitySuggestions(false);
+                            }}
+                          >
+                            <Ionicons name="location-outline" size={16} color="#7c3aed" />
+                            <Text style={styles.suggestionText}>{item}</Text>
+                          </TouchableOpacity>
+                        )}
+                      />
+                    </Reanimated.View>
+                  )}
                 </View>
+
                 <TextInput
                   style={[styles.input, styles.textArea]}
                   placeholder="Mô tả công ty"
@@ -465,6 +610,47 @@ const AddJob = () => {
         onClose={() => setAiModalVisible(false)}
         onSelectTemplate={applyAITemplate}
       />
+
+      {/* Deadline Input Modal */}
+      <Modal
+        visible={showDeadlineModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeadlineModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDeadlineModal(false)}
+        >
+          <View style={styles.deadlineModalContent}>
+            <Text style={styles.deadlineModalTitle}>Chọn hạn nộp</Text>
+            <Text style={styles.deadlineModalHint}>Định dạng: YYYY-MM-DD (vd: 2025-12-31)</Text>
+            <TextInput
+              style={styles.deadlineInput}
+              placeholder="2025-12-31"
+              value={formData.deadline}
+              onChangeText={(text) => updateFormField('deadline', text)}
+              placeholderTextColor="#999"
+              autoFocus
+            />
+            <View style={styles.deadlineModalButtons}>
+              <TouchableOpacity
+                style={[styles.deadlineModalBtn, styles.deadlineCancelBtn]}
+                onPress={() => setShowDeadlineModal(false)}
+              >
+                <Text style={styles.deadlineCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deadlineModalBtn, styles.deadlineConfirmBtn]}
+                onPress={() => setShowDeadlineModal(false)}
+              >
+                <Text style={styles.deadlineConfirmText}>Xong</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -640,5 +826,98 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  // ✨ Autocomplete styles
+  suggestionsContainer: {
+    position: 'absolute',
+    top: 62,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    maxHeight: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 5000,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    gap: 10,
+  },
+  suggestionText: {
+    fontSize: 15,
+    color: '#1a1a1a',
+    flex: 1,
+  },
+  // Deadline Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  deadlineModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  deadlineModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  deadlineModalHint: {
+    fontSize: 13,
+    color: '#64748b',
+    marginBottom: 16,
+  },
+  deadlineInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    marginBottom: 20,
+    backgroundColor: '#fff',
+    color: '#1a1a1a',
+  },
+  deadlineModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deadlineModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  deadlineCancelBtn: {
+    backgroundColor: '#f3f4f6',
+  },
+  deadlineConfirmBtn: {
+    backgroundColor: '#7c3aed',
+  },
+  deadlineCancelText: {
+    color: '#6b7280',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  deadlineConfirmText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

@@ -103,6 +103,7 @@ export interface Job {
   requirements?: string;
   benefits?: string;
   status?: 'active' | 'closed' | 'draft' | 'inactive';
+  companyId?: string;   // ✅ Company ID reference (employer-created jobs)
   employerId?: string;  // ✅ Added to match server type
   ownerId?: string;     // ✅ Legacy field support (some jobs might use this)
   applicantCount?: number;

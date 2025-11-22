@@ -25,6 +25,8 @@ interface ApplyButtonProps {
   onApplyQuickPost?: () => void; // Callback để gửi CV qua email cho quick-post
   compact?: boolean; // Compact mode for bottom bar
   jobId?: string; // Job ID for quick-post notification
+  isApplied?: boolean; // Đã nộp CV hay chưa
+  applyLoading?: boolean; // Đang xử lý nộp CV
 }
 
 const ApplyButton: React.FC<ApplyButtonProps> = ({
@@ -35,6 +37,8 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
   onApplyQuickPost,
   compact = false,
   jobId,
+  isApplied = false,
+  applyLoading = false,
 }) => {
   /**
    * Type 1: Crawled Jobs - Redirect to source
@@ -159,11 +163,22 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
       case 'internal':
         return (
           <TouchableOpacity
-            style={[buttonStyle, styles.featuredButton]}
+            style={[
+              buttonStyle, 
+              styles.featuredButton,
+              (isApplied || applyLoading) && styles.disabledButton
+            ]}
             onPress={handleFeaturedJobApply}
+            disabled={isApplied || applyLoading}
           >
-            <Ionicons name="send-outline" size={iconSize} color="#fff" />
-            <Text style={textStyle}>Gửi CV ứng tuyển</Text>
+            <Ionicons 
+              name={isApplied ? "checkmark-circle-outline" : "send-outline"} 
+              size={iconSize} 
+              color="#fff" 
+            />
+            <Text style={textStyle}>
+              {isApplied ? '✅ Đã nộp CV' : applyLoading ? 'Đang xử lý...' : 'Gửi CV ứng tuyển'}
+            </Text>
           </TouchableOpacity>
         );
 
@@ -204,6 +219,10 @@ const styles = StyleSheet.create({
   },
   featuredButton: {
     backgroundColor: '#FF9500',
+  },
+  disabledButton: {
+    backgroundColor: '#999',
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',

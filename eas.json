@@ -11,7 +11,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.15:3000"
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.35:3000"
       }
     },
     "preview": {
@@ -19,11 +19,17 @@
       "android": {
         "buildType": "apk",
         "credentialsSource": "remote"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://job4s-server.onrender.com"
       }
     },
     "production": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://job4s-server.onrender.com"
       }
     }
   },

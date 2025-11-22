@@ -1,4 +1,6 @@
+# ─────────────
 # Common dependencies
+# ─────────────
 node_modules/
 clean-repo/
 dist/
@@ -8,44 +10,64 @@ web-build/
 .expo-shared/
 *.tsbuildinfo
 
-# Firebase configs
+# ─────────────
+# Firebase mobile configs (🔥 RẤT QUAN TRỌNG)
+# ─────────────
+google-services.json
 **/google-services.json
+GoogleService-Info.plist
 **/GoogleService-Info.plist
 
+# ─────────────
 # Environment / secrets
+# ─────────────
 .env
 .env.*
+.env*.local
 **/.env
 **/.env.*
+**/.env.local
 
-# Firebase Admin private
-**/serviceAccountKey.json
+# Firebase Admin private SDK (Node server)
+serviceAccountKey.json
+server/serviceAccountKey.json
+server/**/serviceAccountKey.json
 **/firebase-adminsdk-*.json
 
-# System / IDE
+# ─────────────
+# System / IDE / OS
+# ─────────────
 .DS_Store
 *.pem
 *.orig.*
 *.log
+
+# Visual Studio Code
 .vscode/
 *.code-workspace
 
+# ─────────────
 # Debug logs
+# ─────────────
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# Native signing
+# ─────────────
+# Native signing files
+# ─────────────
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
 
-# Expo / TS / cache
+# ─────────────
+# Expo / TypeScript / Cache
+# ─────────────
 expo-env.d.ts
 .metro-health-check*
 
-# Your local sensitive deploy configs
 setup-eas-secrets.ps1
-eas.json
+setup-eas-complete.ps1
+google-services.json

@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "test": "jest --watchAll",
     "lint": "expo lint",
-    "seed:categories": "node src/scripts/admin/seedCategories.js"
+    "seed:categories": "node src/scripts/admin/seedCategories.js",
+    "prebuild": "node ./scripts/decode-google-services.js"
   },
   "jest": {
     "preset": "jest-expo"

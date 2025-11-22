@@ -17,9 +17,9 @@ import {
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// ⚙️ Cấu hình Firebase — chú ý dòng storageBucket
+// ⚙️ Cấu hình Firebase — sử dụng environment variables
 const firebaseConfig = {
-  apiKey: AIzaSyDWOpfdH_wDYHzdRgQBW1DEEvUrBQuUkdo,
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
 
@@ -29,6 +29,13 @@ const firebaseConfig = {
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
+
+// ✅ Validate Firebase config trước khi khởi tạo
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.appId) {
+  console.error("❌ Firebase configuration is incomplete!");
+  console.error("Missing environment variables. Check your .env or EAS configuration.");
+  throw new Error("Firebase configuration error");
+}
 
 // ✅ Khởi tạo app Firebase (tránh tạo lại nếu đã có)
 const app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig);

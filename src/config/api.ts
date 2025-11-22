@@ -21,17 +21,17 @@ const getBaseURL = (): string => {
   }
 
   // ✅ 2. Production mode → dùng Render URL
-  const isDev = process.env.NODE_ENV === 'development';
+  const isDev = process.env.NODE_ENV === 'development' || __DEV__;
   if (!isDev) {
     console.log('🌐 Using production API URL');
-    return 'https://job4s-api.onrender.com';
+    return 'https://job4s-server.onrender.com';
   }
 
   // ✅ 3. Development fallback - Tự động dùng Expo debugger host
   // Expo tự detect IP của máy tính đang chạy Metro bundler
   const debuggerHost = Constants.expoConfig?.hostUri?.split(':')[0];
   
-  if (debuggerHost && debuggerHost !== 'localhost') {
+  if (debuggerHost && debuggerHost !== 'localhost' && !debuggerHost.includes('127.0.0.1')) {
     const autoUrl = `http://${debuggerHost}:3000`;
     console.log('🌐 Auto-detected API URL from Expo:', autoUrl);
     return autoUrl;

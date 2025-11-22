@@ -14,8 +14,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.hoangbao.job4s",
-      "googleServicesFile": "./google-services.json",
-
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
@@ -68,8 +66,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "0f9a49c5-b440-4611-a006-e216779c267b"
+        "projectId": "50ec8524-cb2d-4a73-b88f-a760f60cc0b6"
       }
-    }
+    },
+    "owner": "hoangbao1234"
   }
 }

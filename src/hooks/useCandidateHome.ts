@@ -15,6 +15,7 @@ import { normalizeJob, sortJobsByDate } from '@/utils/job.utils';
 import { handleApiError } from '@/utils/errorHandler';
 import { calculateJobMatchScore, JobWithScore } from '@/services/jobMatching.service';
 import * as Location from 'expo-location';
+import { useCandidateHomeStore, CANDIDATE_HOME_CACHE_TTL } from '@/stores/candidateHomeStore';
 
 export type QuickFilter = 'all' | 'intern' | 'part-time' | 'remote' | 'nearby';
 
@@ -22,14 +23,7 @@ export type CategoryWithCount = Category & { jobCount: number };
 
 export const useCandidateHome = () => {
   const [userId, setUserId] = useState<string>('');
-  const [dataJob, setDataJob] = useState<Job[]>([]);
-  const [dataUser, setDataUser] = useState<any>();
-  const [dataCategories, setDataCategories] = useState<Category[]>([]);
-  const [dataCompany, setDataCompany] = useState<Company[]>([]);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<QuickFilter>('all');
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | undefined>();
 
@@ -37,26 +31,55 @@ export const useCandidateHome = () => {
   const hasTriggeredHaptic = useSharedValue(false);
   
   const isLoadingRef = useRef(false);
-  const lastLoadTimeRef = useRef<number>(0);
-  const CACHE_DURATION = 30000; // 30 seconds cache
+  const {
+    user: dataUser,
+    jobs: dataJob,
+    companies: dataCompany,
+    categories: dataCategories,
+    unreadCount,
+    loading,
+    error,
+    lastFetchedAt,
+    hydrated,
+    setStateFromPayload: setStoreState,
+    setLoading: setStoreLoading,
+    setError: setStoreError,
+    setUnreadCount: setStoreUnread,
+    setLastFetchedAt,
+  } = useCandidateHomeStore();
 
-  // Load current location for distance-based matching
+  // Load current location for distance-based matching (candidate-only)
   useEffect(() => {
+    const shouldRequestLocation = !dataUser?.role || dataUser.role === 'candidate';
+    if (!shouldRequestLocation) return;
+
+    let cancelled = false;
+
     (async () => {
       try {
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled || cancelled) return;
+
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const location = await Location.getCurrentPositionAsync({});
-          setCurrentLocation({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          });
+        if (status !== 'granted' || cancelled) return;
+
+        const location = await Location.getCurrentPositionAsync({});
+        if (cancelled) return;
+        setCurrentLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      } catch (error: any) {
+        if (__DEV__) {
+          console.info('[Location] Skip location fetch:', error?.message || error);
         }
-      } catch (error) {
-        if (__DEV__) console.warn('[Location] Could not get current location', error);
       }
     })();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dataUser?.role]);
 
   const load_user_id = useCallback(async () => {
     try {
@@ -68,22 +91,24 @@ export const useCandidateHome = () => {
   }, []);
 
   const load_data_user = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) return undefined;
     try {
       const profile = await authApiService.getProfile();
       const displayName = profile.name || profile.email || '';
-      setDataUser({
+      return {
         ...profile,
         $id: profile.uid,
+        uid: profile.uid,
         displayName,
         name: profile.name || displayName,
         photoURL: profile.photoURL || auth.currentUser?.photoURL || null,
-      });
+        role: profile.role || 'candidate',
+      };
     } catch (e: any) {
       handleApiError(e, 'update_profile', { silent: true });
       const user = auth.currentUser;
       if (user) {
-        setDataUser({
+        return {
           $id: user.uid,
           uid: user.uid,
           email: user.email,
@@ -91,8 +116,10 @@ export const useCandidateHome = () => {
           displayName: user.displayName || user.email || '',
           photoURL: user.photoURL,
           role: 'candidate',
-        });
-      }    }
+        };
+      }
+      return undefined;
+    }
   }, [userId]);
 
   const load_data_job = useCallback(async () => {
@@ -100,13 +127,12 @@ export const useCandidateHome = () => {
       const response = await jobApiService.getAllJobs({ limit: 30 });
       const normalizedJobs = response.jobs.map(normalizeJob);
       const sortedJobs = sortJobsByDate(normalizedJobs);
-      setDataJob(sortedJobs);
       if (__DEV__) console.log('[Tải công việc] Đã tải', response.jobs.length, 'công việc');
+      return sortedJobs;
     } catch (e: any) {
       console.error('[Lỗi] Không thể tải công việc:', e.message);
-      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách việc làm';
-      setError(errorMessage);
       handleApiError(e, 'generic', { silent: true });
+      throw e;
     }
   }, []);
 
@@ -125,82 +151,94 @@ export const useCandidateHome = () => {
         return { ...company, image: imageUrl };
       });
       
-      setDataCompany(normalizedCompanies);
       if (__DEV__) console.log('[Tải công ty] Đã tải', companies.length, 'công ty');
+      return normalizedCompanies;
     } catch (e: any) {
       console.error('[Lỗi] Không thể tải công ty:', e.message);
-      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh sách công ty';
-      setError(errorMessage);
       handleApiError(e, 'generic', { silent: true });
+      throw e;
     }
   }, []);
 
   const load_data_categories = useCallback(async () => {
     try {
       const categories = await categoryApiService.getAllCategories(12);
-      setDataCategories(categories);
       if (__DEV__) console.log('[Tải danh mục] Đã tải', categories.length, 'danh mục');
+      return categories;
     } catch (e: any) {
       console.error('[Lỗi] Không thể tải danh mục:', e.message);
-      const errorMessage = e?.response?.data?.message || e?.message || 'Không thể tải danh mục việc làm';
-      setError(errorMessage);
       handleApiError(e, 'generic', { silent: true });
+      throw e;
     }
   }, []);
 
   const loadUnreadNotifications = useCallback(async () => {
-    if (!userId) return;
+    const isCandidate = !dataUser?.role || dataUser.role === 'candidate';
+    if (!userId || !isCandidate) return 0;
     try {
       const count = await notificationApiService.getUnreadCount();
-      setUnreadCount(count);
+      return count;
     } catch (e: any) {
       // ✅ Silent fail for notifications - không quan trọng lắm
       // Không show error, không làm gián đoạn UX
       if (__DEV__) console.warn('[Cảnh báo] Không thể tải thông báo');
     }
-  }, [userId]);
+    return 0;
+  }, [userId, dataUser?.role]);
 
   const loadAllData = useCallback(async (force = false) => {
     if (isLoadingRef.current) return;
     
     // ✅ Check cache - skip nếu data còn fresh
-    const now = Date.now();
-    const timeSinceLastLoad = now - lastLoadTimeRef.current;
+    const lastLoad = lastFetchedAt ?? 0;
+    const timeSinceLastLoad = Date.now() - lastLoad;
+    const shouldUseCache = hydrated && !force && dataJob.length > 0 && timeSinceLastLoad < CANDIDATE_HOME_CACHE_TTL;
     
-    if (!force && timeSinceLastLoad < CACHE_DURATION && dataJob.length > 0) {
+    if (shouldUseCache) {
       if (__DEV__) console.log(`[Cache] Dùng dữ liệu đã lưu (${Math.round(timeSinceLastLoad / 1000)}s trước)`);
+      setStoreLoading(false);
       return;
     }
     
     isLoadingRef.current = true;
-    setLoading(true);
-    setError(null);
+    setStoreLoading(true);
+    setStoreError(null);
     
     try {
       // ✅ Load sequentially với delay để tránh rate limit
-      await load_data_user();
+      const userProfile = await load_data_user();
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      await load_data_job();
+      const jobs = await load_data_job();
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      await load_data_company();
+      const companies = await load_data_company();
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      await load_data_categories();
+      const categories = await load_data_categories();
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      await loadUnreadNotifications();
-      
-      lastLoadTimeRef.current = Date.now(); // ✅ Update cache timestamp
+      const unread = await loadUnreadNotifications();
+
+      setStoreState({
+        user: userProfile ?? dataUser,
+        jobs: jobs ?? dataJob,
+        companies: companies ?? dataCompany,
+        categories: categories ?? dataCategories,
+      });
+      setStoreUnread(unread);
+      const timestamp = Date.now();
+      setLastFetchedAt(timestamp);
       if (__DEV__) console.log('[Tải dữ liệu] Hoàn tất');
     } catch (e) {
       console.error('[Lỗi] Không thể tải dữ liệu:', e);
+      const errorMessage = (e as any)?.response?.data?.message || (e as any)?.message || 'Không thể tải dữ liệu';
+      setStoreError(errorMessage);
     } finally {
-      setLoading(false);
+      setStoreLoading(false);
       isLoadingRef.current = false;
     }
-  }, [load_data_user, load_data_job, load_data_company, load_data_categories, loadUnreadNotifications, dataJob.length]);
+  }, [hydrated, dataJob, dataCompany, dataCategories, lastFetchedAt, load_data_user, load_data_job, load_data_company, load_data_categories, loadUnreadNotifications, setStoreState, setStoreUnread, setLastFetchedAt, setStoreLoading, setStoreError]);
 
   useEffect(() => {
     load_user_id();
@@ -236,13 +274,9 @@ export const useCandidateHome = () => {
     setSelectedFilter(filter);
   }, []);
 
-  const clearNotifications = useCallback(() => {
-    setUnreadCount(0);
-  }, []);
-
   const resetUnreadCount = useCallback(() => {
-    setUnreadCount(0);
-  }, []);
+    setStoreUnread(0);
+  }, [setStoreUnread]);
 
   const companyMap = useMemo(() => {
     const m: Record<string, Company> = {};
@@ -325,13 +359,14 @@ export const useCandidateHome = () => {
 
   // ✅ Calculate match scores for jobs using AI matching
   const jobsWithMatchScores = useMemo((): JobWithScore[] => {
-    if (!dataUser?.studentProfile) {
+    const studentProfile = dataUser?.studentProfile;
+    if (!studentProfile) {
       // No profile yet, return jobs without scores
       return dataJob.map(job => ({ ...job, matchScore: undefined, isHighMatch: false }));
     }
 
     return dataJob.map(job => {
-      const matchScore = calculateJobMatchScore(job, dataUser.studentProfile, currentLocation);
+      const matchScore = calculateJobMatchScore(job, studentProfile, currentLocation);
       const isHighMatch = matchScore.totalScore >= 0.7; // 70% or higher
 
       return {
@@ -393,7 +428,6 @@ export const useCandidateHome = () => {
     onRefresh,
     reload,
     handleFilterChange,
-    clearNotifications,
     resetUnreadCount,
   };
 };

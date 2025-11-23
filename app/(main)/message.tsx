@@ -58,10 +58,11 @@ const Message = () => {
     const chatId = createChatId(currentUserId, userId);
 
     router.push({
-      pathname: "/chat",
+      pathname: "/(shared)/chat",
       params: {
         chatId, 
-        userName, 
+        partnerId: userId, // ✅ Thêm partnerId (UID đối phương)
+        partnerName: userName, // ✅ Thêm partnerName 
         role: userRole === "Recruiter" ? "Candidate" : "Recruiter", 
         // 👆 Nếu đối phương là Recruiter thì mình là Candidate, ngược lại
       },

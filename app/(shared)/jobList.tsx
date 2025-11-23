@@ -180,8 +180,8 @@ const AllJobs = () => {
             const normalizedJob = {
               $id: jobDoc.id,
               ...jobData,
-              // ✅ Normalized fields
-              displayImage: jobData.company_logo || jobData.image || companyLogo || '',
+              // ✅ Normalized fields - Priority: job.image > job.company_logo > company.image
+              displayImage: jobData.image || jobData.company_logo || companyLogo || '',
               displayCompanyName: companyName || 'Ẩn danh',
               displaySalary: salaryDisplay,
               displayLocation: locationDisplay,

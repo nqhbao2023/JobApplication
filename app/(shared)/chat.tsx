@@ -1,7 +1,9 @@
 // app/(shared)/chat.tsx
 import { useKeyboard } from "@react-native-community/hooks";
-import { useHeaderHeight } from "@react-navigation/elements"; // expo-router có sẵn
-import dayjs from "dayjs";         // expo install dayjs
+import { useHeaderHeight } from "@react-navigation/elements";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,9 +14,10 @@ import {
   Platform,
   FlatList,
   Keyboard,
+  ActivityIndicator,
 } from "react-native";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   collection,
@@ -27,6 +30,9 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db, auth } from "@/config/firebase";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+dayjs.extend(relativeTime);
 
 // Kiểu dữ liệu tin nhắn
 type MessageType = {
@@ -46,8 +52,31 @@ const asStr = (v: string | string[] | undefined): string | undefined => {
 // Helper: tạo chatId cố định từ 2 UID (thứ tự-độc lập)
 const makeChatId = (a: string, b: string) => [a, b].sort().join("_");
 
+const toJsDate = (value: any): Date | null => {
+  if (!value) return null;
+  if (value.toDate && typeof value.toDate === "function") {
+    try {
+      return value.toDate();
+    } catch (error) {
+      console.warn("⚠️ Unable to convert timestamp", error);
+      return null;
+    }
+  }
+  if (value instanceof Date) return value;
+  if (typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+};
+
 const Chat = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{
     chatId?: string | string[];
     partnerId?: string | string[];   // 👈 UID đối phương (bắt buộc nếu không truyền chatId)
@@ -63,12 +92,18 @@ const Chat = () => {
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<MessageType[]>([]);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const flatListRef = useRef<FlatList>(null);
 
   // Lấy UID người đang đăng nhập
   const myUid = auth.currentUser?.uid;
 
-  // Tính chatId “dùng thật”:
+  // ✅ Hooks phải được gọi trước useMemo (Rules of Hooks)
+  const { keyboardHeight } = useKeyboard();
+  const headerHeight = useHeaderHeight();
+
+  // Tính chatId "dùng thật":
   // - Nếu có paramChatId → dùng luôn
   // - Nếu không mà có myUid & partnerId → tự build
   const effectiveChatId = useMemo(() => {
@@ -76,55 +111,92 @@ const Chat = () => {
     if (myUid && partnerId) return makeChatId(myUid, partnerId);
     return undefined;
   }, [paramChatId, myUid, partnerId]);
-const { keyboardHeight } = useKeyboard();
-const headerHeight = useHeaderHeight();
+
+  const scrollToLatest = useCallback(() => {
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    });
+  }, []);
 
   // Lắng nghe tin nhắn realtime khi đã có effectiveChatId
   useEffect(() => {
-    if (!effectiveChatId) return;
+    if (!effectiveChatId) {
+      setMessages([]);
+      setIsLoadingMessages(false);
+      return;
+    }
+
+    setIsLoadingMessages(true);
+
     const q = query(
       collection(db, "chats", effectiveChatId, "messages"),
       orderBy("createdAt", "asc")
     );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newMsgs = snapshot.docs.map(
-        (d) => ({ id: d.id, ...d.data() } as MessageType)
-      );
-      setMessages(newMsgs);
-      // Cuộn về cuối khi có tin mới
-      requestAnimationFrame(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      });
-    });
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const newMsgs = snapshot.docs.map(
+          (d) => ({ id: d.id, ...d.data() } as MessageType)
+        );
+        setMessages(newMsgs);
+        setIsLoadingMessages(false);
+        if (snapshot.docChanges().length) {
+          scrollToLatest();
+        }
+      },
+      (error) => {
+        console.error("🔴 Chat subscription error", error);
+        setIsLoadingMessages(false);
+      }
+    );
+
     return unsubscribe;
-  }, [effectiveChatId]);
+  }, [effectiveChatId, scrollToLatest]);
 
   // Gửi tin nhắn
-const handleSendMessage = useCallback(async () => {
-  if (!effectiveChatId || !myUid) return;
-  const trimmed = message.trim();
-  if (!trimmed) return;
+  const handleSendMessage = useCallback(async () => {
+    if (!effectiveChatId || !myUid) return;
+    const trimmed = message.trim();
+    if (!trimmed) return;
 
-  // ⇢ reset input trước để UI mượt
-  setMessage("");
+    setMessage("");
 
-  const newMsg = {
-    text: trimmed,
-    role: myRole,
-    senderId: myUid,
-    createdAt: serverTimestamp(),
-  };
-  await addDoc(collection(db, "chats", effectiveChatId, "messages"), newMsg);
-  await setDoc(
-    doc(db, "chats", effectiveChatId),
-    {
-      participants: [myUid, partnerId].filter(Boolean),
-      lastMessage: newMsg.text,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-}, [message, effectiveChatId, myUid, myRole, partnerId]);
+    try {
+      const newMsg = {
+        text: trimmed,
+        role: myRole,
+        senderId: myUid,
+        createdAt: serverTimestamp(),
+      };
+      await addDoc(collection(db, "chats", effectiveChatId, "messages"), newMsg);
+      await setDoc(
+        doc(db, "chats", effectiveChatId),
+        {
+          participants: [myUid, partnerId].filter(Boolean),
+          lastMessage: newMsg.text,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error("❌ Send message error:", error);
+      // Restore message on error
+      setMessage(trimmed);
+      // Optionally show alert to user
+      if (__DEV__) {
+        console.error("Failed to send message:", error);
+      }
+    }
+  }, [message, effectiveChatId, myUid, myRole, partnerId]);
+
+  const handleBackPress = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      router.replace('/(shared)/chatList');
+    }
+  }, [navigation, router]);
 
   // Nếu chưa đủ dữ liệu để xác định phòng chat → báo nhẹ nhàng
   if (!effectiveChatId) {
@@ -137,80 +209,154 @@ const handleSendMessage = useCallback(async () => {
           Cần truyền <Text style={{ fontWeight: "700" }}>partnerId</Text> (UID đối phương)
           hoặc trực tiếp <Text style={{ fontWeight: "700" }}>chatId</Text>.
         </Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 14 }}>
+        <TouchableOpacity onPress={handleBackPress} style={{ marginTop: 14 }}>
           <Text style={{ color: "#2563eb", fontWeight: "600" }}>Quay lại</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-const renderMessage = ({ item, index }: { item: MessageType; index: number }) => {
-  const isMine = item.senderId === myUid;
-  const next = messages[index + 1];
-  const showTime =
-    !next || dayjs(next.createdAt?.toDate()).diff(item.createdAt?.toDate(), "minute") >= 2;
+  const renderMessage = useCallback(({ item, index }: { item: MessageType; index: number }) => {
+    const isMine = item.senderId === myUid;
+    const previous = index > 0 ? messages[index - 1] : undefined;
+    const next = index < messages.length - 1 ? messages[index + 1] : undefined;
 
-return (
-  <View style={[styles.row, isMine ? styles.selfRight : styles.selfLeft]}>
-    <View style={[styles.bubble, isMine ? styles.mine : styles.theirs]}>
-      <Text style={[styles.messageText, isMine && { color:"#fff" }]}>{item.text}</Text>
-    </View>
-    {showTime && (
-      <Text style={styles.time}>
-        {dayjs(item.createdAt?.toDate()).format("HH:mm")}
-      </Text>
-    )}
-  </View>
-);
-};
+    const createdDate = toJsDate(item.createdAt);
+    const previousDate = previous ? toJsDate(previous.createdAt) : null;
+    const nextDate = next ? toJsDate(next.createdAt) : null;
+
+    const showDateDivider =
+      (!!createdDate && !previousDate) ||
+      (!!createdDate && !!previousDate && !dayjs(previousDate).isSame(createdDate, "day"));
+    const showTimestamp =
+      !!createdDate && (!nextDate || dayjs(nextDate).diff(createdDate, "minute") >= 3);
+
+    const formattedDate = createdDate ? dayjs(createdDate).format("DD MMMM YYYY") : "";
+    const formattedTime = createdDate ? dayjs(createdDate).format("HH:mm") : "";
+
+    return (
+      <View>
+        {showDateDivider && formattedDate ? (
+          <Text style={styles.dayDivider}>{formattedDate}</Text>
+        ) : null}
+        <View style={[styles.row, isMine ? styles.selfRight : styles.selfLeft]}>
+          <View style={[styles.bubble, isMine ? styles.mine : styles.theirs]}>
+            <Text style={[styles.messageText, isMine && styles.messageTextMine]}>{item.text}</Text>
+          </View>
+        </View>
+        {showTimestamp && formattedTime ? (
+          <Text style={[styles.time, isMine ? styles.timeRight : styles.timeLeft]}>
+            {formattedTime}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }, [messages, myUid]);
+
+  const partnerInitial = partnerName.trim().charAt(0).toUpperCase() || "N";
+
   return (
-  <KeyboardAvoidingView
-    style={styles.container}
-    behavior={Platform.OS === "ios" ? "padding" : undefined}
-    keyboardVerticalOffset={headerHeight}
-  >
-      {/* Header */}
-      <View style={styles.headerContainer}>
-        <TouchableOpacity style={styles.back_btn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="black" />
-        </TouchableOpacity>
-        <Text style={styles.header_username} numberOfLines={1}>
-          {partnerName}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F5F5F5" }}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={headerHeight}
+      >
+        {/* Header */}
+        <View style={styles.headerContainer}>
+          <TouchableOpacity style={styles.back_btn} onPress={handleBackPress}>
+            <Ionicons name="arrow-back" size={22} color="#0f172a" />
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <View style={styles.headerAvatar}>
+              <Text style={styles.headerAvatarText}>{partnerInitial}</Text>
+            </View>
+            <View>
+              <Text style={styles.header_username} numberOfLines={1}>
+                {partnerName}
+              </Text>
+              <Text style={styles.header_status}>Đang hoạt động</Text>
+            </View>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerCircle}>
+              <Ionicons name="call-outline" size={18} color="#0f172a" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerCircle}>
+              <Ionicons name="videocam-outline" size={18} color="#0f172a" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-    {/* Messages list */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        /* 👉 xoá inverted */
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: keyboardHeight + 70 },
-        ]}
-      />
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          value={message}
-          onChangeText={setMessage}
-          placeholder="Nhập tin nhắn..."
-          multiline
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: (keyboardHeight || 0) + 70 }, // ✅ Safe fallback
+          ]}
+          onScroll={(event) => {
+            const { contentSize, layoutMeasurement, contentOffset } = event.nativeEvent;
+            const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+            setShowScrollButton(distanceFromBottom > 120);
+          }}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+          ListFooterComponent={<View style={{ height: 12 }} />}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              {isLoadingMessages ? (
+                <ActivityIndicator color="#94a3b8" />
+              ) : (
+                <>
+                  <Ionicons name="chatbubble-ellipses-outline" size={32} color="#94a3b8" />
+                  <Text style={styles.emptyTitle}>Hãy bắt đầu trò chuyện</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Gửi tin nhắn đầu tiên để kết nối nhanh hơn
+                  </Text>
+                </>
+              )}
+            </View>
+          }
         />
-<TouchableOpacity
-  style={[styles.sendBtn, !message.trim() && { opacity: 0.5 }]}
-  disabled={!message.trim()}
-  onPress={handleSendMessage}
->
-  <Ionicons name="paper-plane" size={18} color="#fff" />
-</TouchableOpacity>
 
+        {showScrollButton && (
+          <TouchableOpacity style={styles.scrollToBottom} onPress={scrollToLatest}>
+            <Ionicons name="arrow-down-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
 
-      </View>
-    </KeyboardAvoidingView>
+        <View style={styles.inputContainer}>
+          <TouchableOpacity style={styles.inputIcon} onPress={() => Keyboard.dismiss()}>
+            <Ionicons name="add-circle-outline" size={24} color="#64748b" />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.textInput}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Nhập tin nhắn..."
+            placeholderTextColor="#94a3b8"
+            multiline
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, !message.trim() && { opacity: 0.5 }]}
+            disabled={!message.trim()}
+            onPress={handleSendMessage}
+          >
+            <Ionicons name="paper-plane" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {isLoadingMessages && messages.length === 0 && (
+          <View style={styles.loadingOverlay} pointerEvents="none">
+            <ActivityIndicator size="small" color="#64748b" />
+            <Text style={styles.loadingText}>Đang tải hội thoại...</Text>
+          </View>
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -224,22 +370,41 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9F9FB",
-    height: 50,
-    paddingHorizontal: 10,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  back_btn: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
-  header_username: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "700" },
+  back_btn: { width: 36, height: 36, justifyContent: "center", alignItems: "center" },
+  headerInfo: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E0E7FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerAvatarText: { fontSize: 16, fontWeight: "700", color: "#312E81" },
+  header_username: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
+  header_status: { fontSize: 12, color: "#94a3b8", marginTop: 2 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   /* Bubble */
-  row: { flexDirection: "row", marginVertical: 4 },
-  selfRight: { alignSelf: "flex-end" },
-  selfLeft: { alignSelf: "flex-start" },
+  row: { flexDirection: "row", marginVertical: 4, paddingHorizontal: 12 },
+  selfRight: { justifyContent: "flex-end" },
+  selfLeft: { justifyContent: "flex-start" },
   bubble: {
     maxWidth: "78%",
     paddingVertical: 8,
@@ -248,19 +413,55 @@ const styles = StyleSheet.create({
   },
   mine: { backgroundColor: "#007AFF", borderBottomRightRadius: 6 },
   theirs: { backgroundColor: "#E6E6EB", borderBottomLeftRadius: 6 },
-  time: { fontSize: 11, color: "#94a3b8", marginHorizontal: 6 },
-  messageText: { fontSize: 16, color: "#0f172a" },
+  dayDivider: {
+    alignSelf: "center",
+    fontSize: 12,
+    color: "#94a3b8",
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  time: { fontSize: 11, color: "#94a3b8", marginHorizontal: 16, marginTop: 2 },
+  timeRight: { textAlign: "right" },
+  timeLeft: { textAlign: "left" },
+  messageText: { fontSize: 15, color: "#0f172a" },
+  messageTextMine: { color: "#fff" },
 
   /* List & input */
-  listContent: { paddingHorizontal: 15, flexGrow: 1, justifyContent: "flex-end" },
+  listContent: { paddingHorizontal: 8, flexGrow: 1, justifyContent: "flex-end", paddingBottom: 16 },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 40,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: "600", color: "#475569" },
+  emptySubtitle: { fontSize: 13, color: "#94a3b8", textAlign: "center", paddingHorizontal: 32 },
+  scrollToBottom: {
+    position: "absolute",
+    right: 20,
+    bottom: 110,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#4A80F0",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
   inputContainer: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    padding: 10,
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: "#fff",
     borderTopWidth: 1,
     borderColor: "#E0E0E0",
   },
+  inputIcon: { marginRight: 8 },
   textInput: {
     flex: 1,
     minHeight: 40,
@@ -287,4 +488,13 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
   },
+  loadingOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 80,
+    alignItems: "center",
+    gap: 6,
+  },
+  loadingText: { fontSize: 12, color: "#94a3b8" },
 });

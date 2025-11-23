@@ -157,19 +157,25 @@ export const JobCard = memo(({
   isHighMatch?: boolean;
 }) => {
   // Determine the best image to display
-  // Priority: item.company_logo (for viecoi) > item.image > company.image > placeholder
+  // Priority: item.image (employer uploaded) > item.company_logo (viecoi/crawled) > company.image > placeholder
   const getCompanyLogo = () => {
-    const logo = item.company_logo || item.image || company?.image;
-    
-    // Validate URL
-    if (logo && typeof logo === 'string' && 
-        (logo.startsWith('http://') || logo.startsWith('https://'))) {
-      return logo;
+    // Priority 1: Job image (employer-uploaded job image)
+    if (item.image && typeof item.image === 'string' && item.image.trim() !== '') {
+      return item.image;
     }
     
-    // Use placeholder with company initial
+    // Priority 2: Company logo (for viecoi/crawled jobs)
+    if (item.company_logo && typeof item.company_logo === 'string' && item.company_logo.trim() !== '') {
+      return item.company_logo;
+    }
+    
+    // Priority 3: Company image from company collection
+    if (company?.image && typeof company.image === 'string' && company.image.trim() !== '') {
+      return company.image;
+    }
+    
+    // Fallback: Use placeholder with company name
     const companyName = company?.corp_name || item.company_name || 'Company';
-    const initial = companyName.charAt(0).toUpperCase();
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&size=200&background=4A80F0&color=fff&bold=true&format=png`;
   };
   

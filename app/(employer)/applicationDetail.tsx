@@ -40,6 +40,7 @@ type ApplicationDetail = {
     id: string;
     title: string;
     image?: string;
+    company_logo?: string; // ✅ Add company_logo field
   };
 };
 
@@ -90,14 +91,14 @@ export default function ApplicationDetail() {
         coverLetter: app.coverLetter,
         candidate: candidate
           ? {
-              id: candidate.email, // Use email as fallback ID
+              id: candidate.uid || app.candidateId || "", // ✅ Use uid as primary ID
               name: candidate.displayName || candidate.email,
               email: candidate.email,
               phone: candidate.phone,
               photoURL: candidate.photoURL,
             }
           : {
-              id: "",
+              id: app.candidateId || "", // ✅ Fallback to candidateId from application
               name: "Ứng viên ẩn danh",
               email: "",
             },
@@ -105,6 +106,7 @@ export default function ApplicationDetail() {
           id: job.id || "",
           title: job.title || "Không rõ",
           image: job.image,
+          company_logo: job.company_logo, // ✅ Include company_logo
         },
       });
     } catch (error) {
@@ -336,8 +338,8 @@ export default function ApplicationDetail() {
               })
             }
           >
-            {application.job.image && (
-              <Image source={{ uri: application.job.image }} style={styles.jobImage} />
+            {(application.job.image || application.job.company_logo) && (
+              <Image source={{ uri: application.job.image || application.job.company_logo }} style={styles.jobImage} />
             )}
             <View style={{ flex: 1 }}>
               <Text style={styles.jobTitle}>{application.job.title}</Text>

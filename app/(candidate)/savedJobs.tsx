@@ -93,8 +93,8 @@ const Job = () => {
   const renderJobItem = ({ item }: { item: any }) => {
     const isSaved = savedJobs.some(job => job.$id === item.$id);
     
-    // Priority: company_logo (viecoi) > image > company.image > placeholder
-    const imageUrl = item.company_logo || item.image || 
+    // ✅ Priority: job.image (employer-uploaded) > job.company_logo (viecoi) > company.image > placeholder
+    const imageUrl = item.image || item.company_logo || 
       (item.company && typeof item.company === 'object' ? item.company.image : undefined) ||
       `https://via.placeholder.com/80x80.png?text=${encodeURIComponent(
         item.company_name || 

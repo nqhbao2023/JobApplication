@@ -370,9 +370,10 @@ export const useAddJobForm = () => {
       return { valid: false, msg: 'Vui lòng nhập tên công ty' };
     }
 
-    if (!formData.imageUri && !formData.image.trim()) {
-      return { valid: false, msg: 'Vui lòng thêm ảnh công việc' };
-    }
+    // ✅ Image is now optional - will use placeholder if not provided
+    // if (!formData.imageUri && !formData.image.trim()) {
+    //   return { valid: false, msg: 'Vui lòng thêm ảnh công việc' };
+    // }
 
     return { valid: true };
   }, [formData, isAddingNewCompany, newCompany.corp_name]);
@@ -580,6 +581,8 @@ export const useAddJobForm = () => {
         }
       }
 
+      const heroImage = jobImageUrl || undefined;
+
       // ✅ Build API payload with source marker to distinguish from crawled/quick-post jobs
       const apiPayload = {
         title: formData.title.trim(),
@@ -598,7 +601,8 @@ export const useAddJobForm = () => {
         category: categoryName,
         status: 'active' as const,
         source: 'internal' as const, // Mark as employer-created job
-        image: jobImageUrl || undefined, // Optional job image
+        image: heroImage, // Optional job image
+        company_logo: heroImage, // Mirror hero image so candidate card picks it up
         experience: formData.experience, // Include experience level
       };
 
@@ -633,7 +637,8 @@ export const useAddJobForm = () => {
     formData.selectedJobCategory &&
     (formData.selectedCompany || isAddingNewCompany)
   );
-  const isMediaComplete = !!(formData.imageUri || formData.image.trim());
+  // ✅ Media is now optional - consider complete even without image
+  const isMediaComplete = true;
 
   return {
     formData,

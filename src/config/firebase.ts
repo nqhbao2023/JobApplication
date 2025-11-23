@@ -57,24 +57,26 @@ try {
 // ✅ Firestore với cấu hình tối ưu cho React Native
 let db: Firestore;
 try {
-  // Use persistent cache for better offline support
-  const cacheSettings = Platform.OS === 'web' 
-    ? memoryLocalCache() 
-    : persistentLocalCache({ 
-        tabManager: undefined // Disable multi-tab for React Native
-      });
-  
+  const isWeb = Platform.OS === 'web';
+  const shouldUsePersistentCache = !isWeb && !__DEV__;
+
+  // 🧠 Expo Go + remote debugging thường không hỗ trợ IndexedDB → dùng memory cache để tránh cảnh báo
+  const cacheSettings = shouldUsePersistentCache
+    ? persistentLocalCache({ tabManager: undefined })
+    : memoryLocalCache();
+
   db = initializeFirestore(app, {
     localCache: cacheSettings,
-    // ✅ Use auto-detect instead of forcing long polling
     experimentalAutoDetectLongPolling: true,
-    // ✅ Disable force long polling to avoid timeout issues
-    // experimentalForceLongPolling: true,
   });
-  
-  console.log('✅ Firestore initialized with persistent cache');
+
+  console.log(
+    shouldUsePersistentCache
+      ? '✅ Firestore initialized with persistent cache'
+      : 'ℹ️ Firestore using in-memory cache (dev mode)'
+  );
 } catch (error) {
-  console.warn('⚠️ Could not initialize Firestore with persistent cache, using default:', error);
+  console.warn('⚠️ Could not initialize Firestore with configured cache, using default:', error);
   db = getFirestore(app);
 }
 

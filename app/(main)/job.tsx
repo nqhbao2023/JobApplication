@@ -74,13 +74,16 @@ const Job = () => {
 
   const renderJobItem = ({ item }: { item: any }) => {
     const isSaved = savedJobs.some(job => job.$id === item.$id);
+    
+    // ✅ Priority: job.image > job.company_logo > placeholder
+    const jobImage = item.image || item.company_logo || 'https://via.placeholder.com/80x80.png?text=Job';
 
     return (
       <TouchableOpacity
         style={styles.jobItem}
         onPress={() => router.push(`/jobDescription?jobId=${item.$id}`)}
       >
-        <Image source={{ uri: item.image }} style={styles.jobImage} />
+        <Image source={{ uri: jobImage }} style={styles.jobImage} />
         <View style={styles.jobInfo}>
           <Text style={styles.jobTitle}>{item.title}</Text>
           <Text style={styles.jobCompany}>{item.company?.corp_name}</Text>

@@ -322,7 +322,11 @@ export default function SearchResultsPage() {
         >
           {jobs.length > 0 ? (
             <View style={styles.jobsContainer}>
-              {jobs.map((job, index) => (
+              {jobs.map((job, index) => {
+                // ✅ Priority: job.image (employer-uploaded) > job.company_logo (viecoi) > placeholder
+                const jobImage = job.image || job.company_logo;
+                
+                return (
                 <Animated.View key={job.$id} entering={FadeInDown.delay(index * 50).duration(400)}>
                   <TouchableOpacity
                     style={styles.jobCard}
@@ -331,9 +335,9 @@ export default function SearchResultsPage() {
                     }
                   >
                     {/* Job Image */}
-                    {(job.company_logo || job.image) ? (
+                    {jobImage ? (
                       <Image
-                        source={{ uri: job.company_logo || job.image }}
+                        source={{ uri: jobImage }}
                         style={styles.jobImage}
                       />
                     ) : (
@@ -369,7 +373,8 @@ export default function SearchResultsPage() {
                     <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
                   </TouchableOpacity>
                 </Animated.View>
-              ))}
+                );
+              })}
             </View>
           ) : (
             <View style={styles.emptyContainer}>

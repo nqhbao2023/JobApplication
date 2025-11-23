@@ -212,9 +212,9 @@ const JobDescription = () => {
               source={{
                 uri: (() => {
                   const job = jobData as Job;
-                  // Priority: company_logo (viecoi) > image > companyData.image > company.image > placeholder
-                  if (job?.company_logo) return job.company_logo;
+                  // ✅ Priority: job.image (employer-uploaded) > job.company_logo (viecoi) > companyData.image > company.image > placeholder
                   if (job?.image) return job.image;
+                  if (job?.company_logo) return job.company_logo;
                   
                   // Check fetched company data (employer jobs)
                   if (companyData?.image && 

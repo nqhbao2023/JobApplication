@@ -19,10 +19,11 @@ export const normalizeJob = (job: any): Job => {
     throw new Error('Job must have a valid id or $id');
   }
   
-  // ✅ Normalize image URL
+  // ✅ Normalize image URL - ONLY if it exists and is valid
+  // Don't set placeholder here - let UI components handle fallback
   let imageUrl = job.image || job.img || job.imageUrl;
-  if (!isValidImageUrl(imageUrl)) {
-    imageUrl = PLACEHOLDER_JOB_IMG;
+  if (imageUrl && !isValidImageUrl(imageUrl)) {
+    imageUrl = undefined; // Clear invalid URLs instead of using placeholder
   }
   
   // ✅ Ensure employerId exists (required for New Plan)
@@ -31,7 +32,7 @@ export const normalizeJob = (job: any): Job => {
   return {
     ...job,
     $id: jobId,
-    image: imageUrl,
+    image: imageUrl, // ✅ Can be undefined - UI will fallback to company_logo
     created_at: job.created_at || job.createdAt || new Date().toISOString(),
     salary: normalizeSalary(job.salary),
     employerId, // ✅ Always provide employerId

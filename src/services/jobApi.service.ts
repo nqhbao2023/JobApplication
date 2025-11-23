@@ -35,6 +35,7 @@ interface CreateJobPayload {
   expiresAt?: string;
   source?: 'viecoi' | 'internal' | 'quick-post'; // Distinguish job sources
   image?: string; // Optional job image
+  company_logo?: string; // Mirror hero image for candidate cards
   experience?: string; // Experience level
 }
 

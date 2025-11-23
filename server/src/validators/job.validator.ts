@@ -19,6 +19,16 @@ export const createJobSchema = Joi.object({
   category: Joi.string().required(),
   status: Joi.string().valid('active', 'inactive', 'closed').default('active'),
   expiresAt: Joi.date().optional(),
+  image: Joi.string().uri().optional(),
+  company_logo: Joi.string().uri().optional(),
+  experience: Joi.string().allow('', null).optional(),
+  source: Joi.string().valid('viecoi', 'internal', 'quick-post').optional(),
+  contactInfo: Joi.object({
+    phone: Joi.string().allow('', null),
+    zalo: Joi.string().allow('', null),
+    facebook: Joi.string().allow('', null),
+    email: Joi.string().email({ tlds: false }).allow('', null),
+  }).optional(),
 });
 
 export const updateJobSchema = Joi.object({
@@ -39,5 +49,15 @@ export const updateJobSchema = Joi.object({
   category: Joi.string(),
   status: Joi.string().valid('active', 'inactive', 'closed'),
   expiresAt: Joi.date(),
+  image: Joi.string().uri().optional().allow('', null),
+  company_logo: Joi.string().uri().optional().allow('', null),
+  experience: Joi.string().allow('', null),
+  source: Joi.string().valid('viecoi', 'internal', 'quick-post'),
+  contactInfo: Joi.object({
+    phone: Joi.string().allow('', null),
+    zalo: Joi.string().allow('', null),
+    facebook: Joi.string().allow('', null),
+    email: Joi.string().email({ tlds: false }).allow('', null),
+  }),
 }).min(1);
 

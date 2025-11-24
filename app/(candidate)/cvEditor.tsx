@@ -34,6 +34,7 @@ import CVPreviewModal from '@/components/CVPreviewModal';
 import * as Haptics from 'expo-haptics';
 import { AddressInput } from '@/components/cv/AddressInput';
 import { EducationSection } from '@/components/cv/EducationSection';
+import { CVAnalysisCard } from '@/components/cv/CVAnalysisCard';
 
 const CVEditorScreen = () => {
   const params = useLocalSearchParams();
@@ -506,6 +507,9 @@ const CVEditorScreen = () => {
               Kỹ năng được tự động điền từ Hồ sơ sinh viên. Vui lòng cập nhật ở mục Hồ sơ sinh viên.
             </Text>
           </View>
+
+          {/* ✅ AI CV Analysis Card */}
+          <CVAnalysisCard cvData={cvData} />
 
           {/* Export PDF Button */}
           <TouchableOpacity

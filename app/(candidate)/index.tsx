@@ -167,7 +167,7 @@ const CandidateHome = () => {
           </View>
 
           <Animated.View style={[styles.welcomeTextContainer, welcomeTextAnimatedStyle]}>
-            <Text style={styles.hello}>Xin chào 👋</Text>
+            <Text style={styles.hello}>Xin chào</Text>
             <Text style={styles.hello2}>
               {data?.user?.displayName || displayName || 'Bạn'}
             </Text>

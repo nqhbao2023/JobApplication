@@ -395,30 +395,44 @@ export const useAddJobForm = () => {
       setLoading(true);
 
       let companyId = formData.selectedCompany;
+      let companyImageUrl = ''; // Track company logo separately
+      
       if (isAddingNewCompany) {
-        let companyImageUrl = newCompany.image;
+        let uploadedCompanyImage = newCompany.image;
         
         // Try to upload company image, but don't fail if it doesn't work
         if (newCompanyImageUri) {
           try {
-            companyImageUrl = await uploadImageToFirebase(newCompanyImageUri, "companies");
-            console.log('✅ Company image uploaded:', companyImageUrl);
+            uploadedCompanyImage = await uploadImageToFirebase(newCompanyImageUri, "companies");
+            console.log('✅ Company image uploaded:', uploadedCompanyImage);
           } catch (uploadError: any) {
             console.warn('⚠️ Company image upload failed, continuing without image:', uploadError.message);
             // Continue without image - use default or empty
-            companyImageUrl = '';
+            uploadedCompanyImage = '';
           }
         }
 
         const companyDoc = await addDoc(collection(db, "companies"), {
           ...newCompany,
-          image: companyImageUrl || "",
+          image: uploadedCompanyImage || "",
           ownerId: userId,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
         });
         companyId = companyDoc.id;
-        console.log('✅ New company created with ID:', companyId);
+        companyImageUrl = uploadedCompanyImage || ''; // Store for job
+        console.log('✅ New company created with ID:', companyId, 'Logo:', companyImageUrl);
+      } else if (companyId) {
+        // Get existing company logo
+        try {
+          const companyDoc = await getDoc(doc(db, "companies", companyId));
+          if (companyDoc.exists()) {
+            companyImageUrl = companyDoc.data()?.image || '';
+            console.log('✅ Existing company logo:', companyImageUrl);
+          }
+        } catch (err) {
+          console.warn('⚠️ Failed to fetch company logo:', err);
+        }
       }
 
       let jobTypeObj: { id: string; type_name: string } = { id: '', type_name: '' };
@@ -601,8 +615,8 @@ export const useAddJobForm = () => {
         category: categoryName,
         status: 'active' as const,
         source: 'internal' as const, // Mark as employer-created job
-        image: heroImage, // Optional job image
-        company_logo: heroImage, // Mirror hero image so candidate card picks it up
+        image: heroImage, // Optional job image (hero)
+        company_logo: companyImageUrl || heroImage, // ✅ Use company logo, fallback to job image
         experience: formData.experience, // Include experience level
       };
 

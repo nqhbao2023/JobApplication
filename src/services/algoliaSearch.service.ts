@@ -60,21 +60,31 @@ export async function searchJobs(params: {
   if (jobType) filters.push(`job_type_id:"${jobType}"`);
   if (category) filters.push(`category:"${category}"`);
   if (companyId) filters.push(`companyId:"${companyId}"`);
-  if (location) filters.push(`location:"${location}"`);
+  
+  // ✅ Location filter with flexible matching
+  // Note: Algolia doesn't support fuzzy matching in filters
+  // We'll handle this in the query string instead
+  // if (location) filters.push(`location:"${location}"`);
   
   // Không filter status vì job crawl có thể là draft
   // filters.push('status:active');
 
   const filterString = filters.length > 0 ? filters.join(' AND ') : '';
 
-  console.log('🔍 Algolia search:', { query, filters: filterString });
+  // ✅ Append location to query for flexible matching
+  let searchQuery = query.trim();
+  if (location && location !== 'Toàn quốc') {
+    searchQuery = searchQuery ? `${searchQuery} ${location}` : location;
+  }
+
+  console.log('🔍 Algolia search:', { query: searchQuery, filters: filterString });
 
   try {
     const result = await client.search({
       requests: [
         {
           indexName: INDEX_NAMES.JOBS,
-          query: query.trim(),
+          query: searchQuery,
           filters: filterString,
           page,
           hitsPerPage,
@@ -90,6 +100,10 @@ export async function searchJobs(params: {
             'skills',
             'description',
             'createdAt',
+            'image',
+            'company_logo',
+            'company_name',
+            'salary_text',
           ],
           attributesToHighlight: ['title', 'company', 'description'],
         },
@@ -116,6 +130,11 @@ export async function searchJobs(params: {
         skills: hit.skills || [],
         description: hit.description,
         createdAt: hit.createdAt,
+        // ✅ Image fields for display
+        image: hit.image,
+        company_logo: hit.company_logo,
+        company_name: hit.company_name,
+        salary_text: hit.salary_text,
         // Highlight matches
         _highlightResult: hit._highlightResult,
       })),

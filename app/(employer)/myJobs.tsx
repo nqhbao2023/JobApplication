@@ -7,6 +7,8 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 
 import { jobApiService } from '@/services/jobApi.service';
@@ -105,101 +107,310 @@ export default function MyJobs() {
     // Handle salary (có thể là number hoặc object với min/max)
     const salaryText = item.salary 
       ? (typeof item.salary === 'number' 
-          ? item.salary.toLocaleString('vi-VN') + ' đ/tháng'
+          ? item.salary.toLocaleString('vi-VN') + ' VNĐ'
           : item.salary.min && item.salary.max
-            ? `${item.salary.min.toLocaleString('vi-VN')} - ${item.salary.max.toLocaleString('vi-VN')} ${item.salary.currency || 'đ'}/tháng`
-            : '—')
-      : '—';
+            ? `${item.salary.min.toLocaleString('vi-VN')} - ${item.salary.max.toLocaleString('vi-VN')} ${item.salary.currency || 'VNĐ'}`
+            : 'Thỏa thuận')
+      : 'Thỏa thuận';
+
+    const jobType = textify(item.jobTypes, 'type');
+    const jobCategory = textify(item.jobCategories, 'category');
 
     return (
       <TouchableOpacity 
         style={styles.card} 
         onPress={() => router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.id || item.$id } })}
-        activeOpacity={0.8}
+        activeOpacity={0.7}
       >
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.image} />
-        ) : (
-          <View style={[styles.image, { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }]}>
-            <Ionicons name="briefcase-outline" size={30} color="#999" />
+        <View style={styles.cardContent}>
+          {/* Job Image */}
+          <View style={styles.imageContainer}>
+            {item.image ? (
+              <Image source={{ uri: item.image }} style={styles.image} />
+            ) : (
+              <LinearGradient
+                colors={['#4A80F0', '#7C3AED']}
+                style={styles.imagePlaceholder}
+              >
+                <Ionicons name="briefcase" size={28} color="#fff" />
+              </LinearGradient>
+            )}
           </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>{item.title}</Text>
-          <Text style={styles.salary}>{salaryText}</Text>
 
-          {/* ✅ Fix crash ở đây */}
-          <Text style={styles.category}>
-            Danh mục: {textify(item.jobCategories, 'category')}
-          </Text>
-          <Text style={styles.category}>
-            Loại: {textify(item.jobTypes, 'type')}
-          </Text>
+          {/* Job Info */}
+          <View style={styles.jobInfo}>
+            <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+            
+            <View style={styles.infoRow}>
+              <Ionicons name="cash-outline" size={14} color="#10b981" />
+              <Text style={styles.salary}>{salaryText}</Text>
+            </View>
 
-          {createdDate && (
-            <Text style={styles.date}>
-              Đăng ngày: {createdDate.toLocaleDateString('vi-VN')}
-            </Text>
-          )}
+            <View style={styles.tagsRow}>
+              {jobCategory !== '—' && (
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>{jobCategory}</Text>
+                </View>
+              )}
+              {jobType !== '—' && (
+                <View style={[styles.tag, styles.tagSecondary]}>
+                  <Text style={styles.tagText}>{jobType}</Text>
+                </View>
+              )}
+            </View>
+
+            {createdDate && (
+              <View style={styles.infoRow}>
+                <Ionicons name="calendar-outline" size={12} color="#94a3b8" />
+                <Text style={styles.date}>
+                  {createdDate.toLocaleDateString('vi-VN')}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Delete Button */}
+          <TouchableOpacity 
+            onPress={() => handleDelete(item.id || item.$id)} 
+            style={styles.deleteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity onPress={() => handleDelete(item.id || item.$id)} style={styles.deleteBtn}>
-          <Ionicons name="trash-outline" size={22} color="#ff4444" />
-        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Công việc của tôi</Text>
-        <TouchableOpacity onPress={() => router.push('/(shared)/addJob' as any)}>
-          <Ionicons name="add-circle-outline" size={28} color="#4CAF50" />
+        <View>
+          <Text style={styles.headerTitle}>Công việc của tôi</Text>
+          <Text style={styles.headerSubtitle}>{jobs.length} công việc đang đăng</Text>
+        </View>
+        <TouchableOpacity 
+          onPress={() => router.push('/(shared)/addJob' as any)}
+          style={styles.addButton}
+        >
+          <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A80F0" />
+          <Text style={styles.loadingText}>Đang tải...</Text>
         </View>
       ) : jobs.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="file-tray-outline" size={48} color="#aaa" />
-          <Text style={styles.emptyText}>Chưa có công việc nào được đăng</Text>
+          <LinearGradient
+            colors={['#E0E7FF', '#F3E8FF']}
+            style={styles.emptyIconBg}
+          >
+            <Ionicons name="briefcase-outline" size={48} color="#7C3AED" />
+          </LinearGradient>
+          <Text style={styles.emptyTitle}>Chưa có công việc nào</Text>
+          <Text style={styles.emptyText}>Tạo công việc đầu tiên để tìm ứng viên phù hợp</Text>
+          <TouchableOpacity 
+            onPress={() => router.push('/(shared)/addJob' as any)}
+            style={styles.createButton}
+          >
+            <Ionicons name="add-circle" size={20} color="#fff" style={{ marginRight: 6 }} />
+            <Text style={styles.createButtonText}>Tạo công việc mới</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={jobs}
-          keyExtractor={(item) => item.id || item.$id} // ✅ fallback key
+          keyExtractor={(item) => item.id || item.$id}
           renderItem={renderJob}
-          contentContainerStyle={{ padding: 12, paddingBottom: SCROLL_BOTTOM_PADDING }}
+          contentContainerStyle={[styles.list, { paddingBottom: SCROLL_BOTTOM_PADDING }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: '#eee',
-    backgroundColor: '#fff',
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F8FAFC' 
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
+  header: {
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    paddingHorizontal: 16, 
+    paddingVertical: 16, 
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  headerTitle: { 
+    fontSize: 22, 
+    fontWeight: '700', 
+    color: '#0f172a' 
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#4A80F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4A80F0',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+
+  list: {
+    padding: 16,
+  },
 
   card: {
-    flexDirection: 'row', backgroundColor: '#fafafa', borderRadius: 10,
-    padding: 10, marginBottom: 12, elevation: 2, alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  image: { width: 70, height: 70, borderRadius: 8, marginRight: 12 },
-  title: { fontSize: 16, fontWeight: '600', color: '#222' },
-  salary: { fontSize: 14, color: '#4CAF50', marginVertical: 2 },
-  category: { fontSize: 13, color: '#555' },
-  date: { fontSize: 12, color: '#999', marginTop: 4 },
-  deleteBtn: { padding: 6 },
+  cardContent: {
+    flexDirection: 'row',
+    padding: 12,
+    alignItems: 'flex-start',
+  },
+  imageContainer: {
+    marginRight: 12,
+  },
+  image: { 
+    width: 64, 
+    height: 64, 
+    borderRadius: 10,
+  },
+  imagePlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  jobInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  title: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#0f172a',
+    lineHeight: 22,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  salary: { 
+    fontSize: 14, 
+    color: '#10b981', 
+    fontWeight: '600',
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  tag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#E0E7FF',
+    borderRadius: 6,
+  },
+  tagSecondary: {
+    backgroundColor: '#F3E8FF',
+  },
+  tagText: {
+    fontSize: 11,
+    color: '#5b21b6',
+    fontWeight: '500',
+  },
+  date: { 
+    fontSize: 11, 
+    color: '#94a3b8',
+  },
+  deleteBtn: { 
+    padding: 8,
+    marginLeft: 4,
+  },
 
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { marginTop: 8, color: '#777', fontSize: 15 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+
+  emptyContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyIconBg: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  emptyText: { 
+    fontSize: 14, 
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4A80F0',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: '#4A80F0',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  createButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
 });

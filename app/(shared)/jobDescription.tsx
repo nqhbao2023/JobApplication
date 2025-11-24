@@ -29,6 +29,7 @@ import { Job } from "@/types";
 import { auth } from "@/config/firebase";
 import { quickPostService } from "@/services/quickPostApi.service";
 import { authApiService } from "@/services/authApi.service";
+import { SalaryPredictionBadge } from "@/components/job/SalaryPredictionBadge";
 
 const JobDescription = () => {
   const [refreshing, setRefreshing] = useState(false);
@@ -292,6 +293,25 @@ const JobDescription = () => {
               <Ionicons name="globe-outline" size={14} color="#4A80F0" />
               <Text style={styles.sourceBadgeText}>Nguồn: viecoi.vn</Text>
             </View>
+          )}
+
+          {/* ✅ AI Salary Prediction */}
+          {(jobData as Job)?.title && (jobData as Job)?.type && (
+            <SalaryPredictionBadge
+              jobData={{
+                title: (jobData as Job).title || '',
+                category: (typeof (jobData as Job).jobCategories === 'object' 
+                  ? ((jobData as Job).jobCategories as any)?.$id || 'other'
+                  : 'other'),
+                location: (jobData as Job).location || '',
+                type: ((jobData as Job).type?.toLowerCase().includes('part') 
+                  ? 'part-time' 
+                  : (jobData as Job).type?.toLowerCase().includes('intern') 
+                  ? 'internship' 
+                  : 'full-time') as any,
+              }}
+              autoLoad={false}
+            />
           )}
         </View>
 

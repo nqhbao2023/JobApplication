@@ -67,7 +67,7 @@ export default function AppliedList() {
       const jobsPromises = jobIds.map(jobId => 
         jobApiService.getJobById(jobId).catch(err => {
           console.warn(`⚠️ Failed to fetch job ${jobId}:`, err.message);
-          return { id: jobId, title: "Không rõ" };
+          return null; // ✅ Return null for deleted jobs
         })
       );
       
@@ -84,58 +84,93 @@ export default function AppliedList() {
         Promise.all(candidatesPromises)
       ]);
       
-      // ✅ Create lookup maps for O(1) access
-      const jobMap = new Map(jobs.map(job => [job.id || (job as any).$id, job]));
-      const candidateMap = new Map(
-        candidates
-          .filter(c => c !== null && c !== undefined)
-          .map(c => [c!.uid || c!.email, c]) // ✅ Use uid or email as key
+      // ✅ Create lookup maps for O(1) access - filter out null jobs
+      const jobMap = new Map(
+        jobs
+          .filter(job => job !== null)
+          .map(job => [job!.id || (job as any).$id, job])
       );
       
-      console.log(`✅ Loaded ${jobMap.size} jobs and ${candidateMap.size} candidates`);
+      // ✅ FIX: Create candidateMap with BOTH uid AND email as keys
+      const candidateMap = new Map<string, any>();
+      candidates
+        .filter(c => c !== null && c !== undefined)
+        .forEach(c => {
+          if (c!.uid) candidateMap.set(c!.uid, c);
+          if (c!.email) candidateMap.set(c!.email, c);
+        });
       
-      // ✅ Map active applications with fetched data
-      const mappedApps = activeApplications.map(app => {
-        const job = jobMap.get(app.jobId);
-        const candidate = app.candidateId ? candidateMap.get(app.candidateId) : null;
-        
-        // ✅ Log if candidate is missing (debugging)
-        if (app.candidateId && !candidate) {
-          console.warn(`⚠️ Candidate data not found for ID: ${app.candidateId}`);
-        }
-        
-        return {
-          $id: app.id,
-          id: app.id,
-          jobId: app.jobId,
-          candidateId: app.candidateId,
-          userId: app.candidateId,
-          status: app.status,
-          applied_at: app.appliedAt,
-          cvUrl: app.cvUrl,
-          cv_url: app.cvUrl,
-          coverLetter: app.coverLetter,
-          job: {
-            title: job?.title || "Không rõ",
-            $id: job?.id || (job as any)?.$id || app.jobId,
-          },
-          user: candidate ? {
-            uid: candidate.uid || app.candidateId, // ✅ Add uid field (from User type)
-            name: candidate.displayName || candidate.email || "Ứng viên",
-            email: candidate.email || "",
-            photoURL: candidate.photoURL || null,
-            phone: candidate.phone || "",
-          } : {
-            uid: app.candidateId || '', // ✅ Fallback uid
-            name: app.candidateId ? "Đang tải..." : "Ứng viên ẩn danh",
-            email: "",
-            photoURL: null,
-            phone: "",
-          },
-        };
-      });
+      console.log(`✅ Loaded ${jobMap.size} jobs and ${candidateMap.size / 2} candidates (${candidateMap.size} keys)`);
+      
+      // ✅ Map active applications with fetched data + filter out deleted jobs
+      let deletedJobsCount = 0;
+      const mappedApps = activeApplications
+        .map(app => {
+          const job = jobMap.get(app.jobId);
+          const candidate = app.candidateId ? candidateMap.get(app.candidateId) : null;
+          
+          // ✅ Skip if job was deleted (404)
+          if (!job) {
+            console.warn(`⚠️ Job ${app.jobId} not found (deleted) - skipping application ${app.id}`);
+            deletedJobsCount++;
+            return null;
+          }
+          
+          // ✅ Log candidate data for debugging
+          if (candidate) {
+            console.log(`👤 Candidate ${app.candidateId}:`, {
+              displayName: candidate.displayName,
+              photoURL: candidate.photoURL,
+              email: candidate.email
+            });
+          } else if (app.candidateId) {
+            console.warn(`⚠️ Candidate data not found for ID: ${app.candidateId}`);
+          }
+          
+          return {
+            $id: app.id,
+            id: app.id,
+            jobId: app.jobId,
+            candidateId: app.candidateId,
+            userId: app.candidateId,
+            status: app.status,
+            applied_at: app.appliedAt,
+            cvUrl: app.cvUrl,
+            cv_url: app.cvUrl,
+            coverLetter: app.coverLetter,
+            job: {
+              title: job.title || "Không rõ",
+              $id: job.id || (job as any)?.$id || app.jobId,
+            },
+            user: candidate ? {
+              uid: candidate.uid || app.candidateId,
+              name: candidate.displayName || candidate.email || "Ứng viên",
+              email: candidate.email || "",
+              photoURL: candidate.photoURL || null,
+              phone: candidate.phone || "",
+            } : {
+              uid: app.candidateId || '',
+              name: app.candidateId ? "Đang tải..." : "Ứng viên ẩn danh",
+              email: "",
+              photoURL: null,
+              phone: "",
+            },
+          };
+        })
+        .filter(app => app !== null); // ✅ Remove null entries (deleted jobs)
       
       setApps(mappedApps);
+      
+      // ✅ Show info if some applications were filtered out
+      if (deletedJobsCount > 0) {
+        console.log(`ℹ️ Filtered out ${deletedJobsCount} application(s) for deleted jobs`);
+        // Optional: Show toast or silent notification
+        // Alert.alert(
+        //   "Thông báo", 
+        //   `Đã ẩn ${deletedJobsCount} ứng tuyển của công việc đã xóa.`,
+        //   [{ text: "OK" }]
+        // );
+      }
     } catch (error: any) {
       console.error("❌ Fetch applications error:", error);
       Alert.alert("Lỗi", "Không thể tải danh sách ứng tuyển. Vui lòng thử lại.");

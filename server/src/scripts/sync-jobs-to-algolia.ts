@@ -50,6 +50,11 @@ function transformJobForAlgolia(jobId: string, jobData: any) {
     requirements: jobData.requirements || [],
     createdAt: jobData.createdAt?._seconds || jobData.created_at?._seconds || Date.now() / 1000,
     expiresAt: jobData.expiresAt?._seconds || null,
+    // ✅ Image fields for search results display
+    image: jobData.image || null,
+    company_logo: jobData.company_logo || null,
+    company_name: jobData.company_name || jobData.company || '',
+    salary_text: jobData.salary_text || jobData.salary || null,
     // Search/Filter fields
     _tags: [
       jobData.type || 'unknown',

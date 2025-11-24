@@ -15,6 +15,7 @@ import {
   FlatList,
   Keyboard,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useNavigation } from "@react-navigation/native";
@@ -28,6 +29,7 @@ import {
   serverTimestamp,
   doc,
   setDoc,
+  getDoc,
 } from "firebase/firestore";
 import { db, auth } from "@/config/firebase";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -74,6 +76,43 @@ const toJsDate = (value: any): Date | null => {
   return null;
 };
 
+// Tách MessageItem thành component riêng với React.memo để tối ưu performance
+const MessageItem = React.memo<{
+  item: MessageType;
+  isMine: boolean;
+  previousDate: Date | null;
+  nextDate: Date | null;
+}>(({ item, isMine, previousDate, nextDate }) => {
+  const createdDate = toJsDate(item.createdAt);
+
+  const showDateDivider =
+    (!!createdDate && !previousDate) ||
+    (!!createdDate && !!previousDate && !dayjs(previousDate).isSame(createdDate, "day"));
+  const showTimestamp =
+    !!createdDate && (!nextDate || dayjs(nextDate).diff(createdDate, "minute") >= 3);
+
+  const formattedDate = createdDate ? dayjs(createdDate).format("DD MMMM YYYY") : "";
+  const formattedTime = createdDate ? dayjs(createdDate).format("HH:mm") : "";
+
+  return (
+    <View>
+      {showDateDivider && formattedDate ? (
+        <Text style={styles.dayDivider}>{formattedDate}</Text>
+      ) : null}
+      <View style={[styles.row, isMine ? styles.selfRight : styles.selfLeft]}>
+        <View style={[styles.bubble, isMine ? styles.mine : styles.theirs]}>
+          <Text style={[styles.messageText, isMine && styles.messageTextMine]}>{item.text}</Text>
+        </View>
+      </View>
+      {showTimestamp && formattedTime ? (
+        <Text style={[styles.time, isMine ? styles.timeRight : styles.timeLeft]}>
+          {formattedTime}
+        </Text>
+      ) : null}
+    </View>
+  );
+});
+
 const Chat = () => {
   const router = useRouter();
   const navigation = useNavigation();
@@ -94,13 +133,17 @@ const Chat = () => {
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
+  const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null);
+  const [partnerDisplayName, setPartnerDisplayName] = useState<string>(partnerName);
   const flatListRef = useRef<FlatList>(null);
+  const textInputRef = useRef<TextInput>(null);
 
   // Lấy UID người đang đăng nhập
   const myUid = auth.currentUser?.uid;
 
   // ✅ Hooks phải được gọi trước useMemo (Rules of Hooks)
-  const { keyboardHeight } = useKeyboard();
+  const keyboard = useKeyboard();
+  const keyboardHeight = keyboard?.keyboardHeight ?? 0; // Safe fallback
   const headerHeight = useHeaderHeight();
 
   // Tính chatId "dùng thật":
@@ -113,9 +156,17 @@ const Chat = () => {
   }, [paramChatId, myUid, partnerId]);
 
   const scrollToLatest = useCallback(() => {
-    requestAnimationFrame(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    });
+    // Đợi animation hoàn tất trước khi scroll
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        try {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        } catch (error) {
+          // Ignore scroll errors
+          console.warn('Scroll error:', error);
+        }
+      });
+    }, 100);
   }, []);
 
   // Lắng nghe tin nhắn realtime khi đã có effectiveChatId
@@ -141,7 +192,8 @@ const Chat = () => {
         );
         setMessages(newMsgs);
         setIsLoadingMessages(false);
-        if (snapshot.docChanges().length) {
+        // Chỉ scroll khi có tin nhắn mới, không scroll khi load lần đầu
+        if (snapshot.docChanges().length && snapshot.docChanges().some(change => change.type === 'added')) {
           scrollToLatest();
         }
       },
@@ -161,6 +213,10 @@ const Chat = () => {
     if (!trimmed) return;
 
     setMessage("");
+    // Đảm bảo TextInput focus trở lại sau khi gửi
+    setTimeout(() => {
+      textInputRef.current?.focus();
+    }, 100);
 
     try {
       const newMsg = {
@@ -170,12 +226,41 @@ const Chat = () => {
         createdAt: serverTimestamp(),
       };
       await addDoc(collection(db, "chats", effectiveChatId, "messages"), newMsg);
+      
+      // ✅ Fetch user info to update participantsInfo
+      const myUserDoc = await getDoc(doc(db, "users", myUid));
+      const myUserData = myUserDoc.exists() ? myUserDoc.data() : null;
+      
+      let partnerUserData = null;
+      if (partnerId) {
+        const partnerUserDoc = await getDoc(doc(db, "users", partnerId));
+        partnerUserData = partnerUserDoc.exists() ? partnerUserDoc.data() : null;
+      }
+      
+      // ✅ Build participantsInfo
+      const participantsInfo: any = {};
+      if (myUserData) {
+        participantsInfo[myUid] = {
+          displayName: myUserData.displayName || myUserData.email || 'User',
+          photoURL: myUserData.photoURL || null,
+          role: myUserData.role || myRole,
+        };
+      }
+      if (partnerId && partnerUserData) {
+        participantsInfo[partnerId] = {
+          displayName: partnerUserData.displayName || partnerUserData.email || partnerName,
+          photoURL: partnerUserData.photoURL || null,
+          role: partnerUserData.role || (myRole === 'Recruiter' ? 'Candidate' : 'Recruiter'),
+        };
+      }
+      
       await setDoc(
         doc(db, "chats", effectiveChatId),
         {
           participants: [myUid, partnerId].filter(Boolean),
           lastMessage: newMsg.text,
           updatedAt: serverTimestamp(),
+          participantsInfo, // ✅ Update participant info
         },
         { merge: true }
       );
@@ -188,15 +273,88 @@ const Chat = () => {
         console.error("Failed to send message:", error);
       }
     }
-  }, [message, effectiveChatId, myUid, myRole, partnerId]);
+  }, [message, effectiveChatId, myUid, myRole, partnerId, partnerName]);
 
   const handleBackPress = useCallback(() => {
+    Keyboard.dismiss(); // Dismiss keyboard trước khi back
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
       router.replace('/(shared)/chatList');
     }
   }, [navigation, router]);
+
+  // Cleanup keyboard khi unmount
+  useEffect(() => {
+    return () => {
+      Keyboard.dismiss();
+    };
+  }, []);
+
+  // Scroll to bottom khi load xong tin nhắn lần đầu
+  useEffect(() => {
+    if (!isLoadingMessages && messages.length > 0) {
+      scrollToLatest();
+    }
+  }, [isLoadingMessages, messages.length, scrollToLatest]);
+
+  // ✅ Sync participantsInfo when chat opens
+  useEffect(() => {
+    if (!effectiveChatId || !myUid || !partnerId) return;
+    
+    const syncParticipantsInfo = async () => {
+      try {
+        const myUserDoc = await getDoc(doc(db, "users", myUid));
+        const partnerUserDoc = await getDoc(doc(db, "users", partnerId));
+        
+        const myUserData = myUserDoc.exists() ? myUserDoc.data() : null;
+        const partnerUserData = partnerUserDoc.exists() ? partnerUserDoc.data() : null;
+        
+        // ✅ Update local state with partner info
+        if (partnerUserData) {
+          setPartnerDisplayName(partnerUserData.displayName || partnerUserData.email || partnerName);
+          setPartnerAvatar(partnerUserData.photoURL || null);
+          console.log('✅ Partner info loaded:', {
+            name: partnerUserData.displayName,
+            avatar: partnerUserData.photoURL
+          });
+        }
+        
+        const participantsInfo: any = {};
+        if (myUserData) {
+          participantsInfo[myUid] = {
+            displayName: myUserData.displayName || myUserData.email || 'User',
+            photoURL: myUserData.photoURL || null,
+            role: myUserData.role || myRole,
+          };
+        }
+        if (partnerUserData) {
+          participantsInfo[partnerId] = {
+            displayName: partnerUserData.displayName || partnerUserData.email || partnerName,
+            photoURL: partnerUserData.photoURL || null,
+            role: partnerUserData.role || (myRole === 'Recruiter' ? 'Candidate' : 'Recruiter'),
+          };
+        }
+        
+        // Update chat document with participants info
+        await setDoc(
+          doc(db, "chats", effectiveChatId),
+          {
+            participantsInfo,
+            participants: [myUid, partnerId],
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        
+        console.log('✅ ParticipantsInfo synced:', participantsInfo);
+      } catch (error) {
+        console.error('❌ Failed to sync participantsInfo:', error);
+      }
+    };
+    
+    syncParticipantsInfo();
+  }, [effectiveChatId, myUid, partnerId, myRole, partnerName]);
 
   // Nếu chưa đủ dữ liệu để xác định phòng chat → báo nhẹ nhàng
   if (!effectiveChatId) {
@@ -221,46 +379,27 @@ const Chat = () => {
     const previous = index > 0 ? messages[index - 1] : undefined;
     const next = index < messages.length - 1 ? messages[index + 1] : undefined;
 
-    const createdDate = toJsDate(item.createdAt);
     const previousDate = previous ? toJsDate(previous.createdAt) : null;
     const nextDate = next ? toJsDate(next.createdAt) : null;
 
-    const showDateDivider =
-      (!!createdDate && !previousDate) ||
-      (!!createdDate && !!previousDate && !dayjs(previousDate).isSame(createdDate, "day"));
-    const showTimestamp =
-      !!createdDate && (!nextDate || dayjs(nextDate).diff(createdDate, "minute") >= 3);
-
-    const formattedDate = createdDate ? dayjs(createdDate).format("DD MMMM YYYY") : "";
-    const formattedTime = createdDate ? dayjs(createdDate).format("HH:mm") : "";
-
     return (
-      <View>
-        {showDateDivider && formattedDate ? (
-          <Text style={styles.dayDivider}>{formattedDate}</Text>
-        ) : null}
-        <View style={[styles.row, isMine ? styles.selfRight : styles.selfLeft]}>
-          <View style={[styles.bubble, isMine ? styles.mine : styles.theirs]}>
-            <Text style={[styles.messageText, isMine && styles.messageTextMine]}>{item.text}</Text>
-          </View>
-        </View>
-        {showTimestamp && formattedTime ? (
-          <Text style={[styles.time, isMine ? styles.timeRight : styles.timeLeft]}>
-            {formattedTime}
-          </Text>
-        ) : null}
-      </View>
+      <MessageItem
+        item={item}
+        isMine={isMine}
+        previousDate={previousDate}
+        nextDate={nextDate}
+      />
     );
-  }, [messages, myUid]);
+  }, [myUid, messages]);
 
-  const partnerInitial = partnerName.trim().charAt(0).toUpperCase() || "N";
+  const partnerInitial = (partnerDisplayName || partnerName).trim().charAt(0).toUpperCase() || "N";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F5F5F5" }}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={headerHeight}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
       >
         {/* Header */}
         <View style={styles.headerContainer}>
@@ -268,12 +407,20 @@ const Chat = () => {
             <Ionicons name="arrow-back" size={22} color="#0f172a" />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
-            <View style={styles.headerAvatar}>
-              <Text style={styles.headerAvatarText}>{partnerInitial}</Text>
-            </View>
+            {/* ✅ Show real avatar or placeholder */}
+            {partnerAvatar ? (
+              <Image 
+                source={{ uri: partnerAvatar }} 
+                style={styles.headerAvatar}
+              />
+            ) : (
+              <View style={styles.headerAvatar}>
+                <Text style={styles.headerAvatarText}>{partnerInitial}</Text>
+              </View>
+            )}
             <View>
               <Text style={styles.header_username} numberOfLines={1}>
-                {partnerName}
+                {partnerDisplayName || partnerName}
               </Text>
               <Text style={styles.header_status}>Đang hoạt động</Text>
             </View>
@@ -295,7 +442,7 @@ const Chat = () => {
           renderItem={renderMessage}
           contentContainerStyle={[
             styles.listContent,
-            { paddingBottom: (keyboardHeight || 0) + 70 }, // ✅ Safe fallback
+            { paddingBottom: Math.max((keyboardHeight || 0) + 70, 90) }, // ✅ Safe fallback with minimum
           ]}
           onScroll={(event) => {
             const { contentSize, layoutMeasurement, contentOffset } = event.nativeEvent;
@@ -304,6 +451,8 @@ const Chat = () => {
           }}
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          removeClippedSubviews={false}
           ListFooterComponent={<View style={{ height: 12 }} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -333,12 +482,17 @@ const Chat = () => {
             <Ionicons name="add-circle-outline" size={24} color="#64748b" />
           </TouchableOpacity>
           <TextInput
+            ref={textInputRef}
             style={styles.textInput}
             value={message}
             onChangeText={setMessage}
             placeholder="Nhập tin nhắn..."
             placeholderTextColor="#94a3b8"
             multiline
+            editable={true}
+            returnKeyType="send"
+            blurOnSubmit={false}
+            onSubmitEditing={handleSendMessage}
           />
           <TouchableOpacity
             style={[styles.sendBtn, !message.trim() && { opacity: 0.5 }]}

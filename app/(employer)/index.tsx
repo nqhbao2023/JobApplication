@@ -522,7 +522,7 @@ export default function EmployerHome() {
           />
           {recentApps.length > 0 ? (
             recentApps.map((item, idx) => (
-              <ApplicantCard key={item.id} item={item} index={idx} />
+              <ApplicantCard key={item.id} item={item} index={idx}  />
             ))
           ) : (
             <EmptyState message="Chưa có ứng viên nào ứng tuyển" />

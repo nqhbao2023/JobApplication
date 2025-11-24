@@ -3,8 +3,8 @@
 # ─────────────
 node_modules/
 clean-repo/
-dist/
-build/
+# dist/    
+# build/
 web-build/
 .expo/
 .expo-shared/

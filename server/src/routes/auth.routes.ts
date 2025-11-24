@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';
-import { Response } from 'express';
+import admin from '../config/firebase';
 
 const router = Router();
 const buildProfileResponse = (
@@ -228,6 +228,52 @@ router.delete('/users/:userId', authenticate, async (req: AuthRequest, res: Resp
   } catch (error: any) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+/**
+ * POST /api/auth/login
+ * Đăng nhập user với email và password
+ */
+router.post('/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+  try {
+    // Đăng nhập với email/password qua Firebase Auth REST API
+    const apiKey = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'Missing Firebase API key in environment' });
+    }
+    const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      return res.status(401).json({ error: data.error?.message || 'Invalid credentials' });
+    }
+    // Lấy user từ Firestore
+    const { db } = await import('../config/firebase');
+    const userDoc = await db.collection('users').doc(data.localId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found in database' });
+    }
+    // Tạo custom token để client dùng xác thực tiếp
+    const customToken = await admin.auth().createCustomToken(data.localId);
+    return res.json({
+      token: customToken,
+      user: {
+        uid: data.localId,
+        email: data.email,
+        ...userDoc.data(),
+      }
+    });
+  } catch (err: any) {
+    console.error('Login error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

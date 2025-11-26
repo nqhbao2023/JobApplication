@@ -248,6 +248,101 @@ export const JobCard = memo(({
 
 JobCard.displayName = 'JobCard';
 
+// 🎨 Mapping category name to beautiful icons
+const CATEGORY_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
+  // IT / Software
+  'it': 'code-slash',
+  'công nghệ thông tin': 'code-slash',
+  'phần mềm': 'laptop-outline',
+  'lập trình': 'terminal-outline',
+  'developer': 'code-working-outline',
+  'software': 'code-slash',
+  // Marketing / Communications
+  'marketing': 'megaphone-outline',
+  'truyền thông': 'share-social-outline',
+  'digital marketing': 'trending-up-outline',
+  'pr': 'newspaper-outline',
+  'quảng cáo': 'megaphone-outline',
+  // Sales / Business
+  'sales': 'cart-outline',
+  'kinh doanh': 'briefcase-outline',
+  'bán hàng': 'storefront-outline',
+  'business': 'business-outline',
+  // HR / Admin
+  'nhân sự': 'people-outline',
+  'hr': 'people-circle-outline',
+  'hành chính': 'clipboard-outline',
+  'tuyển dụng': 'person-add-outline',
+  // Finance / Accounting
+  'tài chính': 'wallet-outline',
+  'kế toán': 'calculator-outline',
+  'kiểm toán': 'document-text-outline',
+  'ngân hàng': 'card-outline',
+  'finance': 'cash-outline',
+  // Design / Creative
+  'thiết kế': 'color-palette-outline',
+  'design': 'brush-outline',
+  'sáng tạo': 'sparkles-outline',
+  'đồ họa': 'images-outline',
+  'creative': 'bulb-outline',
+  // Healthcare
+  'y tế': 'medkit-outline',
+  'dược': 'flask-outline',
+  'healthcare': 'fitness-outline',
+  'bác sĩ': 'pulse-outline',
+  // Engineering
+  'kỹ thuật': 'construct-outline',
+  'engineering': 'hardware-chip-outline',
+  'cơ khí': 'cog-outline',
+  'điện': 'flash-outline',
+  'xây dựng': 'build-outline',
+  // Education
+  'giáo dục': 'school-outline',
+  'đào tạo': 'book-outline',
+  'giảng viên': 'library-outline',
+  // Hospitality / Service
+  'nhà hàng': 'restaurant-outline',
+  'khách sạn': 'bed-outline',
+  'du lịch': 'airplane-outline',
+  'dịch vụ': 'ribbon-outline',
+  // Logistics
+  'vận tải': 'car-outline',
+  'logistics': 'cube-outline',
+  'kho bãi': 'archive-outline',
+  'giao hàng': 'bicycle-outline',
+  // Others
+  'bất động sản': 'home-outline',
+  'luật': 'shield-checkmark-outline',
+  'báo chí': 'newspaper-outline',
+  'media': 'videocam-outline',
+};
+
+// Get best matching icon for a category name
+const getCategoryIcon = (categoryName?: string, iconName?: string): keyof typeof Ionicons.glyphMap => {
+  // If icon_name is already provided and valid, use it
+  if (iconName && iconName !== 'briefcase-outline') {
+    return iconName as keyof typeof Ionicons.glyphMap;
+  }
+  
+  if (!categoryName) return 'grid-outline';
+  
+  const name = categoryName.toLowerCase();
+  
+  // Try exact match first
+  if (CATEGORY_ICON_MAP[name]) {
+    return CATEGORY_ICON_MAP[name];
+  }
+  
+  // Try partial match
+  for (const [key, icon] of Object.entries(CATEGORY_ICON_MAP)) {
+    if (name.includes(key) || key.includes(name)) {
+      return icon;
+    }
+  }
+  
+  return 'grid-outline'; // Default fallback - looks better than briefcase
+};
+
 export const CategoryCard = memo(({ item, jobCount }: { item: Category & { jobCount?: number }; jobCount?: number }) => {
   // Generate gradient colors based on category color
   const baseColor = item.color || '#4A80F0';
@@ -255,6 +350,9 @@ export const CategoryCard = memo(({ item, jobCount }: { item: Category & { jobCo
     baseColor,
     adjustColorBrightness(baseColor, -30),
   ];
+  
+  // 🎨 Get appropriate icon for this category
+  const categoryIcon = getCategoryIcon(item.category_name, item.icon_name);
   
   return (
   <TouchableOpacity
@@ -274,7 +372,7 @@ export const CategoryCard = memo(({ item, jobCount }: { item: Category & { jobCo
       style={styles.categoryCard}
     >
       <View style={styles.categoryIconBg}>
-        <Ionicons name={(item.icon_name as any) || 'briefcase-outline'} size={24} color="#fff" />
+        <Ionicons name={categoryIcon} size={24} color="#fff" />
       </View>
       <View style={styles.categoryContent}>
         <Text style={styles.categoryTitle} numberOfLines={2}>

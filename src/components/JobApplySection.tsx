@@ -15,6 +15,7 @@ interface JobApplySectionProps {
   onToggleSave?: () => void;
   isApplied?: boolean; // NEW: Đã nộp CV hay chưa
   applyLoading?: boolean; // NEW: Đang xử lý nộp CV
+  applicationStatus?: string; // ✅ NEW: Trạng thái ứng tuyển (accepted, rejected, pending)
 }
 
 const JobApplySection: React.FC<JobApplySectionProps> = ({ 
@@ -26,6 +27,7 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({
   onToggleSave,
   isApplied = false,
   applyLoading = false,
+  applicationStatus,
 }) => {
   // Map 'source' field to 'jobSource' for backward compatibility
   // source='viecoi' -> jobSource='crawled'
@@ -78,6 +80,7 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({
           compact={true}
           isApplied={isApplied}
           applyLoading={applyLoading}
+          applicationStatus={applicationStatus}
         />
         
         {onToggleSave && (

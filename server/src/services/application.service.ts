@@ -62,13 +62,29 @@ export class ApplicationService {
           await emailService.sendJobApplicationNotification(
             employerData.email,
             jobData.title,
-            candidateData?.fullName || candidateData?.email || 'Ứng viên',
+            candidateData?.fullName || candidateData?.displayName || candidateData?.email || 'Ứng viên',
             candidateData?.email || '',
-            candidateData?.phoneNumber,
+            candidateData?.phoneNumber || candidateData?.phone,
             applicationData.cvUrl
           );
           console.log(`📧 Email notification sent to employer: ${employerData.email}`);
         }
+
+        // ✅ Tạo in-app notification cho employer
+        const candidateName = candidateData?.fullName || candidateData?.displayName || candidateData?.email || 'Ứng viên';
+        const notificationRef = db.collection('notifications').doc();
+        await notificationRef.set({
+          userId: applicationData.employerId,
+          title: '👤 Ứng viên mới ứng tuyển!',
+          message: `${candidateName} vừa ứng tuyển vào vị trí "${jobData?.title || 'Công việc'}". Nhấn để xem hồ sơ.`,
+          type: 'application',
+          jobId: applicationData.jobId,
+          applicationId: appRef.id,
+          candidateId: applicationData.candidateId,
+          read: false,
+          created_at: new Date(),
+        });
+        console.log(`📬 In-app notification created for employer: ${applicationData.employerId}`);
       } catch (emailError) {
         console.error('⚠️  Failed to send email notification (non-critical):', emailError);
         // Don't throw error - application was created successfully
@@ -130,7 +146,34 @@ export class ApplicationService {
         return bDate - aDate;
       });
 
-      return applications;
+      // ✅ Enrich applications with candidate data
+      const enrichedApplications = await Promise.all(
+        applications.map(async (app) => {
+          if (app.candidateId) {
+            try {
+              const candidateDoc = await db.collection('users').doc(app.candidateId).get();
+              if (candidateDoc.exists) {
+                const candidateData = candidateDoc.data();
+                return {
+                  ...app,
+                  candidate: {
+                    uid: candidateDoc.id,
+                    displayName: candidateData?.displayName || candidateData?.fullName || candidateData?.name || null,
+                    email: candidateData?.email || null,
+                    photoURL: candidateData?.photoURL || candidateData?.avatar || null,
+                    phone: candidateData?.phone || candidateData?.phoneNumber || null,
+                  },
+                };
+              }
+            } catch (err) {
+              console.warn(`⚠️ Could not fetch candidate ${app.candidateId}:`, err);
+            }
+          }
+          return app;
+        })
+      );
+
+      return enrichedApplications;
     } catch (error: any) {
       console.error('Error fetching employer applications:', error);
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
@@ -213,16 +256,54 @@ export class ApplicationService {
   ): Promise<Application> {
     try {
       const appRef = db.collection(APPLICATIONS_COLLECTION).doc(applicationId);
-      const doc = await appRef.get();
+      const docSnap = await appRef.get();
 
-      if (!doc.exists) {
+      if (!docSnap.exists) {
         throw new AppError('Application not found', 404);
       }
+
+      const applicationData = docSnap.data() as Application;
 
       await appRef.update({
         status,
         updatedAt: new Date(),
       });
+
+      // ✅ Tạo notification cho candidate khi employer thay đổi trạng thái
+      if (status === 'accepted' || status === 'rejected') {
+        try {
+          // Lấy thông tin job để hiển thị trong notification
+          const jobDoc = await db.collection('jobs').doc(applicationData.jobId).get();
+          const jobTitle = jobDoc.exists ? jobDoc.data()?.title || 'Công việc' : 'Công việc';
+
+          const notificationTitle = status === 'accepted' 
+            ? '🎉 Hồ sơ được chấp nhận!' 
+            : '📋 Cập nhật hồ sơ ứng tuyển';
+          
+          const notificationMessage = status === 'accepted'
+            ? `Chúc mừng! Hồ sơ ứng tuyển vị trí "${jobTitle}" của bạn đã được nhà tuyển dụng chấp nhận. Hãy kiểm tra tin nhắn để biết thêm chi tiết.`
+            : `Hồ sơ ứng tuyển vị trí "${jobTitle}" của bạn đã bị từ chối. Đừng nản lòng, hãy tiếp tục tìm kiếm cơ hội phù hợp khác!`;
+
+          // Tạo notification trong Firestore
+          const notificationRef = db.collection('notifications').doc();
+          await notificationRef.set({
+            userId: applicationData.candidateId,
+            title: notificationTitle,
+            message: notificationMessage,
+            type: 'application',
+            jobId: applicationData.jobId,
+            applicationId: applicationId,
+            status: status,
+            read: false,
+            created_at: new Date(),
+          });
+
+          console.log(`📬 Notification created for candidate ${applicationData.candidateId} - Status: ${status}`);
+        } catch (notifError) {
+          // Không throw error - notification là non-critical
+          console.error('⚠️ Failed to create notification (non-critical):', notifError);
+        }
+      }
 
       const updated = await appRef.get();
       return { id: updated.id, ...updated.data() } as Application;

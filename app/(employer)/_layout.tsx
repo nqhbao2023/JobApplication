@@ -77,10 +77,30 @@ export default function EmployerLayout() {
         }}
       />
 
+      {/* 🔔 Thông báo */}
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: "Thông báo",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={
+                focused
+                  ? "notifications"
+                  : "notifications-outline"
+              }
+              color={color}
+              size={size}
+            />
+          ),
+        }}
+      />
+
       {/* 💬 Chat */}
       <Tabs.Screen
         name="chat"
         options={{
+          href: null, // Ẩn vì có thể truy cập từ Thông báo
           title: "Chat",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons

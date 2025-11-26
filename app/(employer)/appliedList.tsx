@@ -107,7 +107,10 @@ export default function AppliedList() {
       const mappedApps = activeApplications
         .map(app => {
           const job = jobMap.get(app.jobId);
-          const candidate = app.candidateId ? candidateMap.get(app.candidateId) : null;
+          // ✅ Ưu tiên dùng candidate data từ API enriched response 
+          const enrichedCandidate = (app as any).candidate;
+          const fetchedCandidate = app.candidateId ? candidateMap.get(app.candidateId) : null;
+          const candidate = enrichedCandidate || fetchedCandidate;
           
           // ✅ Skip if job was deleted (404)
           if (!job) {
@@ -121,7 +124,8 @@ export default function AppliedList() {
             console.log(`👤 Candidate ${app.candidateId}:`, {
               displayName: candidate.displayName,
               photoURL: candidate.photoURL,
-              email: candidate.email
+              email: candidate.email,
+              source: enrichedCandidate ? 'enriched' : 'fetched'
             });
           } else if (app.candidateId) {
             console.warn(`⚠️ Candidate data not found for ID: ${app.candidateId}`);
@@ -144,14 +148,15 @@ export default function AppliedList() {
             },
             user: candidate ? {
               uid: candidate.uid || app.candidateId,
-              name: candidate.displayName || candidate.email || "Ứng viên",
+              // ✅ FIX: Kiểm tra cả displayName, name và fullName
+              name: candidate.displayName || candidate.name || candidate.fullName || candidate.email || "Ứng viên",
               email: candidate.email || "",
-              photoURL: candidate.photoURL || null,
-              phone: candidate.phone || "",
+              photoURL: candidate.photoURL || candidate.avatar || null,
+              phone: candidate.phone || candidate.phoneNumber || "",
             } : {
               uid: app.candidateId || '',
-              name: app.candidateId ? "Đang tải..." : "Ứng viên ẩn danh",
-              email: "",
+              name: "Ứng viên (chưa có hồ sơ)",
+              email: app.candidateId ? `ID: ${app.candidateId.substring(0, 8)}...` : "",
               photoURL: null,
               phone: "",
             },

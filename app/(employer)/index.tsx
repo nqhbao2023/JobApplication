@@ -25,7 +25,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { db, auth } from "@/config/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from 'expo-linear-gradient';
@@ -63,6 +63,7 @@ export default function EmployerHome() {
   const router = useRouter();
   const [jobCount, setJobCount] = useState(0);
   const [appCount, setAppCount] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [activeJobCount, setActiveJobCount] = useState(0);
   const [recentApps, setRecentApps] = useState<RecentApp[]>([]);
   const [companyName, setCompanyName] = useState<string>("");
@@ -82,6 +83,30 @@ export default function EmployerHome() {
       console.log(" FIREBASE TOKEN : ", token);
     };
     logToken();
+  }, []);
+
+  // 🔔 Fetch unread notifications count
+  useEffect(() => {
+    const fetchUnreadNotifications = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      try {
+        const notifQuery = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid),
+          where('read', '==', false)
+        );
+        const snapshot = await getDocs(notifQuery);
+        console.log(`🔔 Unread notifications: ${snapshot.docs.length}`);
+        setUnreadNotificationCount(snapshot.docs.length);
+      } catch (error: any) {
+        console.warn('⚠️ Could not fetch notifications count:', error.message);
+        // Fallback: use appCount as badge
+      }
+    };
+    
+    fetchUnreadNotifications();
   }, []);
 
   useEffect(() => {
@@ -405,7 +430,7 @@ export default function EmployerHome() {
       >
         <Image
           style={styles.applicantAvatar}
-          source={{ uri: item.userAvatar || 'https://randomuser.me/api/portraits/men/1.jpg' }}
+          source={{ uri: item.userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.userName || 'User')}&size=80&background=4A80F0&color=fff&bold=true` }}
           contentFit="cover"
           transition={200}
         />
@@ -466,19 +491,53 @@ export default function EmployerHome() {
             )}
           </Animated.View>
 
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/(candidate)/profile');
-            }}
-          >
-            <Image
-              style={styles.avatar}
-              source={{ uri: companyAvatar || 'https://via.placeholder.com/80x80.png?text=Company' }}
-              contentFit="cover"
-              transition={200}
-            />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {/* Notification Icon */}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(employer)/notifications');
+              }}
+              style={{ padding: 8 }}
+            >
+              <View style={{ position: 'relative' }}>
+                <Ionicons name="notifications-outline" size={26} color="#FFFFFF" />
+                {(unreadNotificationCount > 0 || appCount > 0) && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    backgroundColor: '#ef4444',
+                    borderRadius: 10,
+                    minWidth: 18,
+                    height: 18,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingHorizontal: 4,
+                  }}>
+                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+                      {(unreadNotificationCount || appCount) > 9 ? '9+' : (unreadNotificationCount || appCount)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Avatar */}
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(employer)/profile');
+              }}
+            >
+              <Image
+                style={styles.avatar}
+                source={{ uri: companyAvatar || 'https://via.placeholder.com/80x80.png?text=Company' }}
+                contentFit="cover"
+                transition={200}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </Animated.View>
 

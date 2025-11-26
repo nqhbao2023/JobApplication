@@ -92,10 +92,11 @@ export default function ApplicationDetail() {
         candidate: candidate
           ? {
               id: candidate.uid || app.candidateId || "", // ✅ Use uid as primary ID
-              name: candidate.displayName || candidate.email,
-              email: candidate.email,
-              phone: candidate.phone,
-              photoURL: candidate.photoURL,
+              // ✅ FIX: Kiểm tra cả displayName, name và fullName - cast to any for flexibility
+              name: candidate.displayName || (candidate as any).name || (candidate as any).fullName || candidate.email || "Ứng viên",
+              email: candidate.email || "",
+              phone: candidate.phone || (candidate as any).phoneNumber || "",
+              photoURL: candidate.photoURL || (candidate as any).avatar || "",
             }
           : {
               id: app.candidateId || "", // ✅ Fallback to candidateId from application

@@ -27,6 +27,7 @@ interface ApplyButtonProps {
   jobId?: string; // Job ID for quick-post notification
   isApplied?: boolean; // Đã nộp CV hay chưa
   applyLoading?: boolean; // Đang xử lý nộp CV
+  applicationStatus?: string; // ✅ NEW: Trạng thái ứng tuyển (accepted, rejected, pending, etc.)
 }
 
 const ApplyButton: React.FC<ApplyButtonProps> = ({
@@ -39,6 +40,7 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
   jobId,
   isApplied = false,
   applyLoading = false,
+  applicationStatus,
 }) => {
   /**
    * Type 1: Crawled Jobs - Redirect to source
@@ -161,24 +163,49 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
 
       case 'featured':
       case 'internal':
+        // ✅ Hiển thị trạng thái ứng tuyển rõ ràng hơn
+        const getButtonLabel = () => {
+          if (applyLoading) return 'Đang xử lý...';
+          if (applicationStatus === 'accepted') return '✅ Đã được chấp nhận';
+          if (applicationStatus === 'rejected') return '❌ Đã bị từ chối';
+          if (applicationStatus === 'reviewing') return '👀 Đang xem xét';
+          if (applicationStatus === 'withdrawn') return '🔙 Đã rút hồ sơ';
+          if (isApplied || applicationStatus === 'pending') return '⏳ Đang chờ duyệt';
+          return 'Gửi CV ứng tuyển';
+        };
+
+        const getButtonIcon = (): keyof typeof Ionicons.glyphMap => {
+          if (applicationStatus === 'accepted') return 'checkmark-circle';
+          if (applicationStatus === 'rejected') return 'close-circle';
+          if (applicationStatus === 'reviewing') return 'eye';
+          if (isApplied || applicationStatus === 'pending') return 'time';
+          return 'send-outline';
+        };
+
+        const getButtonStyle = () => {
+          if (applicationStatus === 'accepted') return styles.acceptedButton;
+          if (applicationStatus === 'rejected') return styles.rejectedButton;
+          return styles.featuredButton;
+        };
+
+        const isDisabled = isApplied || applyLoading || !!applicationStatus;
+
         return (
           <TouchableOpacity
             style={[
               buttonStyle, 
-              styles.featuredButton,
-              (isApplied || applyLoading) && styles.disabledButton
+              getButtonStyle(),
+              isDisabled && styles.disabledButton
             ]}
             onPress={handleFeaturedJobApply}
-            disabled={isApplied || applyLoading}
+            disabled={isDisabled}
           >
             <Ionicons 
-              name={isApplied ? "checkmark-circle-outline" : "send-outline"} 
+              name={getButtonIcon()} 
               size={iconSize} 
               color="#fff" 
             />
-            <Text style={textStyle}>
-              {isApplied ? '✅ Đã nộp CV' : applyLoading ? 'Đang xử lý...' : 'Gửi CV ứng tuyển'}
-            </Text>
+            <Text style={textStyle}>{getButtonLabel()}</Text>
           </TouchableOpacity>
         );
 
@@ -220,9 +247,14 @@ const styles = StyleSheet.create({
   featuredButton: {
     backgroundColor: '#FF9500',
   },
+  acceptedButton: {
+    backgroundColor: '#34C759',
+  },
+  rejectedButton: {
+    backgroundColor: '#FF3B30',
+  },
   disabledButton: {
-    backgroundColor: '#999',
-    opacity: 0.6,
+    opacity: 0.8,
   },
   buttonText: {
     color: '#fff',

@@ -89,6 +89,8 @@ const JobDescription = () => {
     switch (applicationStatus) {
       case 'accepted': return '✅ Đã được chấp nhận';
       case 'rejected': return '❌ Đã bị từ chối';
+      case 'reviewing': return '👀 Đang xem xét';
+      case 'withdrawn': return '🔙 Đã rút hồ sơ';
       case 'pending': return '⏳ Đang chờ duyệt';
       default: return null;
     }
@@ -429,6 +431,7 @@ const JobDescription = () => {
             onToggleSave={toggleSave}
             isApplied={isApplied}
             applyLoading={applyLoading}
+            applicationStatus={applicationStatus}
           />
         </View>
       )}

@@ -193,7 +193,18 @@ export default function AppliedJob() {
 }
 
 const statusColor = (s?: string) =>
-  s === 'accepted' ? '#34C759' : s === 'rejected' ? '#FF3B30' : '#FF9500';
+  s === 'accepted' ? '#34C759' : s === 'rejected' ? '#FF3B30' : s === 'withdrawn' ? '#9E9E9E' : '#FF9500';
+
+const getStatusLabel = (status?: string) => {
+  switch (status) {
+    case 'accepted': return '✅ Đã được chấp nhận';
+    case 'rejected': return '❌ Đã bị từ chối';
+    case 'withdrawn': return '🔙 Đã rút hồ sơ';
+    case 'reviewing': return '👀 Đang xem xét';
+    case 'pending': 
+    default: return '⏳ Đang chờ duyệt';
+  }
+};
 
 const JobRow = React.memo(({ item, onPress }: { item: any; onPress: any }) => {
   const appliedDate = item.applied_at
@@ -238,13 +249,7 @@ const JobRow = React.memo(({ item, onPress }: { item: any; onPress: any }) => {
         </Text>
 
         <Text style={[styles.status, { color: statusColor(item.status) }]}>
-          {item.status === 'accepted'
-            ? 'Đã duyệt'
-            : item.status === 'rejected'
-            ? 'Từ chối'
-            : item.status === 'withdrawn'
-            ? 'Đã hủy'
-            : 'Đang chờ'}
+          {getStatusLabel(item.status)}
         </Text>
 
         {appliedDate && (

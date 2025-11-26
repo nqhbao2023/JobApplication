@@ -151,16 +151,26 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
           source={{
             uri:
               user?.photoURL ||
+              user?.avatar ||
               user?.id_image ||
-              "https://randomuser.me/api/portraits/men/1.jpg",
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                user?.name || user?.displayName || user?.fullName || user?.email?.charAt(0) || 'U'
+              )}&size=96&background=4A80F0&color=fff&bold=true&format=png`,
           }}
           style={styles.avatar}
         />
         <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={styles.name}>{user?.name || "Ứng viên ẩn danh"}</Text>
-          <Text style={styles.jobTitle}>
+          <Text style={styles.name} numberOfLines={1}>
+            {user?.name || user?.displayName || user?.fullName || user?.email || "Ứng viên"}
+          </Text>
+          <Text style={styles.jobTitle} numberOfLines={1}>
             Ứng tuyển: {job?.title || "Không rõ công việc"}
           </Text>
+          {user?.email && user.email !== user?.name && (
+            <Text style={styles.emailText} numberOfLines={1}>
+              {user.email}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -290,6 +300,11 @@ const styles = StyleSheet.create({
   jobTitle: {
     fontSize: 14,
     color: "#555",
+  },
+  emailText: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 2,
   },
   status: {
     marginTop: 10,

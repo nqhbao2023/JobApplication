@@ -31,6 +31,7 @@ export function DrawerMenuButton() {
 
   const menuItems: MenuItem[] = [
     { id: 'home', title: 'Khám phá việc làm', icon: 'compass', route: '/(candidate)' },
+    { id: 'notifications', title: 'Thông báo', icon: 'notifications', route: '/(shared)/Notifications' },
     { id: 'saved', title: 'Việc đã lưu', icon: 'bookmark', route: '/(candidate)/savedJobs' },
     { id: 'applied', title: 'Hồ sơ ứng tuyển', icon: 'document-text', route: '/(candidate)/appliedJob' },
     { id: 'tracker', title: 'Theo dõi ứng tuyển', icon: 'stats-chart', route: '/(candidate)/applicationTracker' },

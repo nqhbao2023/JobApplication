@@ -25,6 +25,56 @@ type Category = {
   color?: string;
 };
 
+// 🎨 Mapping category name to beautiful icons
+const CATEGORY_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
+  'it': 'code-slash',
+  'công nghệ thông tin': 'code-slash',
+  'phần mềm': 'laptop-outline',
+  'lập trình': 'terminal-outline',
+  'marketing': 'megaphone-outline',
+  'truyền thông': 'share-social-outline',
+  'sales': 'cart-outline',
+  'kinh doanh': 'briefcase-outline',
+  'bán hàng': 'storefront-outline',
+  'nhân sự': 'people-outline',
+  'hr': 'people-circle-outline',
+  'hành chính': 'clipboard-outline',
+  'tài chính': 'wallet-outline',
+  'kế toán': 'calculator-outline',
+  'kiểm toán': 'document-text-outline',
+  'ngân hàng': 'card-outline',
+  'thiết kế': 'color-palette-outline',
+  'design': 'brush-outline',
+  'sáng tạo': 'sparkles-outline',
+  'y tế': 'medkit-outline',
+  'dược': 'flask-outline',
+  'kỹ thuật': 'construct-outline',
+  'cơ khí': 'cog-outline',
+  'xây dựng': 'build-outline',
+  'giáo dục': 'school-outline',
+  'đào tạo': 'book-outline',
+  'nhà hàng': 'restaurant-outline',
+  'khách sạn': 'bed-outline',
+  'du lịch': 'airplane-outline',
+  'vận tải': 'car-outline',
+  'logistics': 'cube-outline',
+  'bất động sản': 'home-outline',
+  'luật': 'shield-checkmark-outline',
+};
+
+const getCategoryIcon = (categoryName?: string, iconName?: string): keyof typeof Ionicons.glyphMap => {
+  if (iconName && iconName !== 'briefcase-outline') {
+    return iconName as keyof typeof Ionicons.glyphMap;
+  }
+  if (!categoryName) return 'grid-outline';
+  const name = categoryName.toLowerCase();
+  if (CATEGORY_ICON_MAP[name]) return CATEGORY_ICON_MAP[name];
+  for (const [key, icon] of Object.entries(CATEGORY_ICON_MAP)) {
+    if (name.includes(key) || key.includes(name)) return icon;
+  }
+  return 'grid-outline';
+};
+
 export default function CategoriesListScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +111,7 @@ export default function CategoriesListScreen() {
   const renderItem = ({ item }: { item: Category }) => {
     const bgColor = item.color || "#E8F0FE";
     const textColor = getContrastColor(item.color);
+    const categoryIcon = getCategoryIcon(item.category_name, item.icon_name);
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: bgColor }]}
@@ -73,7 +124,7 @@ export default function CategoriesListScreen() {
         activeOpacity={0.85}
       >
         <Ionicons
-          name={(item.icon_name as any) || "briefcase-outline"}
+          name={categoryIcon}
           size={40}
           color={textColor}
           style={styles.icon}

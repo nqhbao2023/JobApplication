@@ -9,6 +9,126 @@ import { Ionicons } from '@expo/vector-icons';
 import { aiApiService, SalaryPrediction } from '@/services/aiApi.service';
 import * as Haptics from 'expo-haptics';
 
+/**
+ * Map category name (from database) to salary database key
+ * Supports Vietnamese category names, English names, and common variations
+ */
+const mapCategoryToSalaryKey = (categoryName: string): string => {
+  const normalized = categoryName.toLowerCase().trim();
+  
+  // Direct matches
+  const categoryMap: Record<string, string> = {
+    // F&B / Food & Beverage
+    'f&b': 'f&b',
+    'food & beverage': 'f&b',
+    'food and beverage': 'f&b',
+    'ẩm thực': 'f&b',
+    'nhà hàng': 'f&b',
+    'quán ăn': 'f&b',
+    'cafe': 'f&b',
+    'coffee': 'f&b',
+    'đồ uống': 'f&b',
+    'phục vụ': 'f&b',
+    'bếp': 'f&b',
+    'bartender': 'f&b',
+    'barista': 'f&b',
+    
+    // IT / Software
+    'it-software': 'it-software',
+    'it/software': 'it-software',
+    'it': 'it-software',
+    'software': 'it-software',
+    'công nghệ thông tin': 'it-software',
+    'cntt': 'it-software',
+    'lập trình': 'it-software',
+    'developer': 'it-software',
+    'programmer': 'it-software',
+    'phần mềm': 'it-software',
+    
+    // Marketing
+    'marketing': 'marketing',
+    'tiếp thị': 'marketing',
+    'digital marketing': 'marketing',
+    'online marketing': 'marketing',
+    'content': 'marketing',
+    'seo': 'marketing',
+    'social media': 'marketing',
+    
+    // Sales / Bán hàng
+    'sales': 'sales',
+    'bán hàng': 'sales',
+    'kinh doanh': 'sales',
+    'bán hàng / kinh doanh': 'sales',
+    'bán hàng/ kinh doanh': 'sales',
+    'sales/kinh doanh': 'sales',
+    'telesales': 'sales',
+    'nhân viên bán hàng': 'sales',
+    
+    // Retail
+    'retail': 'retail',
+    'bán lẻ': 'retail',
+    'cửa hàng': 'retail',
+    'thu ngân': 'retail',
+    'cashier': 'retail',
+    'siêu thị': 'retail',
+    
+    // Design
+    'design': 'design',
+    'thiết kế': 'design',
+    'graphic design': 'design',
+    'đồ họa': 'design',
+    'ui/ux': 'design',
+    'creative': 'design',
+    
+    // Education
+    'education': 'education',
+    'giáo dục': 'education',
+    'gia sư': 'education',
+    'tutor': 'education',
+    'giảng viên': 'education',
+    'teaching': 'education',
+    'đào tạo': 'education',
+    
+    // Logistics
+    'logistics': 'logistics',
+    'vận chuyển': 'logistics',
+    'giao hàng': 'logistics',
+    'shipper': 'logistics',
+    'delivery': 'logistics',
+    'kho vận': 'logistics',
+    'warehouse': 'logistics',
+    
+    // Other common categories - fallback to closest match
+    'admin': 'sales', // Office/Admin work similar to sales
+    'hành chính': 'sales',
+    'văn phòng': 'sales',
+    'office': 'sales',
+    'truyền thông': 'marketing',
+    'pr': 'marketing',
+    'sự kiện': 'marketing',
+    'event': 'marketing',
+    'tổ chức sự kiện': 'marketing',
+    'báo chí': 'marketing',
+    'biên tập': 'marketing',
+    'báo chí / biên tập': 'marketing',
+  };
+  
+  // Try exact match first
+  if (categoryMap[normalized]) {
+    return categoryMap[normalized];
+  }
+  
+  // Try partial match
+  for (const [key, value] of Object.entries(categoryMap)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return value;
+    }
+  }
+  
+  // Default fallback - use 'sales' as it has middle-range salaries
+  return 'sales';
+};
+
 interface SalaryPredictionBadgeProps {
   jobData: {
     title: string;
@@ -38,7 +158,18 @@ export const SalaryPredictionBadge: React.FC<SalaryPredictionBadgeProps> = ({
       setLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      const result = await aiApiService.predictSalary(jobData);
+      // Map category to salary database key
+      const mappedCategory = mapCategoryToSalaryKey(jobData.category);
+      
+      if (__DEV__) {
+        console.log('[SalaryPrediction] Input category:', jobData.category);
+        console.log('[SalaryPrediction] Mapped to:', mappedCategory);
+      }
+      
+      const result = await aiApiService.predictSalary({
+        ...jobData,
+        category: mappedCategory,
+      });
       setPrediction(result);
       setExpanded(true);
       

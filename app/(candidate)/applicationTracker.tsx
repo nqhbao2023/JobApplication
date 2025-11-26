@@ -177,26 +177,56 @@ const ApplicationTracker = () => {
       }
 
       // Fetch saved jobs
+      let savedCount = 0;
       const savedQuery = query(
         collection(db, 'saved_jobs'),
-        where('userId', '==', userId),
-        orderBy('savedAt', 'desc')
+        where('userId', '==', userId)
       );
       
       try {
         const savedSnap = await getDocs(savedQuery);
+        // Count total saved regardless of job existence
+        savedCount = savedSnap.size;
+        console.log(`📊 Saved jobs count from DB: ${savedCount}`);
+        
         const savedData: any[] = [];
         
         for (const savedDoc of savedSnap.docs) {
           const savedJobData = savedDoc.data();
-          const jobSnap = await getDoc(doc(db, 'jobs', savedJobData.jobId));
+          const jobId = savedJobData.jobId;
           
-          if (jobSnap.exists()) {
+          try {
+            const jobSnap = await getDoc(doc(db, 'jobs', jobId));
+            
+            if (jobSnap.exists()) {
+              savedData.push({
+                id: savedDoc.id,
+                jobId: jobId,
+                savedAt: savedJobData.savedAt?.toDate() || savedJobData.created_at?.toDate() || new Date(),
+                ...jobSnap.data(),
+              });
+            } else {
+              // Job doesn't exist anymore - still show basic info
+              console.log(`⚠️ Saved job ${jobId} no longer exists`);
+              savedData.push({
+                id: savedDoc.id,
+                jobId: jobId,
+                savedAt: savedJobData.savedAt?.toDate() || savedJobData.created_at?.toDate() || new Date(),
+                title: 'Việc làm không còn khả dụng',
+                company_name: 'Đã bị xóa',
+                _deleted: true,
+              });
+            }
+          } catch (jobErr: any) {
+            console.warn(`Error fetching saved job ${jobId}:`, jobErr?.message);
+            // Still add to list with placeholder info
             savedData.push({
               id: savedDoc.id,
-              jobId: savedJobData.jobId,
-              savedAt: savedJobData.savedAt?.toDate() || new Date(),
-              ...jobSnap.data(),
+              jobId: jobId,
+              savedAt: savedJobData.savedAt?.toDate() || savedJobData.created_at?.toDate() || new Date(),
+              title: 'Không thể tải thông tin',
+              company_name: 'Lỗi kết nối',
+              _error: true,
             });
           }
         }
@@ -207,9 +237,46 @@ const ApplicationTracker = () => {
         setSavedJobs([]);
       }
 
-      // Calculate stats
+      // Calculate stats - use the fetched data directly, not state (which hasn't updated yet)
       const total = appsData.length;
       const successRate = total > 0 ? Math.round((accepted / total) * 100) : 0;
+
+      console.log(`📊 Applications stats: total=${total}, pending=${pending}, accepted=${accepted}, rejected=${rejected}`);
+
+      // Get viewed count from the data we just fetched
+      let viewedCount = 0;
+      try {
+        const viewedQuery2 = query(
+          collection(db, 'user_activities'),
+          where('userId', '==', userId),
+          where('action', '==', 'view_external_job'),
+          limit(100)
+        );
+        const viewedSnap2 = await getDocs(viewedQuery2);
+        viewedCount = viewedSnap2.size;
+        console.log(`📊 Viewed jobs (user_activities): ${viewedCount}`);
+      } catch (err: any) {
+        console.log('user_activities query failed:', err?.message);
+        viewedCount = 0;
+      }
+
+      // Also try job_views collection as alternative
+      try {
+        const viewsQuery = query(
+          collection(db, 'job_views'),
+          where('userId', '==', userId),
+          limit(100)
+        );
+        const viewsSnap = await getDocs(viewsQuery);
+        const jobViewsCount = viewsSnap.size;
+        console.log(`📊 Viewed jobs (job_views): ${jobViewsCount}`);
+        viewedCount = Math.max(viewedCount, jobViewsCount);
+      } catch (err: any) {
+        // Ignore if collection doesn't exist
+        console.log('job_views query failed (normal if collection not exists):', err?.message);
+      }
+
+      console.log(`📊 Final stats: totalApplied=${total}, totalViewed=${viewedCount}, totalSaved=${savedCount}`);
 
       setStats({
         totalApplied: total,
@@ -217,8 +284,8 @@ const ApplicationTracker = () => {
         accepted,
         rejected,
         successRate,
-        totalViewed: viewedJobs.length,
-        totalSaved: savedJobs.length,
+        totalViewed: viewedCount,
+        totalSaved: savedCount,
       });
 
     } catch (err) {
@@ -453,16 +520,40 @@ const ApplicationTracker = () => {
         savedJobs.map((job, index) => (
           <Animated.View key={job.id} entering={FadeInDown.delay(index * 50)}>
             <TouchableOpacity
-              style={styles.savedCard}
+              style={[
+                styles.savedCard,
+                (job._deleted || job._error) && { opacity: 0.6, borderLeftWidth: 3, borderLeftColor: '#f59e0b' }
+              ]}
+              disabled={job._deleted || job._error}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.jobId } });
+                if (!job._deleted && !job._error) {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.jobId } });
+                }
               }}
             >
-              <Text style={styles.savedTitle} numberOfLines={2}>{job.title}</Text>
-              <Text style={styles.savedCompany}>{job.company_name || 'Ẩn danh'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {(job._deleted || job._error) && (
+                  <Ionicons name="warning" size={16} color="#f59e0b" />
+                )}
+                <Text 
+                  style={[
+                    styles.savedTitle, 
+                    (job._deleted || job._error) && { color: '#9ca3af' }
+                  ]} 
+                  numberOfLines={2}
+                >
+                  {job.title}
+                </Text>
+              </View>
+              <Text style={[
+                styles.savedCompany,
+                (job._deleted || job._error) && { color: '#9ca3af' }
+              ]}>
+                {job.company_name || 'Ẩn danh'}
+              </Text>
               <Text style={styles.savedTime}>
-                Lưu: {job.savedAt.toLocaleDateString('vi-VN')}
+                Lưu: {job.savedAt?.toLocaleDateString?.('vi-VN') || 'Không rõ'}
               </Text>
             </TouchableOpacity>
           </Animated.View>

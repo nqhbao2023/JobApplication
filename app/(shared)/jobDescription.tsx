@@ -296,19 +296,50 @@ const JobDescription = () => {
           )}
 
           {/* ✅ AI Salary Prediction */}
-          {(jobData as Job)?.title && (jobData as Job)?.type && (
+          {(jobData as Job)?.title && (
             <SalaryPredictionBadge
               jobData={{
                 title: (jobData as Job).title || '',
-                category: (typeof (jobData as Job).jobCategories === 'object' 
-                  ? ((jobData as Job).jobCategories as any)?.$id || 'other'
-                  : 'other'),
-                location: (jobData as Job).location || '',
-                type: ((jobData as Job).type?.toLowerCase().includes('part') 
-                  ? 'part-time' 
-                  : (jobData as Job).type?.toLowerCase().includes('intern') 
-                  ? 'internship' 
-                  : 'full-time') as any,
+                // Use category_name for better matching with salary database
+                category: (() => {
+                  const job = jobData as Job;
+                  // Try jobCategories first
+                  if (job.jobCategories) {
+                    if (typeof job.jobCategories === 'object' && job.jobCategories.category_name) {
+                      return job.jobCategories.category_name;
+                    }
+                    if (typeof job.jobCategories === 'string') {
+                      return job.jobCategories;
+                    }
+                  }
+                  // Fallback: try to infer from title
+                  const title = (job.title || '').toLowerCase();
+                  if (title.includes('bán hàng') || title.includes('kinh doanh') || title.includes('sales')) return 'sales';
+                  if (title.includes('marketing') || title.includes('content')) return 'marketing';
+                  if (title.includes('phục vụ') || title.includes('nhân viên') || title.includes('bếp') || title.includes('pha chế')) return 'f&b';
+                  if (title.includes('giao hàng') || title.includes('shipper')) return 'logistics';
+                  if (title.includes('thiết kế') || title.includes('design')) return 'design';
+                  if (title.includes('gia sư') || title.includes('giáo viên')) return 'education';
+                  if (title.includes('lập trình') || title.includes('developer') || title.includes('it')) return 'it-software';
+                  return 'other';
+                })(),
+                location: (jobData as Job).location || 'TP.HCM',
+                // Better job type detection
+                type: (() => {
+                  const job = jobData as Job;
+                  const typeStr = (job.type || job.jobTypes?.type_name || '').toLowerCase();
+                  
+                  if (typeStr.includes('part') || typeStr.includes('bán thời gian')) return 'part-time';
+                  if (typeStr.includes('intern') || typeStr.includes('thực tập')) return 'internship';
+                  if (typeStr.includes('freelance') || typeStr.includes('tự do')) return 'freelance';
+                  
+                  // Check title for hints
+                  const title = (job.title || '').toLowerCase();
+                  if (title.includes('part-time') || title.includes('bán thời gian')) return 'part-time';
+                  if (title.includes('intern') || title.includes('thực tập')) return 'internship';
+                  
+                  return 'full-time';
+                })() as any,
               }}
               autoLoad={false}
             />

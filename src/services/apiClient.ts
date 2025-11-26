@@ -18,19 +18,43 @@ const client = axios.create({
   },
 });
 
+// Helper to get token with graceful error handling
+const getAuthToken = async (): Promise<string | null> => {
+  const user = auth.currentUser;
+  if (!user) return null;
+  
+  try {
+    // Try to get cached token first (don't force refresh)
+    const token = await user.getIdToken(false);
+    return token;
+  } catch (err: any) {
+    // If network error, don't force logout - just skip auth for this request
+    if (err?.code === 'auth/network-request-failed') {
+      console.warn('⚠️ Network error getting token, proceeding without auth');
+      return null;
+    }
+    
+    // For other errors, try once more with force refresh
+    try {
+      const token = await user.getIdToken(true);
+      return token;
+    } catch (refreshErr: any) {
+      if (refreshErr?.code !== 'auth/network-request-failed') {
+        console.error('❌ Token refresh failed:', refreshErr?.code || refreshErr?.message);
+      }
+      return null;
+    }
+  }
+};
+
 // Request interceptor - Auto attach Firebase token
 client.interceptors.request.use(
   async (config) => {
     if (config.__skipAuth) return config;
 
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        const token = await user.getIdToken(true);
-        config.headers.Authorization = `Bearer ${token}`;
-      } catch (err) {
-        console.error('❌ Token refresh failed:', err);
-      }
+    const token = await getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },

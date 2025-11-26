@@ -120,26 +120,27 @@ QuickFilters.displayName = 'QuickFilters';
 
 export const CompanyCard = memo(({ item }: { item: Company }) => (
   <TouchableOpacity
-    style={[styles.companyCard, { backgroundColor: item.color || '#f0f4ff' }]}
+    style={styles.companyCard}
     onPress={() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       router.push({ pathname: '/(shared)/companyDescription', params: { companyId: item.$id } });
     }}
+    activeOpacity={0.8}
   >
-    <Image
-      style={styles.companyImage}
-      source={{ uri: item.image || PLACEHOLDER_COMPANY_IMG }}
-      contentFit="cover"
-      transition={200}
-    />
-    <View style={styles.companyTextContainer}>
-      <Text style={[styles.companyTitle, { color: getContrastColor(item.color) }]} numberOfLines={1}>
-        {item.corp_name || 'Công ty'}
-      </Text>
-      <Text style={[styles.companySub, { color: getContrastColor(item.color) }]} numberOfLines={1}>
-        {item.nation || 'Việt Nam'}
-      </Text>
+    <View style={styles.companyLogoContainer}>
+      <Image
+        style={styles.companyImage}
+        source={{ uri: item.image || PLACEHOLDER_COMPANY_IMG }}
+        contentFit="cover"
+        transition={200}
+      />
     </View>
+    <Text style={styles.companyTitle} numberOfLines={1}>
+      {item.corp_name || 'Công ty'}
+    </Text>
+    <Text style={styles.companySub} numberOfLines={1}>
+      {item.nation || 'Việt Nam'}
+    </Text>
   </TouchableOpacity>
 ));
 
@@ -252,12 +253,12 @@ export const CategoryCard = memo(({ item, jobCount }: { item: Category & { jobCo
   const baseColor = item.color || '#4A80F0';
   const gradientColors: [string, string] = [
     baseColor,
-    adjustColorBrightness(baseColor, -20),
+    adjustColorBrightness(baseColor, -30),
   ];
   
   return (
   <TouchableOpacity
-    activeOpacity={0.8}
+    activeOpacity={0.85}
     onPress={() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       router.push({
@@ -272,23 +273,21 @@ export const CategoryCard = memo(({ item, jobCount }: { item: Category & { jobCo
       end={{ x: 1, y: 1 }}
       style={styles.categoryCard}
     >
-      <View style={styles.categoryIconContainer}>
-        <View style={styles.categoryIconBg}>
-          <Ionicons name={(item.icon_name as any) || 'briefcase-outline'} size={32} color="#fff" />
+      <View style={styles.categoryIconBg}>
+        <Ionicons name={(item.icon_name as any) || 'briefcase-outline'} size={24} color="#fff" />
+      </View>
+      <View style={styles.categoryContent}>
+        <Text style={styles.categoryTitle} numberOfLines={2}>
+          {item.category_name || 'Danh mục'}
+        </Text>
+        <View style={styles.categoryJobCountContainer}>
+          <Ionicons name="briefcase" size={12} color="rgba(255,255,255,0.85)" />
+          <Text style={styles.categorySub}>
+            {jobCount || 0} việc làm
+          </Text>
         </View>
       </View>
-      <Text style={styles.categoryTitle} numberOfLines={2}>
-        {item.category_name || 'Danh mục'}
-      </Text>
-      <View style={styles.categoryJobCountContainer}>
-        <Ionicons name="briefcase" size={14} color="rgba(255,255,255,0.9)" />
-        <Text style={styles.categorySub}>
-          {jobCount || 0} việc làm
-        </Text>
-      </View>
-      <View style={styles.categoryArrow}>
-        <Ionicons name="arrow-forward" size={16} color="rgba(255,255,255,0.8)" />
-      </View>
+      <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" style={styles.categoryArrowIcon} />
     </LinearGradient>
   </TouchableOpacity>
   );
@@ -408,31 +407,51 @@ const styles = StyleSheet.create({
   },
   filterText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
   filterTextActive: { color: '#fff' },
+  // ✅ REDESIGNED: Company Card - More compact and clean
   companyCard: {
-    width: 160,
-    padding: 16,
+    width: 130,
+    backgroundColor: '#fff',
     borderRadius: 16,
+    padding: 14,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#f1f5f9',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 3,
     marginRight: CARD_GAP,
   },
-  companyImage: {
-    height: 60,
-    width: 60,
+  companyLogoContainer: {
+    width: 56,
+    height: 56,
     borderRadius: 14,
-    backgroundColor: '#fff',
-    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: '#e2e8f0',
   },
-  companyTextContainer: { gap: 4 },
-  companyTitle: { fontSize: 15, fontWeight: '700' },
-  companySub: { fontSize: 12, opacity: 0.8 },
+  companyImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+  },
+  companyTitle: { 
+    fontSize: 13, 
+    fontWeight: '700', 
+    color: '#1e293b',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  companySub: { 
+    fontSize: 11, 
+    color: '#64748b',
+    textAlign: 'center',
+  },
   jobCard: {
     flexDirection: 'row',
     padding: 14,
@@ -533,65 +552,53 @@ const styles = StyleSheet.create({
     color: '#64748b',
     flex: 1,
   },
+  // ✅ REDESIGNED: Category Card - Horizontal layout, more compact
   categoryCard: {
-    width: 160,
-    height: 180,
-    padding: 20,
-    borderRadius: 20,
-    justifyContent: 'space-between',
+    width: 170,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
     marginRight: CARD_GAP,
     overflow: 'hidden',
   },
-  categoryIconContainer: {
-    alignItems: 'flex-start',
-  },
   categoryIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+  },
+  categoryContent: {
+    flex: 1,
+    marginLeft: 12,
   },
   categoryTitle: {
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 13,
     color: '#fff',
-    marginTop: 12,
-    lineHeight: 20,
+    lineHeight: 17,
+    marginBottom: 4,
   },
   categoryJobCountContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
+    gap: 4,
   },
   categorySub: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#fff',
-    fontWeight: '600',
-    opacity: 0.9,
+    fontWeight: '500',
+    opacity: 0.85,
   },
-  categoryArrow: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  categoryArrowIcon: {
+    marginLeft: 4,
   },
   emptyContainer: {
     alignItems: 'center',

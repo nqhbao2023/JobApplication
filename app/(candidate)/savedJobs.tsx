@@ -1,65 +1,129 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Saved Jobs Screen - Redesigned with better UI/UX
+ * Hiển thị các việc làm đã lưu với đầy đủ thông tin
+ */
+
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   FlatList,
-  Image,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { db, auth } from '../../src/config/firebase';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { DrawerMenuButton } from '@/components/candidate/DrawerMenu';
-import { collection, doc, getDocs, getDoc, query, where, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, query, where, deleteDoc } from 'firebase/firestore';
+import { formatSalary } from '@/utils/salary.utils';
 
-const Job = () => {
-  const [selectedTab, setSelectedTab] = useState(0);
+const SavedJobsScreen = () => {
   const [savedJobs, setSavedJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string>('');
-  const [categories, setCategories] = useState<any[]>([]); 
 
-
-  useEffect(() => {
-    if (userId) {
-      fetchSavedJobs();
-      fetchCategories();
-    }
-  }, [userId]);
   useEffect(() => {
     const user = auth.currentUser;
     if (user) setUserId(user.uid);
   }, []);
 
+  useEffect(() => {
+    if (userId) {
+      fetchSavedJobs();
+    }
+  }, [userId]);
+
   const fetchSavedJobs = async () => {
     try {
-      setLoading(true);
+      if (!loading) setRefreshing(true);
+      
       const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId));
       const savedSnap = await getDocs(q);
-      const jobIds = savedSnap.docs.map(doc => doc.data().jobId);
+      const savedDocs = savedSnap.docs;
       
-      // Fetch jobs sequentially with delay to prevent rate limiting
+      console.log(`📊 Found ${savedDocs.length} saved jobs in DB`);
+      
+      // Fetch jobs in parallel with batching
       const jobDetails: any[] = [];
-      for (let i = 0; i < jobIds.length; i++) {
-        const jobId = jobIds[i];
-        
-        try {
-          // Add 200ms delay between requests (except first one)
-          if (i > 0) await new Promise(resolve => setTimeout(resolve, 200));
-          
-          const jobSnap = await getDoc(doc(db, 'jobs', jobId));
-          if (jobSnap.exists()) {
-            jobDetails.push({ $id: jobId, ...jobSnap.data() });
-          }
-        } catch (jobError) {
-          console.error(`Failed to fetch job ${jobId}:`, jobError);
-          // Continue with other jobs even if one fails
-        }
+      const batchSize = 5;
+      
+      for (let i = 0; i < savedDocs.length; i += batchSize) {
+        const batch = savedDocs.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch.map(async (savedDoc) => {
+            const jobId = savedDoc.data().jobId;
+            const savedAt = savedDoc.data().created_at || savedDoc.data().savedAt;
+            try {
+              const jobSnap = await getDoc(doc(db, 'jobs', jobId));
+              if (jobSnap.exists()) {
+                const jobData = jobSnap.data();
+                // Also fetch company if needed
+                let companyName = jobData.company_name || '';
+                let companyLogo = jobData.company_logo || jobData.image || '';
+                
+                if (!companyName && jobData.company) {
+                  const companyId = typeof jobData.company === 'string' 
+                    ? jobData.company 
+                    : jobData.company.$id || jobData.company.id;
+                  if (companyId) {
+                    try {
+                      const companySnap = await getDoc(doc(db, 'companies', companyId));
+                      if (companySnap.exists()) {
+                        companyName = companySnap.data().corp_name || companySnap.data().name || '';
+                        companyLogo = companyLogo || companySnap.data().image || '';
+                      }
+                    } catch {}
+                  }
+                }
+                
+                return { 
+                  $id: jobId, 
+                  savedDocId: savedDoc.id,
+                  savedAt,
+                  companyName,
+                  companyLogo,
+                  ...jobData 
+                };
+              } else {
+                // Job không còn tồn tại - trả về placeholder
+                console.warn(`⚠️ Job ${jobId} no longer exists`);
+                return {
+                  $id: jobId,
+                  savedDocId: savedDoc.id,
+                  savedAt,
+                  title: 'Việc làm không còn khả dụng',
+                  companyName: 'Đã bị xóa hoặc hết hạn',
+                  companyLogo: '',
+                  _deleted: true,
+                };
+              }
+            } catch (err: any) {
+              console.warn(`Failed to fetch job ${jobId}:`, err?.message);
+              // Error fetching - still show with placeholder
+              return {
+                $id: jobId,
+                savedDocId: savedDoc.id,
+                savedAt,
+                title: 'Không thể tải thông tin',
+                companyName: 'Lỗi kết nối',
+                companyLogo: '',
+                _error: true,
+              };
+            }
+          })
+        );
+        // Include all results including placeholders
+        jobDetails.push(...batchResults.filter(Boolean));
       }
       
       setSavedJobs(jobDetails);
@@ -67,297 +131,399 @@ const Job = () => {
       console.log('Lỗi khi load saved jobs:', error);
     } finally {
       setLoading(false);
-    }
-  };
-  const fetchCategories = async () => {
-    try {
-      const catSnap = await getDocs(collection(db, 'job_categories'));
-      setCategories(catSnap.docs.map(doc => ({ $id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error('Lỗi khi load category:', err);
+      setRefreshing(false);
     }
   };
 
-  // Get saved jobs
-  const savedJobsList = savedJobs;
-
-
-  // Filter jobs based on selected tab
-  const filteredJobs =
-  selectedTab === 0
-    ? savedJobsList
-    : savedJobsList.filter((job) =>
-        job.jobCategories?.$id === categories[selectedTab - 1]?.$id
-      );
-
-  const renderJobItem = ({ item }: { item: any }) => {
-    const isSaved = savedJobs.some(job => job.$id === item.$id);
-    
-    // ✅ Priority: job.image (employer-uploaded) > job.company_logo (viecoi) > company.image > placeholder
-    const imageUrl = item.image || item.company_logo || 
-      (item.company && typeof item.company === 'object' ? item.company.image : undefined) ||
-      `https://via.placeholder.com/80x80.png?text=${encodeURIComponent(
-        item.company_name || 
-        (item.company && typeof item.company === 'object' ? item.company.corp_name : '') || 
-        'Job'
-      )}`;
-
-    // ✅ Format salary - handle both object and string formats
-    const formatSalary = (salary: any) => {
-      if (!salary) return 'Thỏa thuận';
-      
-      // If salary is an object with min/max
-      if (typeof salary === 'object' && salary.min !== undefined) {
-        const currency = salary.currency === 'VND' ? '₫' : '$';
-        if (salary.min === salary.max) {
-          return `${salary.min.toLocaleString()} ${currency}`;
-        }
-        return `${salary.min.toLocaleString()}-${salary.max.toLocaleString()} ${currency}`;
-      }
-      
-      // If salary is a string or number
-      return `${salary}`;
-    };
-
-    return (
-      <TouchableOpacity
-        style={styles.jobItem}
-        onPress={() => router.push(`/jobDescription?jobId=${item.$id}`)}
-      >
-        <Image source={{ uri: imageUrl }} style={styles.jobImage} />
-        <View style={styles.jobInfo}>
-          <Text style={styles.jobTitle}>{item.title}</Text>
-          <Text style={styles.jobCompany}>{item.company?.corp_name}</Text>
-          <Text style={styles.jobLocation}>{item.company?.city}, {item.company?.nation}</Text>
-        </View>
-        <View style={styles.jobRight}>
-          <Text style={styles.jobSalary}>{formatSalary(item.salary)}</Text>
-          <Text style={styles.jobType}>{item.jobTypes?.type_name}</Text>
-          <TouchableOpacity onPress={() => handleSaveJob(item.$id)} style={{ padding: 4 }}>
-  <Ionicons
-    name={savedJobs.some(job => job.$id === item.$id) ? 'heart' : 'heart-outline'}
-    size={24}
-    color={savedJobs.some(job => job.$id === item.$id) ? '#FF3B30' : '#999'}
-  />
-</TouchableOpacity>
-
-        </View>
-      </TouchableOpacity>
-    );
-  };
-  const handleSaveJob = async (jobId: string) => {
+  const handleUnsaveJob = async (jobId: string, savedDocId?: string) => {
     if (!userId) return;
-    const isJobSaved = savedJobs.some(job => job.$id === jobId);
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
     try {
-      if (isJobSaved) {
-        // Find the saved job document
-        const q = query(collection(db, 'saved_jobs'), where('userId', '==', userId), where('jobId', '==', jobId));
+      if (savedDocId) {
+        await deleteDoc(doc(db, 'saved_jobs', savedDocId));
+      } else {
+        const q = query(
+          collection(db, 'saved_jobs'), 
+          where('userId', '==', userId), 
+          where('jobId', '==', jobId)
+        );
         const res = await getDocs(q);
         if (!res.empty) {
           await deleteDoc(doc(db, 'saved_jobs', res.docs[0].id));
         }
-      } else {
-        await addDoc(collection(db, 'saved_jobs'), { userId, jobId, created_at: new Date().toISOString() });
       }
-      fetchSavedJobs();
+      
+      // Optimistic update
+      setSavedJobs(prev => prev.filter(job => job.$id !== jobId));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      console.error('Lỗi xử lý trái tim:', err);
+      console.error('Lỗi khi bỏ lưu:', err);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
-  
+
+  const onRefresh = useCallback(() => {
+    fetchSavedJobs();
+  }, [userId]);
+
+  const getJobImage = (item: any) => {
+    if (item.image && item.image.startsWith('http')) return item.image;
+    if (item.companyLogo && item.companyLogo.startsWith('http')) return item.companyLogo;
+    if (item.company_logo && item.company_logo.startsWith('http')) return item.company_logo;
+    
+    const name = item.companyName || item.company_name || item.title || 'Job';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=200&background=4A80F0&color=fff&bold=true`;
+  };
+
+  const renderJobItem = ({ item, index }: { item: any; index: number }) => {
+    const isUnavailable = item._deleted || item._error;
+    const companyName = item.companyName || item.company_name || 
+      (typeof item.company === 'object' ? item.company.corp_name : '') || 'Công ty';
+    
+    const jobType = item.type || item.jobTypes?.type_name || '';
+    const location = item.location || 
+      (typeof item.company === 'object' ? `${item.company.city || ''}, ${item.company.nation || ''}` : '');
+
+    return (
+      <Animated.View entering={FadeInDown.delay(index * 50).duration(400)}>
+        <TouchableOpacity
+          style={[
+            styles.jobCard,
+            isUnavailable && { opacity: 0.65, borderLeftWidth: 4, borderLeftColor: '#f59e0b' }
+          ]}
+          activeOpacity={0.7}
+          disabled={isUnavailable}
+          onPress={() => {
+            if (!isUnavailable) {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push(`/jobDescription?jobId=${item.$id}`);
+            }
+          }}
+        >
+          {isUnavailable ? (
+            <View style={[styles.jobImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f1f5f9' }]}>
+              <Ionicons name="warning-outline" size={32} color="#f59e0b" />
+            </View>
+          ) : (
+            <Image 
+              source={{ uri: getJobImage(item) }} 
+              style={styles.jobImage}
+              contentFit="cover"
+              transition={200}
+            />
+          )}
+          
+          <View style={styles.jobContent}>
+            <Text style={[styles.jobTitle, isUnavailable && { color: '#9ca3af' }]} numberOfLines={2}>
+              {item.title || 'Chưa có tiêu đề'}
+            </Text>
+            
+            <View style={styles.jobInfoRow}>
+              <Ionicons name="business-outline" size={14} color={isUnavailable ? '#d1d5db' : '#64748b'} />
+              <Text style={[styles.jobInfoText, isUnavailable && { color: '#9ca3af' }]} numberOfLines={1}>
+                {companyName}
+              </Text>
+            </View>
+            
+            {location && !isUnavailable ? (
+              <View style={styles.jobInfoRow}>
+                <Ionicons name="location-outline" size={14} color="#64748b" />
+                <Text style={styles.jobInfoText} numberOfLines={1}>
+                  {location.replace(/^,\s*/, '').replace(/,\s*$/, '')}
+                </Text>
+              </View>
+            ) : null}
+            
+            {isUnavailable ? (
+              <View style={[styles.typeBadge, { backgroundColor: '#fef3c7' }]}>
+                <Text style={[styles.typeText, { color: '#d97706' }]}>
+                  {item._deleted ? 'Đã bị xóa' : 'Không thể tải'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.jobFooter}>
+                {item.salary ? (
+                  <View style={styles.salaryBadge}>
+                    <Ionicons name="cash-outline" size={12} color="#10b981" />
+                    <Text style={styles.salaryText}>
+                      {formatSalary(item.salary)}
+                    </Text>
+                  </View>
+                ) : null}
+                
+                {jobType ? (
+                  <View style={styles.typeBadge}>
+                    <Text style={styles.typeText}>{jobType}</Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.heartButton}
+            onPress={() => handleUnsaveJob(item.$id, item.savedDocId)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name={isUnavailable ? "trash-outline" : "heart"} size={22} color="#ef4444" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="heart-outline" size={64} color="#cbd5e1" />
+      </View>
+      <Text style={styles.emptyTitle}>Chưa có việc làm đã lưu</Text>
+      <Text style={styles.emptySubtitle}>
+        Nhấn vào biểu tượng ❤️ trên các công việc để lưu lại và xem sau
+      </Text>
+      <TouchableOpacity 
+        style={styles.exploreButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push('/(candidate)');
+        }}
+      >
+        <Text style={styles.exploreButtonText}>Khám phá việc làm</Text>
+        <Ionicons name="arrow-forward" size={18} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <DrawerMenuButton />
-        <Text style={styles.headerText}>Việc làm của tôi</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <View style={styles.subHeader}>
-        <Text style={styles.savedText}>Bạn đã lưu {savedJobs.length} việc làm</Text>
-      </View>
-
-      <View style={styles.tabsWrapper}>
-  <ScrollView
-    horizontal
-    showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.tabScroll}
-  >
-    <TouchableOpacity
-      style={[styles.tabButton, selectedTab === 0 && styles.tabButtonActive]}
-      onPress={() => setSelectedTab(0)}
-    >
-      <Text style={[styles.tabText, selectedTab === 0 && styles.tabTextActive]}>
-        All
-      </Text>
-    </TouchableOpacity>
-
-    {categories.map((cat, index) => (
-      <TouchableOpacity
-        key={cat.$id}
-        style={[styles.tabButton, selectedTab === index + 1 && styles.tabButtonActive]}
-        onPress={() => setSelectedTab(index + 1)}
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* Header */}
+      <LinearGradient
+        colors={['#4A80F0', '#357AE8']}
+        style={styles.header}
       >
-        <Text style={[styles.tabText, selectedTab === index + 1 && styles.tabTextActive]}>
-          {cat.category_name}
-        </Text>
-      </TouchableOpacity>
-    ))}
-  </ScrollView>
-</View>
+        <DrawerMenuButton />
+        <Text style={styles.headerText}>Việc làm đã lưu</Text>
+        <View style={{ width: 40 }} />
+      </LinearGradient>
 
+      {/* Stats Bar */}
+      <View style={styles.statsBar}>
+        <View style={styles.statItem}>
+          <Ionicons name="heart" size={18} color="#ef4444" />
+          <Text style={styles.statText}>
+            <Text style={styles.statNumber}>{savedJobs.length}</Text> việc làm đã lưu
+          </Text>
+        </View>
+      </View>
 
+      {/* Job List */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#34C759" />
+          <ActivityIndicator size="large" color="#4A80F0" />
+          <Text style={styles.loadingText}>Đang tải...</Text>
         </View>
-      ) : filteredJobs.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="heart-dislike-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No saved jobs found</Text>
-        </View>
+      ) : savedJobs.length === 0 ? (
+        renderEmptyState()
       ) : (
         <FlatList
-          data={filteredJobs}
+          data={savedJobs}
           renderItem={renderJobItem}
           keyExtractor={(item) => item.$id}
-          contentContainerStyle={{ padding: 16, paddingBottom: SCROLL_BOTTOM_PADDING }}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh}
+              colors={['#4A80F0']}
+            />
+          }
         />
       )}
     </SafeAreaView>
   );
 };
 
-
-export default Job;
+export default SavedJobsScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9FB',
+    backgroundColor: '#f8fafc',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    backgroundColor: '#34C759',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
   },
   headerText: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#fff',
     flex: 1,
     textAlign: 'center',
   },
-  subHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-  },
-  savedText: {
-    fontSize: 15,
-    color: '#666',
-    fontWeight: '600',
-  },
-  tabsWrapper: {
-    paddingVertical: 10,
-  },
-  tabScroll: {
-    paddingHorizontal: 16,
+  statsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  tabButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     backgroundColor: '#fff',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#ccc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  tabButtonActive: {
-    backgroundColor: '#34C759',
-    borderColor: '#34C759',
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  tabText: {
+  statText: {
     fontSize: 14,
-    color: '#333',
+    color: '#64748b',
   },
-  tabTextActive: {
-    color: '#fff',
-    fontWeight: 'bold',
+  statNumber: {
+    fontWeight: '700',
+    color: '#1e293b',
   },
-  jobItem: {
+  listContent: {
+    padding: 16,
+    paddingBottom: SCROLL_BOTTOM_PADDING,
+  },
+  jobCard: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     marginBottom: 12,
-    alignItems: 'center',
-    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   jobImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
   },
-  jobInfo: {
+  jobContent: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 14,
+    justifyContent: 'space-between',
   },
   jobTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b',
+    lineHeight: 20,
+    marginBottom: 6,
   },
-  jobCompany: {
-    fontSize: 14,
-    color: '#666',
+  jobInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
-  jobLocation: {
+  jobInfoText: {
+    fontSize: 13,
+    color: '#64748b',
+    flex: 1,
+  },
+  jobFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  salaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  salaryText: {
     fontSize: 12,
-    color: '#aaa',
+    fontWeight: '600',
+    color: '#10b981',
   },
-  jobRight: {
-    alignItems: 'flex-end',
+  typeBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  jobSalary: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
+  typeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#3b82f6',
   },
-  jobType: {
-    fontSize: 12,
-    color: '#666',
-    marginVertical: 4,
+  heartButton: {
+    padding: 4,
+    alignSelf: 'flex-start',
   },
-
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 40,
   },
-  emptyText: {
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
     fontSize: 18,
-    color: '#666',
-    marginTop: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#64748b',
     textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  exploreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#4A80F0',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  exploreButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
 });

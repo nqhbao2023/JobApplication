@@ -52,29 +52,51 @@ export default function AppliedJob() {
         if (!silent) setRefreshing(true);
 
         const apps = await applicationApiService.getMyApplications();
+        console.log(`📊 Found ${apps.length} applications`);
 
         // Fetch job details sequentially with rate limiting using utility
         const applicationsWithJobs = await sequentialFetch(
           apps,
           async (app: Application) => {
-            const job = await jobApiService.getJobById(app.jobId);
-            return {
-              $id: app.id,
-              jobId: app.jobId,
-              status: app.status,
-              applied_at: app.appliedAt,
-              jobInfo: {
-                title: job.title,
-                company: getCompanyName(job.company),
-                location: job.location || getCompanyCity(job.company) || 'Không rõ',
-                image: job.company_logo || job.image,
-              },
-            };
+            try {
+              const job = await jobApiService.getJobById(app.jobId);
+              return {
+                $id: app.id,
+                jobId: app.jobId,
+                status: app.status,
+                applied_at: app.appliedAt,
+                jobInfo: {
+                  title: job.title,
+                  company: getCompanyName(job.company),
+                  location: job.location || getCompanyCity(job.company) || 'Không rõ',
+                  image: job.company_logo || job.image,
+                },
+              };
+            } catch (err: any) {
+              // Handle 404 specifically - job was deleted
+              if (err?.response?.status === 404) {
+                console.warn(`⚠️ Job ${app.jobId} no longer exists (404)`);
+                return {
+                  $id: app.id,
+                  jobId: app.jobId,
+                  status: app.status,
+                  applied_at: app.appliedAt,
+                  _deleted: true,
+                  jobInfo: {
+                    title: 'Việc làm không còn tồn tại',
+                    company: 'Đã bị xóa',
+                    location: 'N/A',
+                    image: undefined,
+                  },
+                };
+              }
+              throw err; // Let error handler deal with other errors
+            }
           },
           200, // 200ms delay between requests
-          // Error handler
+          // Error handler for non-404 errors
           (error, app) => {
-            console.error(`Failed to fetch job ${app.jobId}:`, error);
+            console.error(`Failed to fetch job ${app.jobId}:`, error?.message || error);
             
             // Return from cache if available
             const cached = applications.find((a) => a.jobId === app.jobId);
@@ -86,9 +108,10 @@ export default function AppliedJob() {
               jobId: app.jobId,
               status: app.status,
               applied_at: app.appliedAt,
+              _error: true,
               jobInfo: {
-                title: 'Đang tải...',
-                company: 'Ẩn danh',
+                title: 'Không thể tải thông tin',
+                company: 'Lỗi kết nối',
                 location: 'Không rõ',
                 image: undefined,
               },

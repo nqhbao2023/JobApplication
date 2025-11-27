@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,13 @@ interface QuickPost {
   id: string;
   title: string;
   description: string;
+  company?: string;
+  location?: string;
+  salary?: string;
+  hourlyRate?: number;
+  workSchedule?: string;
+  type?: string;
+  image?: string; // ✅ NEW: Optional image
   contactInfo?: {
     phone?: string;
     email?: string;
@@ -79,32 +87,35 @@ const QuickPostsPending = () => {
     }
   };
 
-  const handleReject = async (postId: string) => {
-    Alert.alert(
-      'Reject Job',
-      'Are you sure you want to reject this job?',
+  const handleReject = async (postId: string, jobTitle?: string) => {
+    // ✅ Enhanced: Allow admin to input rejection reason
+    Alert.prompt(
+      'Từ chối tin tuyển dụng',
+      'Nhập lý do từ chối (sẽ gửi email cho người đăng):',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Hủy', style: 'cancel' },
         {
-          text: 'Reject',
+          text: 'Từ chối',
           style: 'destructive',
-          onPress: async () => {
+          onPress: async (reason?: string) => {
             try {
               const token = await auth.currentUser?.getIdToken();
               await axios.patch(
                 `${API_URL}/api/quick-posts/${postId}/reject`,
-                { reason: 'Admin rejected' },
+                { reason: reason || 'Nội dung không phù hợp với chính sách của Job4S' },
                 { headers: { Authorization: `Bearer ${token}` } }
               );
-              Alert.alert('Success', 'Job rejected');
+              Alert.alert('Thành công', 'Tin đã bị từ chối và người đăng đã được thông báo');
               fetchPendingPosts();
             } catch (error) {
               console.error('Error rejecting post:', error);
-              Alert.alert('Error', 'Failed to reject job');
+              Alert.alert('Lỗi', 'Không thể từ chối tin');
             }
           },
         },
-      ]
+      ],
+      'plain-text',
+      'Nội dung không phù hợp' // Default reason
     );
   };
 
@@ -113,22 +124,31 @@ const QuickPostsPending = () => {
       (item.spamScore || 0) >= 50 ? '#EF4444' :
       (item.spamScore || 0) >= 30 ? '#F59E0B' : '#10B981';
 
+    // Build detail message for full view
+    const detailMessage = [
+      item.company ? `🏢 ${item.company}` : '',
+      item.location ? `📍 ${item.location}` : '',
+      item.workSchedule ? `⏰ ${item.workSchedule}` : '',
+      item.hourlyRate ? `💰 ${item.hourlyRate.toLocaleString('vi-VN')} VNĐ/giờ` : '',
+      item.type ? `📋 ${item.type}` : '',
+      `\n📝 Mô tả:\n${item.description}`,
+      `\n📞 Liên hệ:`,
+      item.contactInfo?.phone ? `Phone: ${item.contactInfo.phone}` : '',
+      item.contactInfo?.email ? `Email: ${item.contactInfo.email}` : '',
+      item.contactInfo?.zalo ? `Zalo: ${item.contactInfo.zalo}` : '',
+      item.contactInfo?.facebook ? `Facebook: ${item.contactInfo.facebook}` : '',
+      `\n⚠️ Spam Score: ${item.spamScore || 0}`,
+      `\n🌐 IP: ${item.metadata?.ip || 'N/A'}`,
+      item.metadata?.timestamp ? `📅 ${new Date(item.metadata.timestamp).toLocaleString('vi-VN')}` : '',
+    ].filter(Boolean).join('\n');
+
     return (
       <TouchableOpacity
         style={styles.card}
         onPress={() => {
-          // Hiển thị chi tiết đầy đủ trong Alert
           Alert.alert(
             item.title,
-            `📝 Mô tả:\n${item.description}\n\n` +
-            `📞 Liên hệ:\n` +
-            `${item.contactInfo?.phone ? `Phone: ${item.contactInfo.phone}\n` : ''}` +
-            `${item.contactInfo?.email ? `Email: ${item.contactInfo.email}\n` : ''}` +
-            `${item.contactInfo?.zalo ? `Zalo: ${item.contactInfo.zalo}\n` : ''}` +
-            `${item.contactInfo?.facebook ? `Facebook: ${item.contactInfo.facebook}\n` : ''}` +
-            `\n⚠️ Spam Score: ${item.spamScore || 0}\n` +
-            `\n🌐 IP: ${item.metadata?.ip || 'N/A'}\n` +
-            `📅 ${item.metadata?.timestamp ? new Date(item.metadata.timestamp).toLocaleString('vi-VN') : ''}`,
+            detailMessage,
             [
               { text: 'Đóng', style: 'cancel' },
               { 
@@ -139,12 +159,21 @@ const QuickPostsPending = () => {
               { 
                 text: '✗ Reject', 
                 style: 'destructive',
-                onPress: () => handleReject(item.id)
+                onPress: () => handleReject(item.id, item.title)
               },
             ]
           );
         }}
       >
+        {/* Image Preview if available */}
+        {item.image && (
+          <Image 
+            source={{ uri: item.image }} 
+            style={styles.postImage}
+            resizeMode="cover"
+          />
+        )}
+
         {/* Header */}
         <View style={styles.cardHeader}>
           <Text style={styles.title} numberOfLines={2}>
@@ -155,6 +184,30 @@ const QuickPostsPending = () => {
           </View>
         </View>
 
+        {/* Quick Info Row */}
+        <View style={styles.quickInfoRow}>
+          {item.company && (
+            <View style={styles.quickInfoItem}>
+              <Ionicons name="business-outline" size={14} color="#666" />
+              <Text style={styles.quickInfoText} numberOfLines={1}>{item.company}</Text>
+            </View>
+          )}
+          {item.location && (
+            <View style={styles.quickInfoItem}>
+              <Ionicons name="location-outline" size={14} color="#666" />
+              <Text style={styles.quickInfoText} numberOfLines={1}>{item.location}</Text>
+            </View>
+          )}
+          {item.hourlyRate && (
+            <View style={styles.quickInfoItem}>
+              <Ionicons name="cash-outline" size={14} color="#10B981" />
+              <Text style={[styles.quickInfoText, { color: '#10B981', fontWeight: '600' }]}>
+                {item.hourlyRate.toLocaleString('vi-VN')}đ/h
+              </Text>
+            </View>
+          )}
+        </View>
+
         {/* Description */}
         <Text style={styles.description} numberOfLines={3}>
           {item.description}
@@ -162,24 +215,23 @@ const QuickPostsPending = () => {
 
         {/* Contact Info */}
         <View style={styles.contactSection}>
-          <Text style={styles.contactLabel}>Contact:</Text>
-          {item.contactInfo?.phone && (
-            <Text style={styles.contactText}>📞 {item.contactInfo.phone}</Text>
-          )}
-          {item.contactInfo?.email && (
-            <Text style={styles.contactText}>📧 {item.contactInfo.email}</Text>
-          )}
+          <Text style={styles.contactLabel}>Liên hệ:</Text>
+          <View style={styles.contactRow}>
+            {item.contactInfo?.phone && (
+              <Text style={styles.contactText}>📞 {item.contactInfo.phone}</Text>
+            )}
+            {item.contactInfo?.email && (
+              <Text style={styles.contactText}>📧 {item.contactInfo.email}</Text>
+            )}
+          </View>
         </View>
 
         {/* Metadata */}
         {item.metadata && (
           <View style={styles.metadata}>
             <Text style={styles.metaText}>IP: {item.metadata.ip}</Text>
-            <Text style={styles.metaText} numberOfLines={1}>
-              UA: {item.metadata.userAgent.substring(0, 40)}...
-            </Text>
             <Text style={styles.metaText}>
-              {new Date(item.metadata.timestamp).toLocaleString('vi-VN')}
+              {item.metadata.timestamp ? new Date(item.metadata.timestamp).toLocaleString('vi-VN') : ''}
             </Text>
           </View>
         )}
@@ -197,18 +249,18 @@ const QuickPostsPending = () => {
             }}
           >
             <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-            <Text style={styles.buttonText}>Approve</Text>
+            <Text style={styles.buttonText}>Duyệt</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, styles.rejectButton]}
             onPress={(e) => {
               e.stopPropagation();
-              handleReject(item.id);
+              handleReject(item.id, item.title);
             }}
           >
             <Ionicons name="close-circle" size={20} color="#FFF" />
-            <Text style={styles.buttonText}>Reject</Text>
+            <Text style={styles.buttonText}>Từ chối</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -290,6 +342,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+  // ✅ NEW: Image preview for quick posts
+  postImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: '#F3F4F6',
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -302,6 +362,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
     marginRight: 8,
+  },
+  // ✅ NEW: Quick info row
+  quickInfoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 10,
+  },
+  quickInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  quickInfoText: {
+    fontSize: 12,
+    color: '#666',
   },
   spamBadge: {
     paddingHorizontal: 8,
@@ -329,6 +405,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4B5563',
     marginBottom: 4,
+  },
+  // ✅ NEW: Contact row for inline display
+  contactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   contactText: {
     fontSize: 13,

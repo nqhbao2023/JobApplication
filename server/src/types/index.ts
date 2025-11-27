@@ -59,6 +59,10 @@ export interface Job {
   isFeatured?: boolean; // Featured job (trả phí)
   workSchedule?: string; // VD: "Thứ 2,4,6 tối", "Cuối tuần"
   hourlyRate?: number; // Lương theo giờ (cho part-time)
+  
+  // ✅ NEW: Job direction & poster identification
+  jobType?: 'employer_seeking' | 'candidate_seeking'; // employer_seeking: employer tìm candidate, candidate_seeking: candidate tìm employer
+  posterId?: string; // UID của người đăng (employer hoặc candidate)
 }
 
 export interface Application {

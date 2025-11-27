@@ -317,6 +317,126 @@ Email tự động từ Job4S
       html,
     });
   }
+
+  /**
+   * ✅ NEW: Send notification when quick-post is approved
+   */
+  async sendQuickPostApproved(
+    posterEmail: string,
+    jobTitle: string
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #fff; padding: 30px; border: 1px solid #e0e0e0; }
+          .footer { background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 10px 10px; }
+          .success-icon { font-size: 48px; margin-bottom: 10px; }
+          h1 { margin: 0; font-size: 24px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="success-icon">🎉</div>
+            <h1>Tin đã được duyệt!</h1>
+          </div>
+          
+          <div class="content">
+            <p>Chúc mừng! Tin tuyển dụng của bạn đã được admin duyệt và đang hiển thị trên <strong>Job4S</strong>.</p>
+            
+            <p><strong>📋 Tiêu đề:</strong> ${jobTitle}</p>
+            
+            <p>Từ giờ, nhà tuyển dụng có thể xem và liên hệ với bạn. Bạn sẽ nhận email thông báo khi có người quan tâm.</p>
+            
+            <p>Chúc bạn sớm tìm được công việc phù hợp! 🚀</p>
+          </div>
+          
+          <div class="footer">
+            <p>Email tự động từ <strong>Job4S</strong></p>
+            <p>Ứng dụng tìm việc cho sinh viên</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: posterEmail,
+      subject: `[Job4S] ✅ Tin đã được duyệt: ${jobTitle}`,
+      html,
+    });
+  }
+
+  /**
+   * ✅ NEW: Send notification when quick-post is rejected
+   */
+  async sendQuickPostRejected(
+    posterEmail: string,
+    jobTitle: string,
+    reason?: string
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #fff; padding: 30px; border: 1px solid #e0e0e0; }
+          .footer { background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 10px 10px; }
+          .reason-box { background: #FEF2F2; border-left: 4px solid #EF4444; padding: 15px; margin: 15px 0; }
+          h1 { margin: 0; font-size: 24px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>❌ Tin không được duyệt</h1>
+          </div>
+          
+          <div class="content">
+            <p>Rất tiếc, tin tuyển dụng của bạn không được duyệt trên <strong>Job4S</strong>.</p>
+            
+            <p><strong>📋 Tiêu đề:</strong> ${jobTitle}</p>
+            
+            ${reason ? `
+              <div class="reason-box">
+                <strong>📝 Lý do:</strong><br/>
+                ${reason}
+              </div>
+            ` : ''}
+            
+            <p>Bạn có thể đăng lại tin với nội dung phù hợp hơn. Một số lưu ý:</p>
+            <ul>
+              <li>Tiêu đề rõ ràng, mô tả công việc đang tìm</li>
+              <li>Thông tin liên hệ hợp lệ</li>
+              <li>Không chứa nội dung spam hoặc không phù hợp</li>
+            </ul>
+            
+            <p>Nếu có thắc mắc, vui lòng liên hệ support.</p>
+          </div>
+          
+          <div class="footer">
+            <p>Email tự động từ <strong>Job4S</strong></p>
+            <p>Ứng dụng tìm việc cho sinh viên</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to: posterEmail,
+      subject: `[Job4S] ❌ Tin không được duyệt: ${jobTitle}`,
+      html,
+    });
+  }
 }
 
 export default new EmailService();

@@ -136,6 +136,15 @@ export interface Job {
   isFeatured?: boolean;
   workSchedule?: string;
   hourlyRate?: number;
+  
+  // ✅ NEW: Job direction & poster identification
+  jobType?: 'employer_seeking' | 'candidate_seeking'; // employer_seeking: employer tìm candidate, candidate_seeking: candidate tìm employer
+  posterId?: string; // UID của người đăng (employer hoặc candidate)
+  
+  // ✅ NEW: Candidate seeking specific fields
+  cvUrl?: string; // Link CV của candidate (Google Drive, Dropbox, etc.)
+  expectedSalary?: string; // Mức lương mong muốn (text format)
+  availableSchedule?: string[]; // Thời gian có thể làm việc (multiple select)
 }
 
 // Enhanced Company type

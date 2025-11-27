@@ -165,10 +165,11 @@ export const usePendingCounts = () => {
       );
       const jobsSnapshot = await getDocs(jobsQuery);
 
-      // Đếm quick_posts pending
+      // Đếm quick posts pending (trong collection 'jobs' với jobSource='quick-post')
       const quickPostsQuery = query(
-        collection(db, 'quick_posts'),
-        where('status', '==', 'pending')
+        collection(db, 'jobs'),
+        where('jobSource', '==', 'quick-post'),
+        where('status', '==', 'inactive') // Quick posts use 'inactive' status when pending
       );
       const quickPostsSnapshot = await getDocs(quickPostsQuery);
 

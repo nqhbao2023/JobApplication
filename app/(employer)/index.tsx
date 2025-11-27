@@ -573,6 +573,12 @@ export default function EmployerHome() {
               color="#f59e0b"
               onPress={() => router.push("/(employer)/appliedList")}
             />
+            <ActionButton
+              icon="search"
+              label="Tìm ứng viên"
+              color="#8b5cf6"
+              onPress={() => router.push("/(employer)/findCandidates")}
+            />
           </View>
 
           <SectionHeader

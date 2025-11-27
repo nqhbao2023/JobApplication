@@ -133,6 +133,8 @@ export const CompanyCard = memo(({ item }: { item: Company }) => (
         source={{ uri: item.image || PLACEHOLDER_COMPANY_IMG }}
         contentFit="cover"
         transition={200}
+        cachePolicy="memory-disk"
+        recyclingKey={item.$id}
       />
     </View>
     <Text style={styles.companyTitle} numberOfLines={1}>
@@ -196,6 +198,8 @@ export const JobCard = memo(({
       source={{ uri: imageUrl }}
       contentFit="contain"
       transition={200}
+      cachePolicy="memory-disk"
+      recyclingKey={item.$id}
     />
     {/* High Match Badge */}
     {isHighMatch && (

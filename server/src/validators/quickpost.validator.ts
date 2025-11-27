@@ -10,6 +10,7 @@ export const quickPostJobSchema = Joi.object({
   workSchedule: Joi.string().optional(), // VD: "Thứ 2,4,6 tối"
   type: Joi.string().valid('full-time', 'part-time', 'contract', 'internship').default('part-time'),
   category: Joi.string().optional(),
+  image: Joi.string().optional().uri(), // ✅ NEW: Optional image URL
   
   // Contact info (ít nhất 1 trong các field)
   contactInfo: Joi.object({

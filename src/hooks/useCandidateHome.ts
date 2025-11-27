@@ -326,8 +326,23 @@ export const useCandidateHome = () => {
   }, [dataJob, dataCategories]);
 
   const filteredJobs = useMemo(() => {
-    if (selectedFilter === 'all') return dataJob;
-    return dataJob.filter(job => {
+    // ✅ STEP 1: Base filter by jobType - chỉ hiển thị employer_seeking jobs
+    // (jobs mà employer đăng để tìm candidate, KHÔNG phải candidate_seeking - candidate tìm việc)
+    let baseFiltered = dataJob.filter(job => {
+      // Skip candidate_seeking jobs (quick-post từ candidate tìm việc)
+      if (job.jobType === 'candidate_seeking') return false;
+      
+      // Skip jobs mà chính user đăng (không nên thấy job của mình trong feed)
+      if (job.posterId && job.posterId === userId) return false;
+      if (job.employerId && job.employerId === userId) return false;
+      if (job.ownerId && job.ownerId === userId) return false;
+      
+      return true;
+    });
+    
+    // ✅ STEP 2: Apply quick filter
+    if (selectedFilter === 'all') return baseFiltered;
+    return baseFiltered.filter(job => {
       const type = job.type?.toLowerCase() || '';
       const location = job.location?.toLowerCase() || '';
       const title = job.title?.toLowerCase() || '';
@@ -355,17 +370,32 @@ export const useCandidateHome = () => {
       }
       return true;
     });
-  }, [dataJob, selectedFilter]);
+  }, [dataJob, selectedFilter, userId]);
+
+  // ✅ Base filtered jobs (before quick filters) for match scoring
+  const baseFilteredJobs = useMemo(() => {
+    return dataJob.filter(job => {
+      // Skip candidate_seeking jobs (quick-post từ candidate tìm việc)
+      if (job.jobType === 'candidate_seeking') return false;
+      
+      // Skip jobs mà chính user đăng
+      if (job.posterId && job.posterId === userId) return false;
+      if (job.employerId && job.employerId === userId) return false;
+      if (job.ownerId && job.ownerId === userId) return false;
+      
+      return true;
+    });
+  }, [dataJob, userId]);
 
   // ✅ Calculate match scores for jobs using AI matching
   const jobsWithMatchScores = useMemo((): JobWithScore[] => {
     const studentProfile = dataUser?.studentProfile;
     if (!studentProfile) {
       // No profile yet, return jobs without scores
-      return dataJob.map(job => ({ ...job, matchScore: undefined, isHighMatch: false }));
+      return baseFilteredJobs.map(job => ({ ...job, matchScore: undefined, isHighMatch: false }));
     }
 
-    return dataJob.map(job => {
+    return baseFilteredJobs.map(job => {
       const matchScore = calculateJobMatchScore(job, studentProfile, currentLocation);
       const isHighMatch = matchScore.totalScore >= 0.7; // 70% or higher
 

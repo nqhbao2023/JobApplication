@@ -22,7 +22,10 @@ class QuickPostService {
     const now = FieldValue.serverTimestamp();
     const newJob: Partial<Job> = {
       ...jobData,
-      jobSource: 'quick-post',
+      source: 'quick-post', // ✅ Source identifier
+      jobSource: 'quick-post', // Legacy field
+      jobType: 'candidate_seeking', // ✅ NEW: Candidate tìm việc → Employer xem
+      posterId: jobData.posterId || undefined, // ✅ NEW: UID người đăng (undefined nếu anonymous)
       isVerified: false,
       status: 'inactive', // Chờ admin duyệt
       employerId: 'quick-post-user', // Placeholder
@@ -87,6 +90,14 @@ class QuickPostService {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // ✅ Send notification email to poster
+    if (job.contactInfo?.email) {
+      await emailService.sendQuickPostApproved(
+        job.contactInfo.email,
+        job.title || 'Tin tìm việc'
+      ).catch(err => console.error('Failed to send approval email:', err));
+    }
+
     const updated = await jobRef.get();
     return { id: updated.id, ...updated.data() } as Job;
   }
@@ -102,10 +113,20 @@ class QuickPostService {
       throw new Error('Job not found');
     }
 
-    // Có thể lưu reason vào metadata hoặc xóa luôn
+    const job = doc.data() as Job;
+    
+    // ✅ Send rejection notification email to poster BEFORE deleting
+    if (job.contactInfo?.email) {
+      await emailService.sendQuickPostRejected(
+        job.contactInfo.email,
+        job.title || 'Tin tìm việc',
+        reason
+      ).catch(err => console.error('Failed to send rejection email:', err));
+    }
+
+    // Delete the job
     await jobRef.delete();
     
-    // TODO: Send notification to poster nếu có email
     console.log(`Job ${jobId} rejected. Reason: ${reason || 'N/A'}`);
   }
 

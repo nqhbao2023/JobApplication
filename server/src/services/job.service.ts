@@ -170,6 +170,9 @@ export class JobService {
         ownerId: (jobData as any).ownerId || normalizedEmployerId,
         id: jobRef.id,
         status: jobData.status || 'active',
+        source: jobData.source || 'internal', // ✅ Default source for employer jobs
+        jobType: jobData.jobType || 'employer_seeking', // ✅ NEW: Employer tìm candidate
+        posterId: jobData.posterId || normalizedEmployerId, // ✅ NEW: Poster = employer
         applicantCount: 0,
         viewCount: 0,
         createdAt: now,

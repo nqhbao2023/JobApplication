@@ -138,6 +138,7 @@ export default function EmployerLayout() {
       <Tabs.Screen name="applications" options={{ href: null }} />
       <Tabs.Screen name="applicationDetail" options={{ href: null }} />
       <Tabs.Screen name="editJob" options={{ href: null }} />
+      <Tabs.Screen name="findCandidates" options={{ href: null }} />
     </Tabs>
   );
 }

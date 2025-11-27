@@ -174,14 +174,15 @@ const CandidateHome = () => {
           </Animated.View>
 
           <View style={styles.headerIcons}>
+            {/* Nút Đăng tin tìm việc nhanh */}
             <TouchableOpacity
-              style={styles.iconButton}
+              style={[styles.iconButton, { backgroundColor: 'rgba(16, 185, 129, 0.3)' }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(shared)/quickPost');
+                router.push('/(shared)/quickPost?mode=candidate_seeking');
               }}
             >
-              <Ionicons name="add-circle-outline" size={24} color="#FFFFFF" />
+              <Ionicons name="flash" size={22} color="#10b981" />
             </TouchableOpacity>
 
             <TouchableOpacity

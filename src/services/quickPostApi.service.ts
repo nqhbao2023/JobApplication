@@ -1,5 +1,7 @@
 import apiClient from './apiClient';
 
+export type JobTypeMode = 'candidate_seeking' | 'employer_seeking';
+
 export interface QuickPostJobData {
   title: string;
   description: string;
@@ -10,6 +12,13 @@ export interface QuickPostJobData {
   workSchedule?: string;
   type?: 'full-time' | 'part-time' | 'contract' | 'internship';
   category?: string;
+  image?: string; // ✅ Optional image URL for quick post
+  jobType?: JobTypeMode; // ✅ 'candidate_seeking' or 'employer_seeking'
+  posterId?: string; // ✅ UID of poster if logged in
+  // ✅ NEW: Candidate seeking specific fields
+  cvUrl?: string; // Link CV (Google Drive, Dropbox, etc.)
+  expectedSalary?: string; // Mức lương mong muốn
+  availableSchedule?: string[]; // Thời gian có thể làm việc
   contactInfo: {
     phone?: string;
     zalo?: string;
@@ -22,7 +31,13 @@ export interface QuickPostJob extends QuickPostJobData {
   id: string;
   jobSource: 'quick-post';
   isVerified: boolean;
-  status: 'active' | 'inactive' | 'pending';
+  status: 'active' | 'inactive'; // ✅ Fixed: Changed 'pending' to 'inactive' to match backend
+  metadata?: {
+    ip: string;
+    userAgent: string;
+    timestamp: string;
+  };
+  spamScore?: number;
   createdAt: any;
   updatedAt: any;
 }

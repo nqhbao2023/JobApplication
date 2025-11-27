@@ -1,6 +1,6 @@
 # ✅ CHECKLIST DỰ ÁN JOB4S
 
-**Cập nhật**: 20/11/2025
+**Cập nhật**: 27/11/2025
 
 ---
 
@@ -22,16 +22,27 @@
 - [x] AI auto-categorize tích hợp vào crawler
 - [ ] Auto-schedule (cron job 6 tiếng) - TODO
 
-### ✅ **Job System (3/3 Hoàn Thành)**
-- [x] Crawled jobs (viecoi.vn)
-- [x] Quick-Post jobs
-- [x] Featured jobs (employer)
+### ✅ **Job System (4/4 Hoàn Thành)** ← UPDATED
+- [x] Crawled jobs (viecoi.vn) - `jobType: 'employer_seeking'`
+- [x] Quick-Post jobs - `jobType: 'candidate_seeking'`
+- [x] Featured jobs (employer) - `jobType: 'employer_seeking'`
+- [x] **NEW**: Job Type Flow Separation (employer_seeking vs candidate_seeking)
 
 ### ✅ **Student Features (4/4 Hoàn Thành)**
 - [x] Schedule-based filters (lịch học)
 - [x] GPS distance filter
 - [x] CV Builder with templates
 - [x] Job Matching Algorithm
+
+### ✅ **Quick Post Flow (NEW - 27/11/2025) - 100% COMPLETE**
+- [x] `jobType` and `posterId` fields added
+- [x] Candidate feed filters out `candidate_seeking` jobs
+- [x] Candidate feed filters out own posted jobs
+- [x] Employer "Tìm ứng viên" page (`findCandidates.tsx`)
+- [x] Migration script ran: 39 jobs updated
+- [x] CTA differentiation: "Gửi CV" vs "Liên hệ"
+- [x] Email notification on Admin Approve
+- [x] Email notification on Admin Reject (with reason input)
 
 ---
 
@@ -150,12 +161,13 @@
 | Category | Completed | Total | Progress |
 |----------|-----------|-------|----------|
 | **AI Features** | 5 | 5 | 100% ✅ |
-| **Backend API** | 7 | 10 | 70% 🟡 |
-| **Frontend UI** | 4 | 7 | 57% 🟡 |
-| **Documentation** | 5 | 8 | 63% 🟡 |
-| **Testing** | 4 | 9 | 44% 🔴 |
+| **Backend API** | 8 | 10 | 80% 🟢 |
+| **Frontend UI** | 5 | 7 | 71% 🟢 |
+| **Job Flow** | 8 | 8 | 100% ✅ |
+| **Documentation** | 6 | 8 | 75% 🟢 |
+| **Testing** | 5 | 9 | 56% 🟡 |
 | **Deployment** | 0 | 4 | 0% 🔴 |
-| **TỔNG CỘNG** | **85%** | | **🟢 GẦN HOÀN THÀNH** |
+| **TỔNG CỘNG** | **90%** | | **🟢 SẴN SÀNG DEMO** |
 
 ---
 
@@ -194,5 +206,5 @@
 
 ---
 
-**Last Updated**: 20/11/2025  
-**Status**: ✅ 85% Complete - Ready for Demo
+**Last Updated**: 27/11/2025  
+**Status**: ✅ 90% Complete - Ready for Demo

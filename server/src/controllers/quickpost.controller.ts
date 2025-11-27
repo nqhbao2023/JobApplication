@@ -35,9 +35,14 @@ export const createQuickPostJob = async (
 
     const jobData = {
       ...req.body,
-      jobSource: 'quick-post',
+      source: 'quick-post', // ✅ Source identifier
+      jobSource: 'quick-post', // Legacy field
+      // ✅ jobType: Nhận từ frontend hoặc default 'candidate_seeking' (để backward compatible)
+      jobType: req.body.jobType || 'candidate_seeking',
+      // ✅ posterId: Nếu có userId thì lưu (anonymous thì null)
+      posterId: req.body.posterId || null,
       isVerified: false, // Admin phải duyệt
-      status: 'pending',
+      status: 'inactive', // Use 'inactive' for pending quick posts (synced with service)
       metadata, // Lưu metadata để admin review
       spamScore: spamCheck.score, // Lưu spam score
     };

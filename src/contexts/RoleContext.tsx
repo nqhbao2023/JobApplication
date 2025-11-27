@@ -20,23 +20,40 @@ const RoleContext = createContext<RoleContextType>({
 const CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
 const ROLE_CACHE_KEY = 'userRole';
 const ROLE_TIMESTAMP_KEY = 'roleTimestamp';
+const MIN_FETCH_INTERVAL = 3000; // Minimum 3 seconds between API calls
 
 export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRoleOrNull>(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ 1. useRef để giữ giá trị role mới nhất mà không trigger re-render
+  // ✅ useRef để giữ giá trị role mới nhất và tracking state
   const roleRef = useRef<AppRoleOrNull>(null);
+  const lastFetchTime = useRef<number>(0);
+  const isFetching = useRef<boolean>(false);
   
   useEffect(() => {
     roleRef.current = role;
   }, [role]);
 
   /**
-   * Load role with cache invalidation
-   * ✅ 2. Không còn phụ thuộc trực tiếp vào state role trong closure
+   * Load role with cache invalidation and rate limiting
    */
   const loadRole = useCallback(async () => {
+    // ✅ Rate limiting - prevent multiple rapid calls
+    const now = Date.now();
+    if (now - lastFetchTime.current < MIN_FETCH_INTERVAL && isFetching.current) {
+      console.log('ℹ️ Skipping role fetch (rate limited)');
+      return;
+    }
+    
+    // ✅ Prevent concurrent fetches
+    if (isFetching.current) {
+      console.log('ℹ️ Skipping role fetch (already fetching)');
+      return;
+    }
+    
+    isFetching.current = true;
+    lastFetchTime.current = now;
     setLoading(true);
     
     try {
@@ -109,20 +126,38 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
         if (cached) setRole(cached as AppRoleOrNull);
       } catch {}
     } finally {
+      isFetching.current = false;
       setLoading(false);
     }
   }, []); // ✅ Không còn dependency [role]
 
-  // ✅ 3. Initial mount - thêm loadRole vào dependency
+  // ✅ Initial mount - load cached role first, then fetch
   useEffect(() => {
+    // Load cached role immediately for faster UI
+    AsyncStorage.getItem(ROLE_CACHE_KEY).then((cached) => {
+      if (cached) {
+        setRole(cached as AppRoleOrNull);
+      }
+    });
+    // Then fetch fresh role
     loadRole();
   }, [loadRole]);
 
-  // ✅ 3. Listen to auth state changes - thêm loadRole vào dependency
+  // ✅ Listen to auth state changes with debounce
   useEffect(() => {
+    let debounceTimer: NodeJS.Timeout | null = null;
+    
     const unsub = onAuthStateChanged(auth, (user) => {
+      // Clear any pending debounce
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      
       if (user) {
-        loadRole(); // ✅ Luôn gọi phiên bản loadRole mới nhất
+        // Debounce role fetch to avoid multiple rapid calls
+        debounceTimer = setTimeout(() => {
+          loadRole();
+        }, 500);
       } else {
         setRole(null);
         setLoading(false);
@@ -130,8 +165,11 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
     
-    return unsub;
-  }, [loadRole]); // ✅ Thêm dependency
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsub();
+    };
+  }, [loadRole]);
 
   // ✅ 3. Background refresh every 5 minutes - thêm loadRole vào dependency
   useEffect(() => {

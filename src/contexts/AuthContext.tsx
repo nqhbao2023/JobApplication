@@ -55,28 +55,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           password
         );
 
-        // Step 2: Verify with backend
+        // Step 2: Verify with backend (with graceful fallback)
         try {
           const roleData = await authApiService.getCurrentRole();
 
-          if (!roleData.role) {
-            throw new Error('deleted-user');
+          if (roleData.role) {
+            // Step 3: Cache role
+            await AsyncStorage.setItem('userRole', roleData.role);
           }
-
-          // Step 3: Cache role
-          await AsyncStorage.setItem('userRole', roleData.role);
+          
           await refreshRole();
         } catch (apiError: any) {
+          // Network error - still allow login, role will be fetched later
+          if (apiError?.code === 'NETWORK_ERROR' || apiError?.code === 'ERR_NETWORK' || !apiError?.response) {
+            console.warn('⚠️ Backend verification skipped (network issue), proceeding with login');
+            // Don't rollback - user is authenticated with Firebase
+            await refreshRole();
+            return;
+          }
+          
           console.error('❌ Backend verification failed:', apiError);
 
-          // Rollback authentication
-          await firebaseSignOut(auth);
-          await AsyncStorage.removeItem('userRole');
-
-          if (apiError.response?.status === 401) {
+          // Only rollback for non-network errors
+          if (apiError.response?.status === 401 || apiError.response?.status === 404) {
+            await firebaseSignOut(auth);
+            await AsyncStorage.removeItem('userRole');
             throw new Error('session-expired');
           }
-          throw apiError;
+          
+          // For other errors, still allow login
+          console.warn('⚠️ Backend error, but proceeding with login');
+          await refreshRole();
         }
       } catch (err: any) {
         // ✅ Extract error code từ Firebase Auth error

@@ -3,50 +3,85 @@ import Constants from 'expo-constants';
 
 /**
  * Get API base URL based on environment
- * Priority:
- * 1. EXPO_PUBLIC_API_URL environment variable
- * 2. extra.apiUrl from app.json
- * 3. Production URL (if NODE_ENV !== 'development')
- * 4. Platform-specific localhost/emulator URLs
+ * 
+ * Priority order:
+ * 1. EXPO_PUBLIC_API_URL environment variable (explicit override)
+ * 2. extra.apiUrl from app.json (build-time config)
+ * 3. Auto-detect from Expo hostUri (development mode)
+ * 4. Production URL (for release builds)
+ * 5. Platform-specific fallback (emulator/simulator)
  */
+
+// Cache for API URL to avoid re-detection
+let cachedApiUrl: string | null = null;
+
 const getBaseURL = (): string => {
-  // ✅ 1. Ưu tiên biến môi trường Expo (cho phép config linh hoạt)
-  const envUrl =
-    process.env.EXPO_PUBLIC_API_URL ??
-    (Constants.expoConfig?.extra as { apiUrl?: string })?.apiUrl;
+  // Return cached URL if available
+  if (cachedApiUrl) {
+    return cachedApiUrl;
+  }
   
-  if (envUrl) {
-    console.log('🌐 Using API URL from environment:', envUrl);
+  // ✅ 1. Check explicit environment variable first
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim() !== '' && envUrl.startsWith('http')) {
+    console.log('🌐 Using API URL from env:', envUrl);
+    cachedApiUrl = envUrl;
     return envUrl;
   }
 
-  // ✅ 2. Production mode → dùng Render URL
+  // ✅ 2. Check app.json extra config
+  const configUrl = (Constants.expoConfig?.extra as { apiUrl?: string })?.apiUrl;
+  if (configUrl && configUrl.trim() !== '' && configUrl.startsWith('http')) {
+    console.log('🌐 Using API URL from config:', configUrl);
+    cachedApiUrl = configUrl;
+    return configUrl;
+  }
+
+  // ✅ 3. Auto-detect from Expo Metro bundler (most reliable for dev)
+  // This works with both physical devices and emulators
+  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost || Constants.manifest2?.extra?.expoGo?.debuggerHost;
+  
+  if (hostUri) {
+    // Extract IP from hostUri (format: "192.168.1.47:8081" or "192.168.1.47:19000")
+    const host = hostUri.split(':')[0];
+    
+    // Make sure it's a valid IP (not localhost)
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      const autoUrl = `http://${host}:3000`;
+      console.log('🌐 Auto-detected API URL from Metro:', autoUrl);
+      cachedApiUrl = autoUrl;
+      return autoUrl;
+    }
+  }
+
+  // ✅ 4. Production mode - use deployed server
   const isDev = process.env.NODE_ENV === 'development' || __DEV__;
   if (!isDev) {
-    console.log('🌐 Using production API URL');
-    return 'https://job4s-server.onrender.com';
+    const prodUrl = 'https://job4s-server.onrender.com';
+    console.log('🌐 Using production API URL:', prodUrl);
+    cachedApiUrl = prodUrl;
+    return prodUrl;
   }
 
-  // ✅ 3. Development fallback - Tự động dùng Expo debugger host
-  // Expo tự detect IP của máy tính đang chạy Metro bundler
-  const debuggerHost = Constants.expoConfig?.hostUri?.split(':')[0];
-  
-  if (debuggerHost && debuggerHost !== 'localhost' && !debuggerHost.includes('127.0.0.1')) {
-    const autoUrl = `http://${debuggerHost}:3000`;
-    console.log('🌐 Auto-detected API URL from Expo:', autoUrl);
-    return autoUrl;
-  }
-
-  // ✅ 4. Fallback cuối cùng cho emulator/simulator
-  const devUrl = Platform.select({
-    android: 'http://10.0.2.2:3000',      // Android emulator loopback
-    ios: 'http://localhost:3000',         // iOS simulator
+  // ✅ 5. Fallback for emulator/simulator
+  const fallbackUrl = Platform.select({
+    android: 'http://10.0.2.2:3000',      // Android emulator loopback to host machine
+    ios: 'http://localhost:3000',          // iOS simulator shares host network
     default: 'http://localhost:3000',
   }) as string;
 
-  console.log('🌐 Using fallback API URL:', devUrl);
-  return devUrl;
+  console.log('🌐 Using fallback API URL:', fallbackUrl);
+  cachedApiUrl = fallbackUrl;
+  return fallbackUrl;
 };
+
+// Helper to clear cache (useful for testing or reconnection)
+export const clearApiUrlCache = () => {
+  cachedApiUrl = null;
+};
+
+// Helper to get current cached URL
+export const getCurrentApiUrl = () => cachedApiUrl;
 
 export const API_BASE_URL = getBaseURL();
 

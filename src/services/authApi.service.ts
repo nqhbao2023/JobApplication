@@ -59,6 +59,11 @@ export const authApiService = {
       const res = await apiClient.get<AuthResponse>(API_ENDPOINTS.auth.verify);
       return res; // apiClient đã unwrap .data
     } catch (err: any) {
+      // Handle network errors gracefully
+      if (err?.code === 'ECONNABORTED' || !err?.response) {
+        console.warn('⚠️ verifyToken: Network error, will retry later');
+        return null;
+      }
       if (axios.isAxiosError(err) && err.response?.status === 404) {
         console.warn('⚠️ verifyToken: user not found → return null');
         return null;
@@ -76,6 +81,18 @@ export const authApiService = {
       const res = await apiClient.get<RoleResponse>(API_ENDPOINTS.auth.role);
       return res;
     } catch (err: any) {
+      // Handle network/connection errors - return default role without throwing
+      if (err?.code === 'ECONNABORTED' || err?.code === 'ERR_NETWORK' || !err?.response) {
+        console.warn('⚠️ getCurrentRole: Network error, using default role');
+        return { role: 'candidate', isAdmin: false };
+      }
+      
+      // Handle JSON parse errors (SyntaxError from bad response)
+      if (err?.name === 'SyntaxError' || err?.message?.includes('SyntaxError')) {
+        console.warn('⚠️ getCurrentRole: Invalid response format, using default role');
+        return { role: 'candidate', isAdmin: false };
+      }
+      
       if (axios.isAxiosError(err) && err.response?.status === 404) {
         console.warn('⚠️ getCurrentRole: user not found → creating default profile');
 
@@ -87,16 +104,18 @@ export const authApiService = {
               email: firebaseUser.email,
               role: 'candidate',
             })
-            .catch(console.error);
+            .catch(() => {}); // Silent fail on sync
         }
 
         return { role: 'candidate', isAdmin: false };
       }
       
-      // Chỉ log error khi KHÔNG phải 401 (401 là normal khi chưa login hoặc token hết hạn)
-      if (!axios.isAxiosError(err) || err.response?.status !== 401) {
-        console.error('❌ getCurrentRole error:', err.message);
+      // 401 is normal when not logged in - don't log as error
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        return { role: null, isAdmin: false };
       }
+      
+      console.error('❌ getCurrentRole error:', err.message);
       throw err;
     }
   },

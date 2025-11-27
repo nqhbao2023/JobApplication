@@ -26,15 +26,37 @@ app.use(helmet());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// CORS
+// CORS - Cho phép tất cả local development IPs
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:19000',
-  'http://192.168.1.35:19000',
-  'exp://192.168.1.35:8081',
+  'http://localhost:8081',
 ];
+
+// Helper: Kiểm tra origin có phải local/private IP không
+const isLocalOrigin = (origin: string): boolean => {
+  // Cho phép localhost
+  if (origin.includes('localhost') || origin.includes('127.0.0.1')) return true;
+  
+  // Cho phép Expo dev client
+  if (origin.startsWith('exp://')) return true;
+  
+  // Cho phép private IP ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+  const privateIPRegex = /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})/;
+  if (privateIPRegex.test(origin)) return true;
+  
+  return false;
+};
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin?.includes('192.168.1.35')) {
+    // Cho phép requests không có origin (curl, Postman, server-to-server)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    // Cho phép nếu nằm trong whitelist hoặc là local IP
+    if (allowedOrigins.includes(origin) || isLocalOrigin(origin)) {
       callback(null, true);
     } else {
       console.warn('CORS blocked origin:', origin);
@@ -76,7 +98,24 @@ app.use(errorHandler);
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 Accessible at: http://localhost:${PORT} or http://192.168.1.35:${PORT}`);
+  
+  // Hiển thị IP hiện tại của máy
+  const os = require('os');
+  const networkInterfaces = os.networkInterfaces();
+  let localIP = 'unknown';
+  
+  for (const name of Object.keys(networkInterfaces)) {
+    for (const iface of networkInterfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        localIP = iface.address;
+        break;
+      }
+    }
+    if (localIP !== 'unknown') break;
+  }
+  
+  console.log(`🌐 Local: http://localhost:${PORT}`);
+  console.log(`🌐 Network: http://${localIP}:${PORT}`);
 });
 
 export default app;

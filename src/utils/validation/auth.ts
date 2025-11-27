@@ -45,11 +45,14 @@ export const mapAuthError = (code?: string): string => {
     'auth/wrong-password': 'Sai mật khẩu',
     'auth/invalid-credential': 'Email hoặc mật khẩu không đúng',
     'auth/user-disabled': 'Tài khoản đã bị vô hiệu hóa',
-    'auth/too-many-requests': 'Bạn đã nhập sai quá nhiều lần',
-    'auth/network-request-failed': 'Mất kết nối mạng',
+    'auth/too-many-requests': 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau.',
+    'auth/network-request-failed': 'Không thể kết nối. Kiểm tra WiFi/Internet và thử lại.',
     'auth/email-already-in-use': 'Email đã được sử dụng',
     'auth/weak-password': 'Mật khẩu quá yếu',
     'auth/operation-not-allowed': 'Phương thức đăng nhập bị tắt',
+    // Additional network errors
+    'NETWORK_ERROR': 'Không thể kết nối server. Kiểm tra kết nối mạng.',
+    'ERR_NETWORK': 'Lỗi kết nối mạng. Vui lòng thử lại.',
   };
   return errorMap[code || ''] || 'Đã xảy ra lỗi. Vui lòng thử lại';
 };

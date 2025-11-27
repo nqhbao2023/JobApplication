@@ -12,10 +12,12 @@ declare module 'axios' {
 
 const client = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 20000, // Increased timeout for slower connections
   headers: {
     'Content-Type': 'application/json',
   },
+  // Validate response status to handle non-JSON responses
+  validateStatus: (status) => status >= 200 && status < 300,
 });
 
 // Helper to get token with graceful error handling
@@ -61,10 +63,17 @@ client.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - Retry logic & token refresh
-// Note: Error messages are handled by errorHandler utility
+// Response interceptor - Retry logic & better error handling
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Validate that response is JSON if expected
+    const contentType = response.headers['content-type'];
+    if (contentType && !contentType.includes('application/json') && typeof response.data === 'string') {
+      // Non-JSON response - might be HTML error page
+      console.warn('⚠️ Received non-JSON response');
+    }
+    return response;
+  },
   async (error: AxiosError) => {
     const config = error.config as AxiosRequestConfig;
     if (!config) return Promise.reject(error);
@@ -72,15 +81,18 @@ client.interceptors.response.use(
     config.__retryCount = config.__retryCount || 0;
 
     // Network errors - Retry up to 3 times with exponential backoff
-    if (error.code === 'ECONNABORTED' || !error.response) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || !error.response) {
       if (config.__retryCount >= 3) {
-        // Max retries reached - reject with original error
-        // Error message will be handled by errorHandler utility
-        return Promise.reject(error);
+        // Max retries reached - reject with descriptive error
+        const networkError = new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.');
+        (networkError as any).code = 'NETWORK_ERROR';
+        (networkError as any).originalError = error;
+        return Promise.reject(networkError);
       }
 
       config.__retryCount++;
-      const delay = 1000 * config.__retryCount;
+      const delay = 1000 * config.__retryCount; // 1s, 2s, 3s
+      console.log(`🔄 Retry ${config.__retryCount}/3 after ${delay}ms...`);
       await new Promise((r) => setTimeout(r, delay));
       return client(config);
     }

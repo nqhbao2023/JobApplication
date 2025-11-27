@@ -6,30 +6,51 @@
  * 2. Job nearby (<3km)
  * 3. High salary job (>20% market)
  * 4. Reminder for saved jobs
+ * 
+ * NOTE: Push notifications are NOT supported in Expo Go SDK 53+
+ * This service gracefully degrades when running in Expo Go.
+ * For full functionality, use a development build.
  */
 
-import * as Notifications from 'expo-notifications';
-import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { db, auth } from '@/config/firebase';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import Constants from 'expo-constants';
 
-// Configure notification behavior (silently fail in Expo Go)
+// Safe import for notifications - may not be available in Expo Go
+let Notifications: typeof import('expo-notifications') | null = null;
+let SchedulableTriggerInputTypes: any = null;
+let isNotificationsAvailable = false;
+
+// Check if we're in Expo Go (notifications not supported in SDK 53+)
+const isExpoGo = Constants.appOwnership === 'expo' || !Constants.executionEnvironment || Constants.executionEnvironment === 'storeClient';
+
 try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  // Only import if not in Expo Go or if it's a dev build
+  if (!isExpoGo) {
+    Notifications = require('expo-notifications');
+    SchedulableTriggerInputTypes = Notifications?.SchedulableTriggerInputTypes;
+    isNotificationsAvailable = true;
+    
+    // Configure notification behavior
+    Notifications?.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    console.log('✅ Push notifications initialized');
+  } else {
+    console.log('ℹ️ Push notifications disabled in Expo Go (SDK 53+)');
+  }
 } catch (error) {
-  // Expo Go doesn't support notifications - this is expected
-  console.log('⚠️ Notifications not available in Expo Go');
+  // Expected in Expo Go - notifications not supported
+  console.log('ℹ️ Push notifications not available (expected in Expo Go)');
+  isNotificationsAvailable = false;
 }
 
 export interface NotificationData {
@@ -46,27 +67,40 @@ class PushNotificationService {
   private expoPushToken: string | null = null;
 
   /**
+   * Check if notifications are available
+   */
+  isAvailable(): boolean {
+    return isNotificationsAvailable && Notifications !== null;
+  }
+
+  /**
    * Register for push notifications
    */
   async registerForPushNotifications(): Promise<string | null> {
+    // Check if notifications are available first
+    if (!this.isAvailable()) {
+      console.log('ℹ️ Push notifications not available (Expo Go or unsupported)');
+      return null;
+    }
+
     if (!Device.isDevice) {
-      console.log('Push notifications only work on physical devices');
+      console.log('ℹ️ Push notifications only work on physical devices');
       return null;
     }
 
     try {
       // Check existing permissions
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      const { status: existingStatus } = await Notifications!.getPermissionsAsync();
       let finalStatus = existingStatus;
 
       // Request permissions if not granted
       if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
+        const { status } = await Notifications!.requestPermissionsAsync();
         finalStatus = status;
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Permission to receive notifications was denied');
+        console.log('ℹ️ Permission to receive notifications was denied');
         return null;
       }
 
@@ -79,7 +113,7 @@ class PushNotificationService {
         return null;
       }
 
-      const token = await Notifications.getExpoPushTokenAsync({
+      const token = await Notifications!.getExpoPushTokenAsync({
         projectId,
       });
 
@@ -87,9 +121,9 @@ class PushNotificationService {
 
       // Configure Android channel
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
+        await Notifications!.setNotificationChannelAsync('default', {
           name: 'Thông báo việc làm',
-          importance: Notifications.AndroidImportance.MAX,
+          importance: Notifications!.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#4A80F0',
         });
@@ -134,15 +168,25 @@ class PushNotificationService {
     body: string,
     data?: NotificationData
   ) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: { ...(data || {}) } as Record<string, unknown>,
-        sound: true,
-      },
-      trigger: null, // Immediate
-    });
+    if (!this.isAvailable() || !Notifications) {
+      console.log('ℹ️ Notification skipped (not available):', title);
+      return;
+    }
+    
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: { ...(data || {}) } as Record<string, unknown>,
+          sound: true,
+        },
+        trigger: null, // Immediate
+      });
+    } catch (error) {
+      // Silently fail - expected in Expo Go
+      console.log('ℹ️ Local notification failed:', title);
+    }
   }
 
   /**
@@ -154,15 +198,25 @@ class PushNotificationService {
     triggerSeconds: number,
     data?: NotificationData
   ) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: { ...(data || {}) } as Record<string, unknown>,
-        sound: true,
-      },
-      trigger: { type: SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: triggerSeconds },
-    });
+    if (!this.isAvailable() || !Notifications || !SchedulableTriggerInputTypes) {
+      console.log('ℹ️ Scheduled notification skipped (not available):', title);
+      return;
+    }
+    
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: { ...(data || {}) } as Record<string, unknown>,
+          sound: true,
+        },
+        trigger: { type: SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: triggerSeconds },
+      });
+    } catch (error) {
+      // Silently fail - expected in Expo Go
+      console.log('ℹ️ Scheduled notification failed:', title);
+    }
   }
 
   /**
@@ -319,29 +373,54 @@ class PushNotificationService {
    * Cancel all notifications
    */
   async cancelAllNotifications() {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    console.log('✅ All notifications cancelled');
+    if (!this.isAvailable() || !Notifications) {
+      console.log('ℹ️ Cancel notifications skipped (not available)');
+      return;
+    }
+    
+    try {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('✅ All notifications cancelled');
+    } catch (error) {
+      console.log('ℹ️ Failed to cancel notifications');
+    }
   }
 
   /**
    * Get notification permission status
    */
   async getPermissionStatus(): Promise<'granted' | 'denied' | 'undetermined'> {
-    const { status } = await Notifications.getPermissionsAsync();
-    return status;
+    if (!this.isAvailable() || !Notifications) {
+      return 'undetermined';
+    }
+    
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      return status;
+    } catch (error) {
+      return 'undetermined';
+    }
   }
 
   /**
    * Handle notification tap
    */
-  addNotificationResponseListener(callback: (response: Notifications.NotificationResponse) => void) {
+  addNotificationResponseListener(callback: (response: any) => void) {
+    if (!this.isAvailable() || !Notifications) {
+      // Return a dummy subscription that does nothing
+      return { remove: () => {} };
+    }
     return Notifications.addNotificationResponseReceivedListener(callback);
   }
 
   /**
    * Handle notification received while app is open
    */
-  addNotificationReceivedListener(callback: (notification: Notifications.Notification) => void) {
+  addNotificationReceivedListener(callback: (notification: any) => void) {
+    if (!this.isAvailable() || !Notifications) {
+      // Return a dummy subscription that does nothing
+      return { remove: () => {} };
+    }
     return Notifications.addNotificationReceivedListener(callback);
   }
 

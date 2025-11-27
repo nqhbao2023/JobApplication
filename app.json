@@ -67,8 +67,7 @@
       "router": {},
       "eas": {
         "projectId": "50ec8524-cb2d-4a73-b88f-a760f60cc0b6"
-      },
-      "apiUrl": "http://192.168.1.35:3000"
+      }
     },
     "owner": "hoangbao1234"
   }

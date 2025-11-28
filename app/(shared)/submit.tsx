@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -32,6 +33,9 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { applicationApiService } from "@/services/applicationApi.service";
+import CVSelectorModal, { CVSelectionResult } from "@/components/CVSelectorModal";
+import { CVData } from "@/types/cv.types";
+import { LinearGradient } from "expo-linear-gradient";
 const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
 const ALLOW_TYPES = [
   "application/pdf",
@@ -39,12 +43,22 @@ const ALLOW_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
+// ✅ CV Source type
+type CVSource = 'none' | 'library' | 'upload';
+
 export default function Submit() {
   const { jobId, userId, applyDocId } = useLocalSearchParams<{
     jobId: string;
     userId: string;
     applyDocId?: string;
   }>();
+  
+  // ✅ NEW: CV Selection states
+  const [cvSource, setCvSource] = useState<CVSource>('none');
+  const [selectedCV, setSelectedCV] = useState<CVData | null>(null);
+  const [showCVSelector, setShowCVSelector] = useState(false);
+  
+  // Legacy states (for direct upload)
   const [cvFile, setCvFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [progress, setProgress] = useState<number>(0);
   const [employerId, setEmployerId] = useState<string | null>(null);
@@ -63,7 +77,22 @@ export default function Submit() {
     })();
   }, [jobId]);
 
-  /* ------------------ Chọn file ------------------ */
+  /* ------------------ ✅ NEW: Handle CV Selection ------------------ */
+  const handleCVSelection = (result: CVSelectionResult) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    if (result.type === 'none') {
+      setCvSource('none');
+      setSelectedCV(null);
+      setCvFile(null);
+    } else if (result.type === 'existing' || result.type === 'new-upload') {
+      setCvSource('library');
+      setSelectedCV(result.cv || null);
+      setCvFile(null); // Clear direct upload file
+    }
+  };
+
+  /* ------------------ Chọn file (Direct Upload) ------------------ */
   const handlePick = async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
@@ -83,9 +112,41 @@ export default function Submit() {
       }
 
       setCvFile({ uri: f.uri, name: f.name!, type: f.mimeType! });
+      setCvSource('upload');
+      setSelectedCV(null); // Clear library selection
     } catch {
       Alert.alert("Lỗi", "Không thể chọn file, vui lòng thử lại.");
     }
+  };
+
+  /* ------------------ Get CV URL for submission ------------------ */
+  const getCvUrlForSubmission = async (): Promise<string | null> => {
+    // Case 1: Using CV from library
+    if (cvSource === 'library' && selectedCV) {
+      return selectedCV.pdfUrl || selectedCV.fileUrl || null;
+    }
+    
+    // Case 2: Direct file upload
+    if (cvSource === 'upload' && cvFile) {
+      const blob = await (await fetch(cvFile.uri)).blob();
+      const fname = `${userId}_${Date.now()}_${cvFile.name}`;
+      const fileRef = ref(storage, `cvs/${userId}/${fname}`);
+
+      const uploadTask = uploadBytesResumable(fileRef, blob, {
+        contentType: cvFile.type,
+      });
+      uploadRef.current = uploadTask;
+
+      uploadTask.on("state_changed", (snap) => {
+        const percent = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        setProgress(percent);
+      });
+
+      await uploadTask;
+      return await getDownloadURL(fileRef);
+    }
+    
+    return null;
   };
 
   /* ------------------ Nộp file ------------------ */
@@ -103,10 +164,13 @@ export default function Submit() {
       return Alert.alert("Thiếu dữ liệu", "Không xác định được công việc hoặc người dùng.");
     }
 
-    if (!cvFile) {
+    // ✅ NEW: Check if CV is selected (from library OR upload)
+    const hasCV = (cvSource === 'library' && selectedCV) || (cvSource === 'upload' && cvFile);
+    if (!hasCV) {
       isSubmittingRef.current = false;
-      return Alert.alert("Chưa chọn file", "Hãy chọn CV trước khi nộp.");
+      return Alert.alert("Chưa chọn CV", "Hãy chọn CV từ thư viện hoặc tải lên CV mới.");
     }
+    
     if (!applyDocId) {
       isSubmittingRef.current = false;
       return Alert.alert(
@@ -117,24 +181,14 @@ export default function Submit() {
     try {
       setIsUploading(true);
       setProgress(1);
-      console.log("🚀 Bắt đầu upload CV...");
+      console.log("🚀 Bắt đầu nộp CV...");
 
-      const blob = await (await fetch(cvFile.uri)).blob();
-      const fname = `${userId}_${Date.now()}_${cvFile.name}`;
-      const fileRef = ref(storage, `cvs/${userId}/${fname}`);
-
-      const uploadTask = uploadBytesResumable(fileRef, blob, {
-        contentType: cvFile.type,
-      });
-      uploadRef.current = uploadTask;
-
-      uploadTask.on("state_changed", (snap) => {
-        const percent = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-        setProgress(percent);
-      });
-
-      await uploadTask;
-      const url = await getDownloadURL(fileRef);
+      // ✅ NEW: Get CV URL (from library or upload new)
+      const url = await getCvUrlForSubmission();
+      
+      if (!url) {
+        throw new Error("Không thể lấy URL của CV");
+      }
 
       // 🔎 Lấy dữ liệu user + job
       const [userSnap, jobSnap] = await Promise.all([
@@ -168,8 +222,10 @@ export default function Submit() {
         userInfo,
         jobInfo,
         cv_url: url,
-        cv_path: fileRef.fullPath,
+        cv_path: cvSource === 'library' ? `library/${selectedCV?.id}` : uploadRef.current?.snapshot?.ref?.fullPath,
         cv_uploaded: true,
+        cv_source: cvSource, // ✅ NEW: Track CV source
+        cv_id: selectedCV?.id || null, // ✅ NEW: Track CV ID if from library
         status: "pending",
         applied_at: serverTimestamp(),
         updated_at: serverTimestamp(),
@@ -224,6 +280,19 @@ router.replace({
   }, []);
 
   /* ------------------ UI ------------------ */
+  // ✅ Get display text for selected CV
+  const getCVDisplayText = () => {
+    if (cvSource === 'library' && selectedCV) {
+      return `📚 ${selectedCV.personalInfo.fullName || selectedCV.fileName || 'CV từ thư viện'}`;
+    }
+    if (cvSource === 'upload' && cvFile) {
+      return `📎 ${cvFile.name}`;
+    }
+    return 'Chưa chọn CV';
+  };
+
+  const hasSelectedCV = (cvSource === 'library' && selectedCV) || (cvSource === 'upload' && cvFile);
+
   return (
     <View style={styles.container}>
       <View style={styles.top}>
@@ -233,46 +302,142 @@ router.replace({
         <Text style={styles.title}>Hồ sơ & Portfolio</Text>
       </View>
 
-      <View style={styles.body}>
-        <Text style={styles.label}>CV / Resume</Text>
-        <Text style={styles.sub}>Tải lên để ứng tuyển công việc</Text>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.body}>
+          <Text style={styles.label}>CV / Resume</Text>
+          <Text style={styles.sub}>Chọn CV để ứng tuyển công việc</Text>
 
-        <TouchableOpacity style={styles.upload} onPress={handlePick} disabled={isUploading}>
-          <Text style={styles.uploadTxt}>
-            {cvFile ? cvFile.name : "Chọn file PDF / DOCX"}
+          {/* ✅ NEW: Option 1 - Select from Library */}
+          <TouchableOpacity 
+            style={[
+              styles.optionCard, 
+              cvSource === 'library' && selectedCV && styles.optionCardSelected
+            ]}
+            onPress={() => setShowCVSelector(true)}
+            disabled={isUploading}
+          >
+            <View style={[styles.optionIcon, { backgroundColor: '#dcfce7' }]}>
+              <Ionicons name="folder-open" size={24} color="#16a34a" />
+            </View>
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>📚 Chọn từ thư viện CV</Text>
+              <Text style={styles.optionDesc}>
+                {cvSource === 'library' && selectedCV 
+                  ? selectedCV.personalInfo.fullName || selectedCV.fileName
+                  : 'CV đã tạo hoặc đã tải lên trước đó'
+                }
+              </Text>
+            </View>
+            {cvSource === 'library' && selectedCV ? (
+              <Ionicons name="checkmark-circle" size={24} color="#16a34a" />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+            )}
+          </TouchableOpacity>
+
+          {/* ✅ NEW: Option 2 - Direct Upload */}
+          <TouchableOpacity 
+            style={[
+              styles.optionCard, 
+              cvSource === 'upload' && cvFile && styles.optionCardSelected
+            ]}
+            onPress={handlePick}
+            disabled={isUploading}
+          >
+            <View style={[styles.optionIcon, { backgroundColor: '#dbeafe' }]}>
+              <Ionicons name="cloud-upload" size={24} color="#2563eb" />
+            </View>
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>📤 Tải lên CV mới</Text>
+              <Text style={styles.optionDesc}>
+                {cvSource === 'upload' && cvFile 
+                  ? cvFile.name 
+                  : 'Chọn file PDF / DOCX từ thiết bị'
+                }
+              </Text>
+            </View>
+            {cvSource === 'upload' && cvFile ? (
+              <Ionicons name="checkmark-circle" size={24} color="#2563eb" />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+            )}
+          </TouchableOpacity>
+
+          {/* Progress indicator */}
+          {isUploading && (
+            <View style={styles.progressBox}>
+              <ActivityIndicator color="#28A745" />
+              <Text style={styles.progressTxt}>
+                {cvSource === 'library' ? 'Đang nộp...' : `Đang tải: ${progress}%`}
+              </Text>
+            </View>
+          )}
+
+          {/* Selected CV Info */}
+          {hasSelectedCV && !isUploading && (
+            <View style={styles.selectedCVInfo}>
+              <Ionicons name="document-text" size={20} color="#10b981" />
+              <Text style={styles.selectedCVText}>{getCVDisplayText()}</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setCvSource('none');
+                  setSelectedCV(null);
+                  setCvFile(null);
+                }}
+              >
+                <Ionicons name="close-circle" size={22} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.submit, (!hasSelectedCV || isUploading) && { opacity: 0.6 }]}
+            disabled={!hasSelectedCV || isUploading}
+            onPress={handleSubmit}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={hasSelectedCV ? ['#28A745', '#218838'] : ['#9ca3af', '#6b7280']}
+              style={styles.submitGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name={isUploading ? "hourglass" : "paper-plane"} size={20} color="#fff" />
+              <Text style={styles.submitTxt}>
+                {isUploading ? "Đang nộp..." : "Nộp đơn ứng tuyển"}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Info note */}
+          <Text style={styles.noteText}>
+            💡 Tip: Bạn có thể quản lý CV trong mục "Quản lý CV" để tái sử dụng khi ứng tuyển
           </Text>
-        </TouchableOpacity>
+        </View>
+      </ScrollView>
 
-        {isUploading && (
-          <View style={styles.progressBox}>
-            <ActivityIndicator color="#28A745" />
-            <Text style={styles.progressTxt}>Đang tải: {progress}%</Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.submit, (!cvFile || isUploading) && { opacity: 0.6 }]}
-          disabled={!cvFile || isUploading}
-          onPress={handleSubmit}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.submitTxt}>
-            {isUploading ? "Đang nộp..." : "Nộp đơn"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* CV Selector Modal */}
+      <CVSelectorModal
+        visible={showCVSelector}
+        onClose={() => setShowCVSelector(false)}
+        onSelect={handleCVSelection}
+        allowNoCV={false}
+        title="Chọn CV để ứng tuyển"
+      />
     </View>
   );
 }
 
 /* ------------------ Styles ------------------ */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", paddingHorizontal: 20 },
+  container: { flex: 1, backgroundColor: "#fff" },
   top: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 40,
     marginBottom: 20,
+    paddingHorizontal: 20,
   },
   back: {
     width: 40,
@@ -282,10 +447,105 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: { flex: 1, textAlign: "center", fontSize: 20, fontWeight: "700" },
-  body: { marginBottom: 30 },
+  scrollView: {
+    flex: 1,
+  },
+  body: { 
+    marginBottom: 30,
+    paddingHorizontal: 20,
+  },
   label: { fontSize: 18, fontWeight: "700", marginBottom: 5 },
-  sub: { fontSize: 14, color: "#666", marginBottom: 10 },
+  sub: { fontSize: 14, color: "#666", marginBottom: 16 },
 
+  // ✅ NEW: Option cards
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    marginBottom: 12,
+  },
+  optionCardSelected: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#10b981',
+  },
+  optionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionContent: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  optionDesc: {
+    fontSize: 13,
+    color: '#64748b',
+  },
+
+  // Progress
+  progressBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  progressTxt: { color: "#28A745", fontSize: 14, fontWeight: "600" },
+
+  // Selected CV Info
+  selectedCVInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  selectedCVText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#065f46',
+  },
+
+  // Submit button
+  submit: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  submitGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
+  },
+  submitTxt: { fontSize: 17, color: "#fff", fontWeight: "700" },
+
+  // Note text
+  noteText: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 20,
+  },
+
+  // Legacy styles (kept for compatibility)
   upload: {
     borderWidth: 1,
     borderColor: "#ccc",
@@ -295,19 +555,4 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   uploadTxt: { fontSize: 16, color: "#666" },
-  progressBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 10,
-  },
-  progressTxt: { color: "#28A745", fontSize: 14, fontWeight: "600" },
-
-  submit: {
-    backgroundColor: "#28A745",
-    borderRadius: 10,
-    padding: 15,
-    alignItems: "center",
-  },
-  submitTxt: { fontSize: 18, color: "#fff", fontWeight: "700" },
 });

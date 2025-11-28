@@ -5,9 +5,10 @@
  * - Save/Load CV from Firestore
  * - Auto-fill from Student Profile
  * - Export to PDF
+ * - Upload CV file
  */
 
-import { db } from '@/config/firebase';
+import { db, storage } from '@/config/firebase';
 import {
   collection,
   doc,
@@ -21,6 +22,7 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { auth } from '@/config/firebase';
 import { CVData, EducationEntry, SkillCategory, SkillItem } from '@/types/cv.types';
 import { StudentProfile } from '@/types';
@@ -36,6 +38,7 @@ class CVService {
     
     return {
       userId,
+      type: 'template', // ✅ NEW: Default type is template
       personalInfo: {
         fullName: '',
         email: '',
@@ -55,6 +58,106 @@ class CVService {
       updatedAt: now,
       isDefault: false, // Will be set to true only for first CV
     };
+  }
+
+  /**
+   * ✅ NEW: Create CV record from uploaded file
+   */
+  createUploadedCV(userId: string, fileUrl: string, fileName: string): CVData {
+    const now = new Date().toISOString();
+    
+    // Extract name from filename if possible
+    const nameFromFile = fileName
+      .replace(/\.[^/.]+$/, '') // Remove extension
+      .replace(/[_-]/g, ' ')    // Replace underscores/dashes with spaces
+      .replace(/^\d+\s*/, '');  // Remove leading numbers
+    
+    return {
+      userId,
+      type: 'uploaded',
+      pdfUrl: fileUrl,
+      fileUrl: fileUrl,
+      fileName: fileName,
+      personalInfo: {
+        fullName: nameFromFile || 'CV đã tải lên',
+        email: auth.currentUser?.email || '',
+        phone: '',
+        address: '',
+      },
+      objective: '',
+      education: [],
+      skills: [],
+      experience: [],
+      projects: [],
+      activities: [],
+      certifications: [],
+      languages: [],
+      templateId: 'student-basic', // Required field, but not used for uploaded CVs
+      createdAt: now,
+      updatedAt: now,
+      isDefault: false,
+    };
+  }
+
+  /**
+   * ✅ NEW: Upload CV file to Firebase Storage and create CV record
+   */
+  async uploadCVFile(
+    fileUri: string,
+    fileName: string,
+    mimeType: string,
+    onProgress?: (progress: number) => void
+  ): Promise<{ cvId: string; fileUrl: string }> {
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      // Prepare file for upload
+      const blob = await (await fetch(fileUri)).blob();
+      const safeName = `${userId}_${Date.now()}_${fileName}`;
+      const fileRef = ref(storage, `cvs/${userId}/${safeName}`);
+
+      // Upload with progress tracking
+      const uploadTask = uploadBytesResumable(fileRef, blob, {
+        contentType: mimeType,
+      });
+
+      // Track progress
+      if (onProgress) {
+        uploadTask.on('state_changed', (snap) => {
+          const percent = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+          onProgress(percent);
+        });
+      }
+
+      // Wait for upload to complete
+      await uploadTask;
+      const fileUrl = await getDownloadURL(fileRef);
+
+      // Create CV record in Firestore
+      const cvData = this.createUploadedCV(userId, fileUrl, fileName);
+      const cvId = await this.saveCV(cvData);
+
+      return { cvId, fileUrl };
+    } catch (error) {
+      console.error('Error uploading CV file:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ NEW: Update CV with exported PDF URL
+   */
+  async updateCVPdfUrl(cvId: string, pdfUrl: string): Promise<void> {
+    try {
+      await updateDoc(doc(db, this.COLLECTION, cvId), {
+        pdfUrl,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Error updating CV PDF URL:', error);
+      throw error;
+    }
   }
 
   /**

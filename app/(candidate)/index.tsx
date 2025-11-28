@@ -267,6 +267,32 @@ const CandidateHome = () => {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* My Job Posts Quick Access */}
+          <TouchableOpacity
+            style={styles.myPostsWidget}
+            activeOpacity={0.8}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push('/(candidate)/myJobPosts' as any);
+            }}
+          >
+            <LinearGradient
+              colors={['#10b981', '#059669']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.trackerGradient}
+            >
+              <View style={styles.trackerLeft}>
+                <Ionicons name="document-text" size={28} color="#fff" />
+                <View style={styles.trackerTextContainer}>
+                  <Text style={styles.trackerTitle}>Tin đã đăng</Text>
+                  <Text style={styles.trackerSubtitle}>Xem tin tìm việc của bạn</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+
           <SectionHeader 
             title={studentFilters.isActive ? "Kết quả lọc" : "Dành cho bạn"} 
             onPressShowAll={() => router.push('/(shared)/jobList')} 
@@ -430,10 +456,20 @@ const styles = StyleSheet.create({
   trackerWidget: {
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  myPostsWidget: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
   },

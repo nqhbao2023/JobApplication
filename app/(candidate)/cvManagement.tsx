@@ -2,8 +2,9 @@
  * CV Management Screen
  * 
  * Quản lý danh sách CV:
- * - Xem tất cả CV đã tạo
- * - Tạo CV mới
+ * - Xem tất cả CV đã tạo (template + uploaded)
+ * - Tạo CV mới từ template
+ * - Upload CV có sẵn
  * - Chỉnh sửa CV
  * - Xóa CV
  * - Đặt CV mặc định
@@ -23,17 +24,28 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import { CVData } from '@/types/cv.types';
 import { cvService } from '@/services/cv.service';
 import { cvExportService } from '@/services/cvExport.service';
 import { authApiService } from '@/services/authApi.service';
 import * as Haptics from 'expo-haptics';
 import { DrawerMenuButton } from '@/components/candidate/DrawerMenu';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
+const ALLOW_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
 
 const CVManagementScreen = () => {
   const [cvs, setCvs] = useState<CVData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     loadCVs();
@@ -92,6 +104,57 @@ const CVManagementScreen = () => {
       Alert.alert('Lỗi', 'Không thể tạo CV mới');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ NEW: Upload CV file
+  const handleUploadCV = async () => {
+    if (loading || uploading) return;
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ALLOW_TYPES,
+        copyToCacheDirectory: true,
+      });
+
+      if (res.canceled) return;
+
+      const file = res.assets?.[0];
+      if (!file) return;
+
+      // Validate file size
+      if (file.size && file.size > MAX_SIZE) {
+        return Alert.alert('❌ File quá lớn', 'Giới hạn tối đa là 25 MB.');
+      }
+
+      // Validate file type
+      if (!ALLOW_TYPES.includes(file.mimeType ?? '')) {
+        return Alert.alert('⚠️ Định dạng không hợp lệ', 'Chỉ chấp nhận PDF, DOC hoặc DOCX.');
+      }
+
+      setUploading(true);
+      setUploadProgress(0);
+
+      // Upload file and create CV record
+      const { cvId, fileUrl } = await cvService.uploadCVFile(
+        file.uri,
+        file.name!,
+        file.mimeType!,
+        setUploadProgress
+      );
+
+      // Reload CVs
+      await loadCVs();
+
+      Alert.alert('✅ Thành công', 'CV đã được tải lên và lưu vào thư viện. Bạn có thể sử dụng CV này khi ứng tuyển.');
+    } catch (error: any) {
+      console.error('Upload CV error:', error);
+      Alert.alert('Lỗi', error.message || 'Không thể tải lên CV');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -214,40 +277,79 @@ const CVManagementScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Create New CV Button */}
-        <TouchableOpacity
-          style={[styles.createButton, loading && styles.createButtonDisabled]}
-          onPress={handleCreateCV}
-          activeOpacity={0.8}
-          disabled={loading}
-        >
-          <View style={styles.createIconContainer}>
-            {loading ? (
-              <ActivityIndicator size="small" color="#4A80F0" />
-            ) : (
-              <Ionicons name="add-circle-outline" size={32} color="#4A80F0" />
-            )}
-          </View>
-          <View style={styles.createTextContainer}>
-            <Text style={styles.createTitle}>
-              {loading ? 'Đang tạo CV...' : 'Tạo CV mới'}
-            </Text>
-            <Text style={styles.createSubtitle}>
-              Tự động điền từ hồ sơ sinh viên
-            </Text>
-          </View>
-          {!loading && (
-            <Ionicons name="chevron-forward" size={24} color="#94a3b8" />
-          )}
-        </TouchableOpacity>
+        {/* ✅ IMPROVED: Action Buttons Row */}
+        <View style={styles.actionButtonsContainer}>
+          <Text style={styles.sectionTitle}>Thêm CV mới</Text>
+          <View style={styles.actionButtonsRow}>
+            {/* Create New CV from Template */}
+            <TouchableOpacity
+              style={[styles.createActionCard, (loading || uploading) && styles.cardDisabled]}
+              onPress={handleCreateCV}
+              activeOpacity={0.8}
+              disabled={loading || uploading}
+            >
+              <LinearGradient
+                colors={['#10b981', '#059669']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.actionCardGradient}
+              >
+                <View style={styles.actionCardIcon}>
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="sparkles" size={24} color="#fff" />
+                  )}
+                </View>
+                <View style={styles.actionCardContent}>
+                  <Text style={styles.actionCardTitle}>Tạo từ template</Text>
+                  <Text style={styles.actionCardSubtitle}>Tự động điền từ profile</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
+              </LinearGradient>
+            </TouchableOpacity>
 
-        {/* CV List */}
+            {/* Upload Existing CV */}
+            <TouchableOpacity
+              style={[styles.uploadActionCard, (loading || uploading) && styles.cardDisabled]}
+              onPress={handleUploadCV}
+              activeOpacity={0.8}
+              disabled={loading || uploading}
+            >
+              <LinearGradient
+                colors={['#3b82f6', '#2563eb']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.actionCardGradient}
+              >
+                <View style={styles.actionCardIcon}>
+                  {uploading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="cloud-upload" size={24} color="#fff" />
+                  )}
+                </View>
+                <View style={styles.actionCardContent}>
+                  <Text style={styles.actionCardTitle}>
+                    {uploading ? `Đang tải ${uploadProgress}%` : 'Upload CV'}
+                  </Text>
+                  <Text style={styles.actionCardSubtitle}>PDF, DOC, DOCX</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* CV List Section */}
+        <View style={styles.cvListSection}>
+          <Text style={styles.sectionTitle}>CV của bạn ({cvs.length})</Text>
         {cvs.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="document-text-outline" size={64} color="#cbd5e1" />
             <Text style={styles.emptyTitle}>Chưa có CV</Text>
             <Text style={styles.emptySubtitle}>
-              Tạo CV đầu tiên để bắt đầu ứng tuyển
+              Tạo CV từ template hoặc tải lên CV có sẵn
             </Text>
           </View>
         ) : (
@@ -256,11 +358,18 @@ const CVManagementScreen = () => {
               {/* CV Header */}
               <TouchableOpacity
                 style={styles.cvHeader}
-                onPress={() => handleEditCV(cv.id!)}
-                activeOpacity={0.8}
+                onPress={() => cv.type !== 'uploaded' && handleEditCV(cv.id!)}
+                activeOpacity={cv.type === 'uploaded' ? 1 : 0.8}
               >
-                <View style={styles.cvIconContainer}>
-                  <Ionicons name="document-text" size={28} color="#4A80F0" />
+                <View style={[
+                  styles.cvIconContainer, 
+                  cv.type === 'uploaded' && { backgroundColor: '#dbeafe' }
+                ]}>
+                  <Ionicons 
+                    name={cv.type === 'uploaded' ? 'document-attach' : 'document-text'} 
+                    size={28} 
+                    color={cv.type === 'uploaded' ? '#3b82f6' : '#4A80F0'} 
+                  />
                   {cv.isDefault && (
                     <View style={styles.defaultBadge}>
                       <Ionicons name="star" size={12} color="#fff" />
@@ -271,7 +380,10 @@ const CVManagementScreen = () => {
                 <View style={styles.cvInfo}>
                   <View style={styles.cvTitleRow}>
                     <Text style={styles.cvTitle} numberOfLines={1}>
-                      {cv.personalInfo.fullName || 'CV chưa có tên'}
+                      {cv.type === 'uploaded' 
+                        ? (cv.fileName || 'CV đã tải lên')
+                        : (cv.personalInfo.fullName || 'CV chưa có tên')
+                      }
                     </Text>
                     {cv.isDefault && (
                       <View style={styles.defaultTag}>
@@ -280,11 +392,25 @@ const CVManagementScreen = () => {
                     )}
                   </View>
                   
-                  <Text style={styles.cvTemplate}>
-                    {cv.templateId === 'student-basic' && 'Template: Cơ bản'}
-                    {cv.templateId === 'student-modern' && 'Template: Hiện đại'}
-                    {cv.templateId === 'student-creative' && 'Template: Sáng tạo'}
-                  </Text>
+                  {/* ✅ NEW: CV Type Badge */}
+                  <View style={[
+                    styles.cvTypeBadge,
+                    cv.type === 'uploaded' 
+                      ? { backgroundColor: '#dbeafe' }
+                      : { backgroundColor: '#dcfce7' }
+                  ]}>
+                    <Ionicons 
+                      name={cv.type === 'uploaded' ? 'cloud-upload' : 'create'} 
+                      size={10} 
+                      color={cv.type === 'uploaded' ? '#3b82f6' : '#10b981'} 
+                    />
+                    <Text style={[
+                      styles.cvTypeBadgeText,
+                      { color: cv.type === 'uploaded' ? '#3b82f6' : '#10b981' }
+                    ]}>
+                      {cv.type === 'uploaded' ? 'CV tải lên' : 'CV từ template'}
+                    </Text>
+                  </View>
                   
                   <Text style={styles.cvDate}>
                     Cập nhật: {formatDate(cv.updatedAt)}
@@ -294,49 +420,72 @@ const CVManagementScreen = () => {
 
               {/* CV Actions */}
               <View style={styles.cvActions}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleEditCV(cv.id!)}
-                >
-                  <Ionicons name="create-outline" size={20} color="#4A80F0" />
-                  <Text style={styles.actionText}>Sửa</Text>
-                </TouchableOpacity>
+                {/* Edit - only for template CVs */}
+                {cv.type !== 'uploaded' && (
+                  <TouchableOpacity
+                    style={styles.cvActionButton}
+                    onPress={() => handleEditCV(cv.id!)}
+                  >
+                    <Ionicons name="create-outline" size={18} color="#4A80F0" />
+                    <Text style={styles.actionText}>Sửa</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* View - for uploaded CVs */}
+                {cv.type === 'uploaded' && cv.pdfUrl && (
+                  <TouchableOpacity
+                    style={styles.cvActionButton}
+                    onPress={() => {
+                      // Open PDF in browser
+                      import('expo-linking').then(({ openURL }) => {
+                        openURL(cv.pdfUrl!);
+                      });
+                    }}
+                  >
+                    <Ionicons name="eye-outline" size={18} color="#4A80F0" />
+                    <Text style={styles.actionText}>Xem</Text>
+                  </TouchableOpacity>
+                )}
 
                 {!cv.isDefault && (
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={styles.cvActionButton}
                     onPress={() => handleSetDefault(cv.id!)}
                   >
-                    <Ionicons name="star-outline" size={20} color="#f59e0b" />
+                    <Ionicons name="star-outline" size={18} color="#f59e0b" />
                     <Text style={[styles.actionText, { color: '#f59e0b' }]}>
                       Mặc định
                     </Text>
                   </TouchableOpacity>
                 )}
 
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleDuplicateCV(cv.id!)}
-                >
-                  <Ionicons name="copy-outline" size={20} color="#64748b" />
-                  <Text style={styles.actionText}>Sao chép</Text>
-                </TouchableOpacity>
+                {cv.type !== 'uploaded' && (
+                  <TouchableOpacity
+                    style={styles.cvActionButton}
+                    onPress={() => handleDuplicateCV(cv.id!)}
+                  >
+                    <Ionicons name="copy-outline" size={18} color="#64748b" />
+                    <Text style={styles.actionText}>Sao chép</Text>
+                  </TouchableOpacity>
+                )}
+
+                {cv.type !== 'uploaded' && (
+                  <TouchableOpacity
+                    style={styles.cvActionButton}
+                    onPress={() => handleExportCV(cv)}
+                  >
+                    <Ionicons name="download-outline" size={18} color="#10b981" />
+                    <Text style={[styles.actionText, { color: '#10b981' }]}>
+                      Xuất
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleExportCV(cv)}
-                >
-                  <Ionicons name="download-outline" size={20} color="#10b981" />
-                  <Text style={[styles.actionText, { color: '#10b981' }]}>
-                    Xuất
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.actionButton}
+                  style={styles.cvActionButton}
                   onPress={() => handleDeleteCV(cv.id!, cv.isDefault || false)}
                 >
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
                   <Text style={[styles.actionText, { color: '#ef4444' }]}>
                     Xóa
                   </Text>
@@ -345,6 +494,7 @@ const CVManagementScreen = () => {
             </View>
           ))
         )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -396,14 +546,13 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   createButton: {
-    flexDirection: 'row',
+    flex: 1,
     alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
     borderWidth: 2,
-    borderColor: '#4A80F0',
+    borderColor: '#10b981',
     borderStyle: 'dashed',
   },
   createButtonDisabled: {
@@ -497,14 +646,17 @@ const styles = StyleSheet.create({
   cvDate: {
     fontSize: 12,
     color: '#94a3b8',
+    marginTop: 2,
   },
   cvActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
   },
+  // Old actionButton style (kept for compatibility)
   actionButton: {
     flex: 1,
     flexDirection: 'row',
@@ -513,8 +665,18 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 8,
   },
+  // ✅ NEW: CV Action Button (for CV card actions)
+  cvActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minWidth: 65,
+  },
   actionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#64748b',
   },
@@ -542,6 +704,119 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
+    color: '#64748b',
+  },
+  // ✅ NEW: Section styles
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  actionButtonsContainer: {
+    marginBottom: 8,
+  },
+  // ✅ NEW: Action Buttons Row styles
+  actionButtonsRow: {
+    flexDirection: 'column',
+    gap: 10,
+  },
+  cardDisabled: {
+    opacity: 0.6,
+  },
+  // ✅ NEW: Action Card styles
+  createActionCard: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  uploadActionCard: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  actionCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  actionCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionCardContent: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  actionCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  actionCardSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  // ✅ CV List Section
+  cvListSection: {
+    marginTop: 16,
+  },
+  // Legacy styles (kept for compatibility)
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
+  actionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  actionButtonTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e293b',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  actionButtonSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  uploadButton: {
+    borderColor: '#3b82f6',
+  },
+  // ✅ CV Type Badge
+  cvTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+    marginTop: 6,
+  },
+  cvTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
     color: '#64748b',
   },
 });

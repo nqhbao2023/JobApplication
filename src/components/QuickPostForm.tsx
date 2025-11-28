@@ -17,6 +17,9 @@ import { router } from 'expo-router';
 import { quickPostService, QuickPostJobData } from '@/services/quickPostApi.service';
 import { auth } from '@/config/firebase';
 import { LinearGradient } from 'expo-linear-gradient';
+import CVSelectorModal, { CVSelectionResult } from '@/components/CVSelectorModal';
+import { CVData } from '@/types/cv.types';
+import { useCandidateHomeStore } from '@/stores/candidateHomeStore';
 
 export type QuickPostMode = 'candidate_seeking' | 'employer_seeking';
 
@@ -67,12 +70,18 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
   
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string>('');
-  const [cvUrl, setCvUrl] = useState<string>(''); // ✅ NEW: CV URL
   const [showImageInput, setShowImageInput] = useState(false);
-  const [showCvInput, setShowCvInput] = useState(false);
   const [selectedSchedules, setSelectedSchedules] = useState<string[]>([]); // ✅ Multiple select
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [expectedSalary, setExpectedSalary] = useState<string>(''); // ✅ NEW
+  
+  // ✅ NEW: CV Selection states (replacing manual cvUrl input)
+  const [showCVSelector, setShowCVSelector] = useState(false);
+  const [selectedCV, setSelectedCV] = useState<CVData | null>(null);
+  const [cvUrl, setCvUrl] = useState<string>(''); // Keep for final URL
+  const [cvSource, setCvSource] = useState<'none' | 'library' | 'manual'>('none');
+  const [manualCvUrl, setManualCvUrl] = useState<string>(''); // For backward compat
+  const [showManualCvInput, setShowManualCvInput] = useState(false);
   
   const [formData, setFormData] = useState<QuickPostJobData>({
     title: '',
@@ -113,6 +122,31 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
   const isValidUrl = (url: string): boolean => {
     if (!url) return true;
     return url.startsWith('https://') || url.startsWith('http://');
+  };
+
+  // ✅ NEW: Handle CV Selection from modal
+  const handleCVSelection = (result: CVSelectionResult) => {
+    if (result.type === 'none') {
+      setCvSource('none');
+      setSelectedCV(null);
+      setCvUrl('');
+    } else if (result.type === 'existing' || result.type === 'new-upload') {
+      setCvSource('library');
+      setSelectedCV(result.cv || null);
+      // Use pdfUrl or fileUrl from selected CV
+      setCvUrl(result.fileUrl || result.cv?.pdfUrl || result.cv?.fileUrl || '');
+    }
+  };
+
+  // ✅ Get display text for selected CV
+  const getCVDisplayText = () => {
+    if (cvSource === 'library' && selectedCV) {
+      return selectedCV.personalInfo.fullName || selectedCV.fileName || 'CV từ thư viện';
+    }
+    if (cvSource === 'manual' && manualCvUrl) {
+      return 'Link CV đã nhập';
+    }
+    return null;
   };
 
   const handleSubmit = async () => {
@@ -175,12 +209,26 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
 
       await quickPostService.createQuickPost(finalFormData);
       
+      // ✅ Invalidate home cache to force reload
+      useCandidateHomeStore.getState().setLastFetchedAt(null);
+      
       const successMessage = isCandidateSeeking
         ? 'Hồ sơ tìm việc của bạn đã được gửi! Admin sẽ duyệt trong vòng 24h. Sau khi duyệt, nhà tuyển dụng có thể xem và liên hệ với bạn.'
         : 'Tin tuyển dụng của bạn đã được gửi. Admin sẽ duyệt trong vòng 24h.';
       
       Alert.alert('🎉 Thành công!', successMessage, [
-        { text: 'OK', onPress: () => router.back() },
+        { 
+          text: 'Xem tin đã đăng', 
+          onPress: () => {
+            if (isCandidateSeeking) {
+              // Navigate to My Job Posts for candidates
+              router.replace('/(candidate)/myJobPosts' as any);
+            } else {
+              router.back();
+            }
+          }
+        },
+        { text: 'Quay lại', onPress: () => router.back() },
       ]);
     } catch (error: any) {
       Alert.alert('Lỗi', error.message || 'Không thể tạo tin');
@@ -296,40 +344,111 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
           {isCandidateSeeking && (
             <View style={styles.formGroup}>
               <Text style={styles.label}>📄 CV của bạn (khuyến khích)</Text>
-              {!showCvInput ? (
-                <TouchableOpacity 
-                  style={[styles.imagePicker, styles.cvPicker]} 
-                  onPress={() => setShowCvInput(true)}
-                >
-                  <Ionicons name="document-text-outline" size={40} color="#3b82f6" />
-                  <Text style={styles.imagePickerText}>Thêm link CV</Text>
-                  <Text style={styles.imagePickerHint}>Google Drive, Dropbox, hoặc link CV online</Text>
-                </TouchableOpacity>
-              ) : (
-                <View>
+              
+              {/* ✅ NEW: Option 1 - Select from Library */}
+              <TouchableOpacity 
+                style={[
+                  styles.cvOptionCard, 
+                  cvSource === 'library' && selectedCV && styles.cvOptionCardSelected
+                ]}
+                onPress={() => setShowCVSelector(true)}
+              >
+                <View style={[styles.cvOptionIcon, { backgroundColor: '#dcfce7' }]}>
+                  <Ionicons name="folder-open" size={24} color="#16a34a" />
+                </View>
+                <View style={styles.cvOptionContent}>
+                  <Text style={styles.cvOptionTitle}>📚 Chọn từ thư viện CV</Text>
+                  <Text style={styles.cvOptionDesc}>
+                    {cvSource === 'library' && selectedCV 
+                      ? getCVDisplayText() 
+                      : 'CV đã tạo hoặc đã tải lên trước đó'
+                    }
+                  </Text>
+                </View>
+                {cvSource === 'library' && selectedCV ? (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setCvSource('none');
+                      setSelectedCV(null);
+                      setCvUrl('');
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  </TouchableOpacity>
+                ) : (
+                  <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                )}
+              </TouchableOpacity>
+
+              {/* ✅ Option 2 - Manual link input (fallback) */}
+              <TouchableOpacity 
+                style={[
+                  styles.cvOptionCard, 
+                  cvSource === 'manual' && manualCvUrl && styles.cvOptionCardSelected
+                ]}
+                onPress={() => setShowManualCvInput(!showManualCvInput)}
+              >
+                <View style={[styles.cvOptionIcon, { backgroundColor: '#dbeafe' }]}>
+                  <Ionicons name="link" size={24} color="#2563eb" />
+                </View>
+                <View style={styles.cvOptionContent}>
+                  <Text style={styles.cvOptionTitle}>🔗 Nhập link CV</Text>
+                  <Text style={styles.cvOptionDesc}>
+                    {cvSource === 'manual' && manualCvUrl 
+                      ? 'Link CV đã nhập' 
+                      : 'Google Drive, Dropbox...'
+                    }
+                  </Text>
+                </View>
+                {cvSource === 'manual' && manualCvUrl ? (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setCvSource('none');
+                      setManualCvUrl('');
+                      setCvUrl('');
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  </TouchableOpacity>
+                ) : (
+                  <Ionicons name={showManualCvInput ? "chevron-up" : "chevron-down"} size={20} color="#94a3b8" />
+                )}
+              </TouchableOpacity>
+
+              {/* Manual CV URL input */}
+              {showManualCvInput && (
+                <View style={styles.manualCvInput}>
                   <TextInput
                     style={styles.input}
                     placeholder="https://drive.google.com/file/d/..."
-                    value={cvUrl}
-                    onChangeText={setCvUrl}
+                    value={manualCvUrl}
+                    onChangeText={(text) => {
+                      setManualCvUrl(text);
+                      if (text) {
+                        setCvSource('manual');
+                        setCvUrl(text);
+                        setSelectedCV(null);
+                      } else {
+                        setCvSource('none');
+                        setCvUrl('');
+                      }
+                    }}
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
                   <Text style={styles.cvHint}>
                     💡 Tip: Upload CV lên Google Drive → Click phải → Lấy đường liên kết → Dán vào đây
                   </Text>
-                  {cvUrl && (
-                    <TouchableOpacity 
-                      style={styles.cvPreviewButton}
-                      onPress={() => Alert.alert('CV đã thêm', `Link: ${cvUrl}`)}
-                    >
-                      <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-                      <Text style={styles.cvPreviewText}>CV đã được thêm</Text>
-                      <TouchableOpacity onPress={() => { setCvUrl(''); setShowCvInput(false); }}>
-                        <Ionicons name="close" size={20} color="#ef4444" />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  )}
+                </View>
+              )}
+
+              {/* Selected CV indicator */}
+              {(cvSource === 'library' && selectedCV) && (
+                <View style={styles.selectedCVBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color="#10b981" />
+                  <Text style={styles.selectedCVText}>
+                    ✅ {getCVDisplayText()}
+                  </Text>
                 </View>
               )}
             </View>
@@ -568,6 +687,15 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ✅ NEW: CV Selector Modal */}
+      <CVSelectorModal
+        visible={showCVSelector}
+        onClose={() => setShowCVSelector(false)}
+        onSelect={handleCVSelection}
+        allowNoCV={true}
+        title="Chọn CV để đính kèm"
+      />
     </SafeAreaView>
   );
 };
@@ -847,6 +975,61 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // ✅ NEW: CV Option Cards
+  cvOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+  },
+  cvOptionCardSelected: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#10b981',
+  },
+  cvOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cvOptionContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  cvOptionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 2,
+  },
+  cvOptionDesc: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  manualCvInput: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  selectedCVBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  selectedCVText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#065f46',
   },
 });
 

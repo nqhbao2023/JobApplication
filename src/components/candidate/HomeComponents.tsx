@@ -190,7 +190,14 @@ export const JobCard = memo(({
     activeOpacity={0.7}
     onPress={() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      router.push({ pathname: '/jobDescription', params: { jobId: item.$id } });
+      // ✅ Navigate to different screens based on job type
+      if (item.jobType === 'candidate_seeking') {
+        // Tin tìm việc của candidate → hiển thị profile ứng viên
+        router.push({ pathname: '/(shared)/candidateProfile', params: { jobId: item.$id } });
+      } else {
+        // Tin tuyển dụng của employer → hiển thị job description
+        router.push({ pathname: '/jobDescription', params: { jobId: item.$id } });
+      }
     }}
   >
     <Image

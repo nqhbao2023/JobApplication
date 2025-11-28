@@ -329,8 +329,14 @@ export const useCandidateHome = () => {
     // ✅ STEP 1: Base filter by jobType - chỉ hiển thị employer_seeking jobs
     // (jobs mà employer đăng để tìm candidate, KHÔNG phải candidate_seeking - candidate tìm việc)
     let baseFiltered = dataJob.filter(job => {
+      // ✅ FIX: Skip inactive/pending jobs (chưa được duyệt)
+      if (job.status !== 'active') return false;
+      
       // Skip candidate_seeking jobs (quick-post từ candidate tìm việc)
       if (job.jobType === 'candidate_seeking') return false;
+      
+      // Skip quick-post jobs from candidates (backup check)
+      if (job.jobSource === 'quick-post' && job.posterId) return false;
       
       // Skip jobs mà chính user đăng (không nên thấy job của mình trong feed)
       if (job.posterId && job.posterId === userId) return false;
@@ -375,8 +381,14 @@ export const useCandidateHome = () => {
   // ✅ Base filtered jobs (before quick filters) for match scoring
   const baseFilteredJobs = useMemo(() => {
     return dataJob.filter(job => {
+      // ✅ FIX: Skip inactive/pending jobs (chưa được duyệt)
+      if (job.status !== 'active') return false;
+      
       // Skip candidate_seeking jobs (quick-post từ candidate tìm việc)
       if (job.jobType === 'candidate_seeking') return false;
+      
+      // Skip quick-post jobs from candidates (backup check)
+      if (job.jobSource === 'quick-post' && job.posterId) return false;
       
       // Skip jobs mà chính user đăng
       if (job.posterId && job.posterId === userId) return false;

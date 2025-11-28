@@ -148,6 +148,15 @@ export default function CandidateLayout() {
           headerShown: false,
         }}
       />
+      <Tabs.Screen
+      name="myJobPosts"
+      options={{
+        href: null,
+        title: "quick",
+        headerTitle: "Theo doi ung tuyen",
+        headerShown: false,
+      }}
+      ></Tabs.Screen>
     </Tabs>
   );
 }

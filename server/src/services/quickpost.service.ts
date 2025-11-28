@@ -24,8 +24,9 @@ class QuickPostService {
       ...jobData,
       source: 'quick-post', // ✅ Source identifier
       jobSource: 'quick-post', // Legacy field
-      jobType: 'candidate_seeking', // ✅ NEW: Candidate tìm việc → Employer xem
-      posterId: jobData.posterId || undefined, // ✅ NEW: UID người đăng (undefined nếu anonymous)
+      // ✅ FIX: Use jobType from frontend, default to 'candidate_seeking' if not provided
+      jobType: jobData.jobType || 'candidate_seeking',
+      posterId: jobData.posterId || undefined, // ✅ UID người đăng (undefined nếu anonymous)
       isVerified: false,
       status: 'inactive', // Chờ admin duyệt
       employerId: 'quick-post-user', // Placeholder

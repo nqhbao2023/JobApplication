@@ -54,11 +54,19 @@ function mapDocToJob(doc: FirebaseFirestore.DocumentSnapshot): Job {
     expiresAt: data.expiresAt,
     // ✅ NEW PLAN: External job fields
     source: data.source,
+    jobSource: data.jobSource, // ✅ ADD: quick-post source
+    jobType: data.jobType, // ✅ ADD: candidate_seeking or employer_seeking
+    posterId: data.posterId, // ✅ ADD: UID of poster
     external_url: data.external_url,
     is_verified: data.is_verified,
+    isVerified: data.isVerified,
     contactInfo: data.contactInfo,
     workSchedule: data.workSchedule,
     hourlyRate: data.hourlyRate,
+    // ✅ Candidate seeking fields
+    cvUrl: data.cvUrl,
+    expectedSalary: data.expectedSalary,
+    availableSchedule: data.availableSchedule,
     // ✅ Viecoi aggregator fields
     company_name: data.company_name,
     company_logo: data.company_logo,
@@ -73,6 +81,7 @@ export class JobService {
     type?: string;
     limit?: number;
     offset?: number;
+    includeAllJobTypes?: boolean; // ✅ NEW: Set true to include candidate_seeking jobs
   }): Promise<{ jobs: Job[]; total: number }> {
     try {
       let query = db.collection(JOBS_COLLECTION);
@@ -97,7 +106,13 @@ export class JobService {
       const snapshot = await query.get();
       
       // Map documents to Job type
-      const jobs = snapshot.docs.map(mapDocToJob);
+      let jobs = snapshot.docs.map(mapDocToJob);
+
+      // ✅ NEW: Filter out candidate_seeking jobs by default (tin tìm việc của candidate)
+      // These should only be visible to employers in "Tìm ứng viên" page
+      if (!filters?.includeAllJobTypes) {
+        jobs = jobs.filter(job => job.jobType !== 'candidate_seeking');
+      }
 
       // Sort by created_at descending
       jobs.sort((a, b) => {

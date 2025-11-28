@@ -9,6 +9,20 @@ export interface CVData {
   id?: string;
   userId?: string;
   
+  // ✅ NEW: CV Type - distinguishes template-created vs uploaded CVs
+  type?: 'template' | 'uploaded';
+  
+  // ✅ NEW: PDF URL - stores the PDF file URL for BOTH types
+  // For template CVs: URL of exported PDF
+  // For uploaded CVs: URL of uploaded file
+  pdfUrl?: string;
+  
+  // ✅ NEW: Original file URL (for uploaded CVs)
+  fileUrl?: string;
+  
+  // ✅ NEW: Original file name (for uploaded CVs)
+  fileName?: string;
+  
   // Personal Information
   personalInfo: {
     fullName: string;

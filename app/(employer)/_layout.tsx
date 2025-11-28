@@ -81,6 +81,7 @@ export default function EmployerLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
+          href: null, // Ẩn vì có thể truy cập từ Trang chủ
           title: "Thông báo",
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons

@@ -33,6 +33,7 @@ import { SalaryPredictionBadge } from "@/components/job/SalaryPredictionBadge";
 
 const JobDescription = () => {
   const [refreshing, setRefreshing] = useState(false);
+  const [hasFocused, setHasFocused] = useState(false); // Track if already focused once
   const params = useLocalSearchParams<{ 
     jobId?: string; 
     id?: string;
@@ -40,7 +41,7 @@ const JobDescription = () => {
     applicationId?: string;
   }>();
   const jobId = (params.jobId || params.id || "") as string;
-  const applicationStatus = params.applicationStatus as string | undefined;
+  const paramsApplicationStatus = params.applicationStatus as string | undefined;
   const { role: userRole } = useRole();
 
   const {
@@ -56,16 +57,27 @@ const JobDescription = () => {
     handleDelete,
     refresh,
     hasDraft,
+    applicationStatus: apiApplicationStatus, // ✅ Lấy từ API
   } = useJobDescription(jobId);
 
+  // ✅ Only refresh on focus if coming back (not initial load)
   useFocusEffect(
     React.useCallback(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      refresh();
-    }, [refresh])
+      
+      // Only refresh if we've already focused once (coming back from another screen)
+      if (hasFocused) {
+        refresh();
+      } else {
+        setHasFocused(true);
+      }
+    }, [hasFocused, refresh])
   );
 
   const { isSaved, saveLoading, toggleSave } = useJobStatus(jobId);
+
+  // ✅ Ưu tiên dùng applicationStatus từ API (realtime), fallback về params nếu chưa có
+  const applicationStatus = apiApplicationStatus || paramsApplicationStatus;
 
   const showCandidateUI = userRole === "candidate";
   

@@ -1,18 +1,26 @@
-import React, { useEffect, useState } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 import { Stack, Redirect } from "expo-router";
 import { auth } from "@/config/firebase";
-import { getCurrentUserRole } from "@/utils/roles";
+import { useRole } from "@/contexts/RoleContext";
 
 export default function AdminLayout() {
   const [loading, setLoading] = useState(true);
   const [hasAdmin, setHasAdmin] = useState<boolean | null>(null);
   const [nextRoute, setNextRoute] = useState<string | null>(null);
+  const checkedRef = useRef(false); // Prevent duplicate checks
+  
+  // Use RoleContext instead of direct API call to avoid network issues
+  const { role, loading: roleLoading } = useRole();
 
   useEffect(() => {
+    // Only check once
+    if (checkedRef.current) return;
+    
     const checkAdminAccess = async () => {
       try {
-        await new Promise(resolve => setTimeout(resolve, 150));
+        // Wait a bit for auth to stabilize
+        await new Promise(resolve => setTimeout(resolve, 200));
         
         const user = auth.currentUser;
         console.log("🔍 Admin layout checking user:", user?.email);
@@ -22,11 +30,17 @@ export default function AdminLayout() {
           setHasAdmin(false);
           setNextRoute("/(auth)/login");
           setLoading(false);
+          checkedRef.current = true;
           return;
         }
 
-        const role = await getCurrentUserRole();
+        // Wait for role to load from context
+        if (roleLoading) {
+          return; // Will re-run when roleLoading changes
+        }
+
         console.log("🔐 Admin layout role check:", { email: user.email, role, isAdmin: role === "admin" });
+        checkedRef.current = true;
 
         if (role === "admin") {
           setHasAdmin(true);
@@ -39,6 +53,8 @@ export default function AdminLayout() {
         }
       } catch (e) {
         console.error("❌ Admin guard error:", e);
+        // Don't retry on error, just redirect
+        checkedRef.current = true;
         setHasAdmin(false);
         setNextRoute("/(auth)/login");
       } finally {
@@ -47,23 +63,24 @@ export default function AdminLayout() {
     };
 
     checkAdminAccess();
-  }, []);
+  }, [role, roleLoading]);
 
-  // Đang xác thực -> loading
-  if (loading) {
+  // Show loading while checking
+  if (loading || roleLoading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#0A84FF" />
+        <Text style={styles.loadingText}>Đang kiểm tra quyền admin...</Text>
       </View>
     );
   }
 
-  // Không có quyền -> chuyển ra ngoài
+  // No permission -> redirect
   if (hasAdmin === false && nextRoute) {
-    // ép kiểu về Href để TypeScript chấp nhận chuỗi động
     return <Redirect href={nextRoute as any} />;
   }
-  // Có quyền admin -> render Stack admin
+  
+  // Has admin permission -> render Stack
   return (
     <Stack
       screenOptions={{
@@ -82,11 +99,21 @@ export default function AdminLayout() {
       <Stack.Screen name="user-detail" options={{ title: "Chỉnh sửa User" }} />
       <Stack.Screen name="job-detail" options={{ title: "Chỉnh sửa Job" }} />
       <Stack.Screen name="user-create" options={{ title: "Tạo User Mới" }} />
-<Stack.Screen name="job-create" options={{ title: "Tạo Job Mới" }} />
+      <Stack.Screen name="job-create" options={{ title: "Tạo Job Mới" }} />
     </Stack>
   );
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff" },
+  loading: { 
+    flex: 1, 
+    alignItems: "center", 
+    justifyContent: "center", 
+    backgroundColor: "#fff" 
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#666",
+  },
 });

@@ -39,14 +39,14 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
    * Load role with cache invalidation and rate limiting
    */
   const loadRole = useCallback(async () => {
-    // ✅ Rate limiting - prevent multiple rapid calls
+    // Rate limiting - prevent multiple rapid calls
     const now = Date.now();
-    if (now - lastFetchTime.current < MIN_FETCH_INTERVAL && isFetching.current) {
+    if (now - lastFetchTime.current < MIN_FETCH_INTERVAL) {
       console.log('ℹ️ Skipping role fetch (rate limited)');
       return;
     }
     
-    // ✅ Prevent concurrent fetches
+    // Prevent concurrent fetches
     if (isFetching.current) {
       console.log('ℹ️ Skipping role fetch (already fetching)');
       return;
@@ -65,7 +65,7 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      // Check cache age
+      // Check cache first
       const [cached, timestamp] = await AsyncStorage.multiGet([
         ROLE_CACHE_KEY,
         ROLE_TIMESTAMP_KEY,
@@ -77,59 +77,58 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
         ? Date.now() - parseInt(cacheTimestamp)
         : Infinity;
 
-      // ✅ Chỉ dùng cache khi chưa có role trong bộ nhớ (sử dụng roleRef.current)
-      if (cachedRole && cacheAge < CACHE_MAX_AGE && !roleRef.current) {
+      // Use cache immediately if valid
+      if (cachedRole && cacheAge < CACHE_MAX_AGE) {
         setRole(cachedRole as AppRoleOrNull);
+        // If cache is very fresh (< 30s), skip API call
+        if (cacheAge < 30000) {
+          console.log('📦 Using fresh cached role, skipping API');
+          return;
+        }
       }
 
-      // Always fetch from backend to check for updates
+      // Fetch from backend
       try {
         const roleData = await authApiService.getCurrentRole();
-        const normalizedRole = roleData.role?.toLowerCase() as AppRoleOrNull;
+        const normalizedRole = roleData.role ? roleData.role.toLowerCase() as AppRoleOrNull : null;
 
-        // Detect role change
-        if (normalizedRole !== cachedRole) {
-          console.log('🔄 Role changed:', cachedRole, '→', normalizedRole);
-        }
-
-        if (normalizedRole && ['candidate', 'employer', 'admin'].includes(normalizedRole)) {
+        if (normalizedRole && ['candidate', 'employer', 'admin'].indexOf(normalizedRole) >= 0) {
           setRole(normalizedRole);
           await AsyncStorage.multiSet([
             [ROLE_CACHE_KEY, normalizedRole],
             [ROLE_TIMESTAMP_KEY, Date.now().toString()],
           ]);
-        } else {
-          // No role or deleted user
+        } else if (!cachedRole) {
+          // Only clear if no cache backup
           setRole(null);
-          await AsyncStorage.multiRemove([ROLE_CACHE_KEY, ROLE_TIMESTAMP_KEY]);
         }
       } catch (apiError: any) {
-        // Chỉ log error khi KHÔNG phải 401 (401 là bình thường khi chưa auth)
-        if (apiError?.response?.status !== 401) {
-          console.error('❌ Load role from API failed:', apiError.message || apiError);
+        // Silent handle - use cache if available
+        const status = apiError?.response?.status;
+        if (status !== 401 && status !== 403) {
+          console.warn('⚠️ Role API error, using cache:', apiError.message);
         }
-
-        // Use cache only if fresh
-        if (cachedRole && cacheAge < CACHE_MAX_AGE) {
-          console.log('📦 Using cached role due to API error');
+        // Keep current role or use cache
+        if (!roleRef.current && cachedRole) {
           setRole(cachedRole as AppRoleOrNull);
-        } else {
-          setRole(null);
         }
       }
     } catch (e: any) {
       console.error('❌ Load role error:', e);
-      
-      // Final fallback
+      // Final fallback to cache
       try {
         const cached = await AsyncStorage.getItem(ROLE_CACHE_KEY);
-        if (cached) setRole(cached as AppRoleOrNull);
-      } catch {}
+        if (cached && !roleRef.current) {
+          setRole(cached as AppRoleOrNull);
+        }
+      } catch (cacheErr) {
+        // Ignore cache errors
+      }
     } finally {
       isFetching.current = false;
       setLoading(false);
     }
-  }, []); // ✅ Không còn dependency [role]
+  }, []);
 
   // ✅ Initial mount - load cached role first, then fetch
   useEffect(() => {

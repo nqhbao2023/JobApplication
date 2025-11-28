@@ -301,30 +301,57 @@ Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, chỉ 
     // Import salary database
     const SALARY_DATA = this.getSalaryDatabase();
     
-    const categoryData = SALARY_DATA[jobData.category.toLowerCase()];
+    // Normalize category to lowercase for lookup
+    const normalizedCategory = jobData.category.toLowerCase().trim();
+    const categoryData = SALARY_DATA[normalizedCategory];
+    
     if (!categoryData) {
-      return null;
+      console.warn('[AI] Unknown category:', jobData.category, '-> Falling back to sales');
+      // Fallback to sales if category not found (common middle-range)
+      const fallbackData = SALARY_DATA['sales'];
+      if (!fallbackData || !fallbackData[jobData.type]) {
+        return null;
+      }
+      const typeData = fallbackData[jobData.type];
+      return {
+        min: typeData.min,
+        max: typeData.max,
+        avg: typeData.avg,
+        unit: typeData.unit,
+        confidence: 'medium', // Low confidence because we used fallback
+      };
     }
     
     const typeData = categoryData[jobData.type];
     if (!typeData) {
+      console.warn('[AI] Unknown job type:', jobData.type, 'for category:', normalizedCategory);
       return null;
     }
     
-    // Adjust by location
+    // Adjust by location - these are multipliers for salary based on city
     let multiplier = 1.0;
+    let locationConfidence = 'high';
     const locationLower = jobData.location.toLowerCase();
     
-    if (locationLower.includes('hồ chí minh') || locationLower.includes('hcm') || locationLower.includes('sài gòn')) {
+    if (locationLower.includes('ho chi minh') || locationLower.includes('hcm') || 
+        locationLower.includes('sai gon') || locationLower.includes('tp.hcm') ||
+        locationLower.includes('thanh pho ho chi minh')) {
       multiplier = 1.2;
-    } else if (locationLower.includes('hà nội') || locationLower.includes('hanoi')) {
+      locationConfidence = 'high';
+    } else if (locationLower.includes('ha noi') || locationLower.includes('hanoi')) {
       multiplier = 1.15;
-    } else if (locationLower.includes('đà nẵng')) {
+      locationConfidence = 'high';
+    } else if (locationLower.includes('da nang')) {
       multiplier = 1.1;
-    } else if (locationLower.includes('bình dương') || locationLower.includes('thủ dầu một')) {
+      locationConfidence = 'high';
+    } else if (locationLower.includes('binh duong') || locationLower.includes('thu dau mot') ||
+               locationLower.includes('dong nai') || locationLower.includes('can tho')) {
       multiplier = 1.05;
+      locationConfidence = 'medium';
     } else {
-      multiplier = 0.9;
+      // Other provinces - use base salary with medium confidence
+      multiplier = 1.0;
+      locationConfidence = 'medium';
     }
     
     return {
@@ -332,7 +359,7 @@ Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, chỉ 
       max: Math.round(typeData.max * multiplier),
       avg: Math.round(typeData.avg * multiplier),
       unit: typeData.unit,
-      confidence: multiplier >= 1.1 ? 'Cao' : multiplier >= 1.0 ? 'Trung bình' : 'Thấp',
+      confidence: locationConfidence,
     };
   }
   

@@ -58,9 +58,12 @@ export const useJobDescription = (jobId: string) => {
   const [isApplied, setIsApplied] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [applyDocId, setApplyDocId] = useState<string | null>(null);
+  // ✅ NEW: Lưu trạng thái thực tế của application từ API
+  const [applicationStatus, setApplicationStatus] = useState<Application['status'] | null>(null);
 
   const checkingRef = useRef(false);
   const mountedRef = useRef(true);
+  const loadingRef = useRef(false); // Prevent duplicate API calls
 
   useEffect(() => {
     const u = auth.currentUser;
@@ -76,19 +79,35 @@ export const useJobDescription = (jobId: string) => {
    */
   const loadJobData = useCallback(async () => {
     if (!jobId) return;
+    
+    // ✅ Prevent duplicate calls
+    if (loadingRef.current) {
+      return;
+    }
+    loadingRef.current = true;
 
     try {
       setLoading(true);
       setError(null);
 
-      const job = await withOfflineHandling(
-        () => jobApiService.getJobById(jobId),
-        null
-      );
+      // ✅ Direct API call with better error handling
+      let job: Job | null = null;
+      try {
+        job = await jobApiService.getJobById(jobId);
+      } catch (apiError: any) {
+        // Check if it's a real network error or just 404
+        if (apiError?.response?.status === 404) {
+          if (mountedRef.current) {
+            setError('Công việc không tồn tại hoặc đã bị xóa.');
+          }
+          return;
+        }
+        throw apiError; // Re-throw for outer catch
+      }
       
       if (!job) {
         if (!mountedRef.current) return;
-        setError('Không thể tải công việc. Vui lòng kiểm tra kết nối mạng.');
+        setError('Công việc không tồn tại hoặc đã bị xóa.');
         return;
       }
       
@@ -144,6 +163,7 @@ export const useJobDescription = (jobId: string) => {
         }
       }
     } finally {
+      loadingRef.current = false;
       if (mountedRef.current) {
         setLoading(false);
       }
@@ -175,6 +195,22 @@ export const useJobDescription = (jobId: string) => {
 
       try {
         const applications = await applicationApiService.getMyApplications();
+        
+        // ✅ Guard: Ensure applications is an array
+        if (!Array.isArray(applications)) {
+          if (__DEV__) {
+            console.warn('⚠️ getMyApplications returned non-array:', typeof applications);
+          }
+          // Reset state và return early
+          if (mountedRef.current) {
+            setApplyDocId(null);
+            setIsApplied(false);
+            setHasDraft(false);
+            setApplicationStatus(null);
+          }
+          return;
+        }
+        
         const app = applications.find((a: Application) => a.jobId === jobId);
 
         if (!mountedRef.current) return;
@@ -184,10 +220,13 @@ export const useJobDescription = (jobId: string) => {
           setApplyDocId(app.id || null);
           setIsApplied(submitted);
           setHasDraft(!submitted);
+          // ✅ NEW: Lưu trạng thái thực tế từ API
+          setApplicationStatus(app.status || null);
         } else {
           setApplyDocId(null);
           setIsApplied(false);
           setHasDraft(false);
+          setApplicationStatus(null);
         }
       } catch (e: any) {
         // ✅ Professional error handling:
@@ -203,6 +242,7 @@ export const useJobDescription = (jobId: string) => {
             setApplyDocId(null);
             setIsApplied(false);
             setHasDraft(false);
+            setApplicationStatus(null);
           }
           // Không log error trong production để tránh noise
           if (__DEV__) {
@@ -214,6 +254,7 @@ export const useJobDescription = (jobId: string) => {
             setApplyDocId(null);
             setIsApplied(false);
             setHasDraft(false);
+            setApplicationStatus(null);
           }
           if (__DEV__) {
             console.log('ℹ️ Apply status check skipped: User not authenticated');
@@ -416,12 +457,12 @@ export const useJobDescription = (jobId: string) => {
     }
   }, [loadJobData, checkApplyStatus]);
 
-  // Initial load
+  // Initial load - only if not already loaded
   useEffect(() => {
-    if (jobId) {
+    if (jobId && !jobData && !loadingRef.current) {
       loadJobData();
     }
-  }, [jobId]);
+  }, [jobId, loadJobData]);
 
   // ✅ Only check apply status if user is logged in
   // Note: checkApplyStatus sẽ tự handle permission errors silently
@@ -459,6 +500,7 @@ export const useJobDescription = (jobId: string) => {
     isApplied,
     hasDraft,
     applyDocId,
+    applicationStatus, // ✅ NEW: Export trạng thái thực tế
     handleApply,
     handleCancel,
     handleDelete,

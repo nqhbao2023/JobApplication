@@ -26,15 +26,21 @@ export const applicationApiService = {
   },
 
   async getMyApplications(): Promise<Application[]> {
-    return apiClient.get<Application[]>(API_ENDPOINTS.applications.my);
+    const result = await apiClient.get<Application[]>(API_ENDPOINTS.applications.my);
+    // ✅ Ensure we always return an array
+    return Array.isArray(result) ? result : [];
   },
 
   async getEmployerApplications(): Promise<Application[]> {
-    return apiClient.get<Application[]>(API_ENDPOINTS.applications.employer);
+    const result = await apiClient.get<Application[]>(API_ENDPOINTS.applications.employer);
+    // ✅ Ensure we always return an array
+    return Array.isArray(result) ? result : [];
   },
 
   async getJobApplications(jobId: string): Promise<Application[]> {
-    return apiClient.get<Application[]>(API_ENDPOINTS.applications.byJob(jobId));
+    const result = await apiClient.get<Application[]>(API_ENDPOINTS.applications.byJob(jobId));
+    // ✅ Ensure we always return an array
+    return Array.isArray(result) ? result : [];
   },
   async updateApplication(
     id: string,

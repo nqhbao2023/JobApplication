@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   ScrollView,
   Text,
@@ -7,28 +7,32 @@ import {
   Image,
   StyleSheet,
   ActivityIndicator,
-  TextInput,
   RefreshControl,
+  Animated as RNAnimated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { db } from "@/config/firebase";
-import { collection, getDocs, doc, getDoc } from "firebase/firestore";
+import { db, auth } from "@/config/firebase";
+import { collection, getDocs, doc, getDoc, query, where } from "firebase/firestore";
 
 type Job = {
   $id: string;
   title: string;
   image?: string;
-  company_logo?: string; // ✅ Thêm field từ viecoi
-  company_name?: string; // ✅ Thêm field từ viecoi
-  salary_text?: string;  // ✅ Thêm field từ viecoi
-  location?: string;     // ✅ Thêm field từ viecoi
+  company_logo?: string;
+  company_name?: string;
+  salary_text?: string;
+  location?: string;
   jobCategories?: any;
   jobTypes?: any;
   company?: any;
   salary?: any;
+  // Filter fields
+  jobType?: 'employer_seeking' | 'candidate_seeking';
+  posterId?: string;
+  employerId?: string;
+  source?: string;
 };
 
 type JobCategory = {
@@ -42,8 +46,6 @@ type JobType = {
 };
 
 const AllJobs = () => {
-  console.log('🟡 AllJobs component mounted');
-  
   const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [categories, setCategories] = useState<JobCategory[]>([]);
@@ -53,52 +55,74 @@ const AllJobs = () => {
   const [sortBy, setSortBy] = useState<"newest" | "salary">("newest");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Animation refs for each job card
+  const fadeAnims = React.useRef<RNAnimated.Value[]>([]).current;
 
   const fetchData = async () => {
     try {
-      console.log('🔵 [1] Bắt đầu fetch...');
+      const currentUserId = auth.currentUser?.uid;
       
-      const jobsSnap = await getDocs(collection(db, "jobs"));
-      console.log('🔵 [2] Firebase jobs count:', jobsSnap.docs.length);
-      
-      const categoriesSnap = await getDocs(collection(db, "job_categories"));
-      const typesSnap = await getDocs(collection(db, "job_types"));
+      // Fetch all data in parallel for better performance
+      const [jobsSnap, categoriesSnap, typesSnap, companiesSnap] = await Promise.all([
+        getDocs(collection(db, "jobs")),
+        getDocs(collection(db, "job_categories")),
+        getDocs(collection(db, "job_types")),
+        getDocs(collection(db, "companies")),
+      ]);
 
-      // ✅ Normalize jobs data
-      const jobsData: Job[] = (
-        await Promise.all(
-          jobsSnap.docs.map(async (jobDoc) => {
+      // Build lookup maps for O(1) access
+      const categoriesMap = new Map<string, any>();
+      categoriesSnap.docs.forEach((cat) => {
+        categoriesMap.set(cat.id, { $id: cat.id, ...cat.data() });
+      });
+
+      const typesMap = new Map<string, any>();
+      typesSnap.docs.forEach((type) => {
+        typesMap.set(type.id, { $id: type.id, ...type.data() });
+      });
+
+      const companiesMap = new Map<string, any>();
+      companiesSnap.docs.forEach((comp) => {
+        companiesMap.set(comp.id, { $id: comp.id, ...comp.data() });
+      });
+
+      // Process jobs synchronously using lookup maps (no more async per job)
+      const jobsData: Job[] = jobsSnap.docs
+        .map((jobDoc) => {
+          try {
             const jobData = jobDoc.data();
-            console.log('🔵 [3] Processing job:', jobDoc.id, jobData.title);
             
             if (!jobData.title) return null;
 
-            // ✅ Xử lý company data
+            // FILTER 1: Exclude candidate_seeking jobs (only show employer jobs)
+            if (jobData.jobType === 'candidate_seeking') {
+              return null;
+            }
+            
+            // FILTER 2: Exclude current user's own job posts
+            const jobPosterId = jobData.posterId || jobData.employerId || jobData.ownerId;
+            if (currentUserId && jobPosterId === currentUserId) {
+              return null;
+            }
+
+            // Process company data using lookup map
             let companyData: any = {};
             let companyName = '';
             let companyLogo = '';
 
             if (jobData.company_name) {
-              // Viecoi job - có sẵn company_name
               companyName = jobData.company_name;
               companyLogo = jobData.company_logo || '';
             } else if (jobData.company) {
-              // Internal job - cần fetch company
               const companyId = typeof jobData.company === "string" 
                 ? jobData.company 
                 : jobData.company.id || jobData.company.$id || "";
               
-              if (companyId) {
-                try {
-                  const companySnap = await getDoc(doc(db, "companies", companyId));
-                  if (companySnap.exists()) {
-                    companyData = { $id: companySnap.id, ...companySnap.data() };
-                    companyName = companyData.corp_name || companyData.name || '';
-                    companyLogo = companyData.image || '';
-                  }
-                } catch (err) {
-                  console.warn('⚠️ Failed to fetch company:', companyId);
-                }
+              if (companyId && companiesMap.has(companyId)) {
+                companyData = companiesMap.get(companyId);
+                companyName = companyData.corp_name || companyData.name || '';
+                companyLogo = companyData.image || '';
               } else if (typeof jobData.company === 'object') {
                 companyData = jobData.company;
                 companyName = companyData.corp_name || companyData.name || '';
@@ -106,66 +130,54 @@ const AllJobs = () => {
               }
             }
 
-            // ✅ Xử lý category
+            // Process category using lookup map
             let categoryData = undefined;
             let categoryId = "";
             if (jobData.jobCategories) {
               const catId = typeof jobData.jobCategories === "string"
                 ? jobData.jobCategories
-                : jobData.jobCategories.id || jobData.jobCategories.jobCategoryId || "";
+                : jobData.jobCategories.id || jobData.jobCategories.$id || jobData.jobCategories.jobCategoryId || "";
               
               categoryId = catId;
               
-              if (catId) {
-                try {
-                  const catSnap = await getDoc(doc(db, "job_categories", catId));
-                  if (catSnap.exists()) {
-                    categoryData = { $id: catSnap.id, ...catSnap.data() };
-                    console.log(`📁 Job "${jobData.title}" -> Category: ${(categoryData as any).category_name} (${catSnap.id})`);
-                  }
-                } catch (err) {
-                  console.warn('⚠️ Failed to fetch category:', catId);
-                }
-              } else {
+              if (catId && categoriesMap.has(catId)) {
+                categoryData = categoriesMap.get(catId);
+              } else if (typeof jobData.jobCategories === 'object') {
                 categoryData = jobData.jobCategories;
+                categoryId = jobData.jobCategories.$id || jobData.jobCategories.id || "";
               }
             }
 
-            // ✅ Xử lý job type
+            // Process job type using lookup map
             let typeData = undefined;
             let typeId = "";
             if (jobData.jobTypes) {
               const tId = typeof jobData.jobTypes === "string"
                 ? jobData.jobTypes
-                : jobData.jobTypes.id || jobData.jobTypes.jobTypeId || "";
+                : jobData.jobTypes.id || jobData.jobTypes.$id || jobData.jobTypes.jobTypeId || "";
               
               typeId = tId;
               
-              if (tId) {
-                try {
-                  const typeSnap = await getDoc(doc(db, "job_types", tId));
-                  if (typeSnap.exists()) {
-                    typeData = { $id: typeSnap.id, ...typeSnap.data() };
-                    console.log(`🏷️  Job "${jobData.title}" -> Type: ${(typeData as any).type_name} (${typeSnap.id})`);
-                  }
-                } catch (err) {
-                  console.warn('⚠️ Failed to fetch type:', tId);
-                }
-              } else {
+              if (tId && typesMap.has(tId)) {
+                typeData = typesMap.get(tId);
+              } else if (typeof jobData.jobTypes === 'object') {
                 typeData = jobData.jobTypes;
+                typeId = jobData.jobTypes.$id || jobData.jobTypes.id || "";
               }
             }
 
-            // ✅ Xử lý salary
+            // Process salary
             let salaryDisplay = '';
             if (jobData.salary_text) {
-              // Viecoi job
               salaryDisplay = jobData.salary_text;
             } else if (jobData.salary) {
               if (typeof jobData.salary === 'string') {
                 salaryDisplay = jobData.salary;
               } else if (jobData.salary.min && jobData.salary.max) {
-                salaryDisplay = `${jobData.salary.min.toLocaleString()} - ${jobData.salary.max.toLocaleString()} ${jobData.salary.currency || 'VND'}`;
+                const minStr = jobData.salary.min.toLocaleString();
+                const maxStr = jobData.salary.max.toLocaleString();
+                const currency = jobData.salary.currency || 'VND';
+                salaryDisplay = minStr + ' - ' + maxStr + ' ' + currency;
               } else {
                 salaryDisplay = 'Thỏa thuận';
               }
@@ -173,88 +185,95 @@ const AllJobs = () => {
               salaryDisplay = 'Thỏa thuận';
             }
 
-            // ✅ Xử lý location
+            // Process location
             const locationDisplay = jobData.location || 
-                                   (companyData?.city ? `${companyData.city}, ${companyData.nation || 'Việt Nam'}` : 'Không rõ');
+                                   (companyData?.city ? (companyData.city + ', ' + (companyData.nation || 'Việt Nam')) : 'Không rõ');
 
-            const normalizedJob = {
+            return {
               $id: jobDoc.id,
               ...jobData,
-              // ✅ Normalized fields - Priority: job.image > job.company_logo > company.image
               displayImage: jobData.image || jobData.company_logo || companyLogo || '',
               displayCompanyName: companyName || 'Ẩn danh',
               displaySalary: salaryDisplay,
               displayLocation: locationDisplay,
               company: companyData,
               jobCategories: categoryData,
+              jobCategoryId: categoryId,
               jobTypes: typeData,
-            };
-            
-            return normalizedJob as unknown as Job;
-          })
-        )
-      ).filter((job): job is Job => job !== null);
+              jobTypeId: typeId,
+            } as unknown as Job;
+          } catch (err) {
+            console.warn('Error processing job:', jobDoc.id, err);
+            return null;
+          }
+        })
+        .filter((job): job is Job => job !== null);
 
-      console.log('✅ [4] Final jobsData:', jobsData.length);
+      const categoriesData: JobCategory[] = Array.from(categoriesMap.values());
+      const typesData: JobType[] = Array.from(typesMap.values());
 
-      const categoriesData: JobCategory[] = categoriesSnap.docs.map((cat) => ({
-        $id: cat.id,
-        ...cat.data(),
-      })) as JobCategory[];
-
-      const typesData: JobType[] = typesSnap.docs.map((type) => ({
-        $id: type.id,
-        ...type.data(),
-      })) as JobType[];
+      // Initialize animation values for new jobs
+      while (fadeAnims.length < jobsData.length) {
+        fadeAnims.push(new RNAnimated.Value(0));
+      }
 
       setJobs(jobsData);
       setCategories(categoriesData);
       setTypes(typesData);
+      
+      // Animate cards appearing with stagger (limit to first 20 for performance)
+      const animateCount = Math.min(jobsData.length, 20);
+      for (let index = 0; index < animateCount; index++) {
+        RNAnimated.timing(fadeAnims[index], {
+          toValue: 1,
+          duration: 300,
+          delay: index * 30,
+          useNativeDriver: true,
+        }).start();
+      }
+      // Set remaining to visible immediately
+      for (let index = animateCount; index < jobsData.length; index++) {
+        fadeAnims[index]?.setValue(1);
+      }
     } catch (err) {
-      console.error("🔥 Lỗi fetchData():", err);
+      console.error("Fetch error:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // ✅ Memoized filtered & sorted jobs với logic chính xác
+  // Memoized filtered & sorted jobs with fixed logic
   const filteredJobs = useMemo(() => {
     let result = [...jobs];
 
-    // 1. Filter by category
+    // 1. Filter by category using stored categoryId
     if (activeCategory !== "all") {
       result = result.filter((job) => {
-        if (!job.jobCategories) return false;
-        
-        // Xử lý cả trường hợp jobCategories là string hoặc object
-        const categoryId = typeof job.jobCategories === "string"
-          ? job.jobCategories
-          : job.jobCategories.$id || job.jobCategories.id || "";
-        
-        return categoryId === activeCategory;
+        const jobCatId = (job as any).jobCategoryId || 
+                        (job.jobCategories?.$id) || 
+                        (job.jobCategories?.id) ||
+                        (typeof job.jobCategories === "string" ? job.jobCategories : "");
+        return jobCatId === activeCategory;
       });
     }
 
-    // 2. Filter by type
+    // 2. Filter by type using stored typeId
     if (activeType !== "all") {
       result = result.filter((job) => {
-        if (!job.jobTypes) return false;
-        
-        // Xử lý cả trường hợp jobTypes là string hoặc object
-        const typeId = typeof job.jobTypes === "string"
-          ? job.jobTypes
-          : job.jobTypes.$id || job.jobTypes.id || "";
-        
-        return typeId === activeType;
+        const jobTypeId = (job as any).jobTypeId || 
+                         (job.jobTypes?.$id) || 
+                         (job.jobTypes?.id) ||
+                         (typeof job.jobTypes === "string" ? job.jobTypes : "");
+        return jobTypeId === activeType;
       });
     }
 
     // 3. Sort
     if (sortBy === "newest") {
       result.sort((a, b) => {
-        const aTime = (a as any).createdAt?.toMillis?.() || 0;
-        const bTime = (b as any).createdAt?.toMillis?.() || 0;
+        const aTime = (a as any).createdAt?.toMillis?.() || (a as any).createdAt?.seconds * 1000 || 0;
+        const bTime = (b as any).createdAt?.toMillis?.() || (b as any).createdAt?.seconds * 1000 || 0;
         return bTime - aTime;
       });
     } else if (sortBy === "salary") {
@@ -273,13 +292,12 @@ const AllJobs = () => {
     return result;
   }, [jobs, activeCategory, activeType, sortBy]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchData();
-  };
+  }, []);
 
   useEffect(() => {
-    console.log('🟢 useEffect triggered - calling fetchData()');
     fetchData();
   }, []);
 
@@ -306,7 +324,7 @@ const AllJobs = () => {
           <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
         </View>
       ) : (
-        <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
+        <View style={{ flex: 1 }}>
           {/* Filter Stats & Sort */}
           <View style={styles.filterStatsRow}>
             <Text style={styles.filterStatsText}>
@@ -362,11 +380,8 @@ const AllJobs = () => {
                 onPress={() => setActiveCategory("all")}
               >
                 <Text style={[styles.tabText, activeCategory === "all" && styles.tabTextActive]}>
-                  Tất cả danh mục
+                  Tất cả
                 </Text>
-                {activeCategory === "all" && (
-                  <View style={styles.activeIndicator} />
-                )}
               </TouchableOpacity>
 
               {categories.map((cat) => (
@@ -378,14 +393,11 @@ const AllJobs = () => {
                   <Text style={[styles.tabText, activeCategory === cat.$id && styles.tabTextActive]}>
                     {cat.category_name}
                   </Text>
-                  {activeCategory === cat.$id && (
-                    <View style={styles.activeIndicator} />
-                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* Type Tabs */}
+            {/* Type Tabs - Simplified */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -396,11 +408,8 @@ const AllJobs = () => {
                 onPress={() => setActiveType("all")}
               >
                 <Text style={[styles.tabText, activeType === "all" && styles.tabTextActive]}>
-                  Tất cả loại hình
+                  Tất cả
                 </Text>
-                {activeType === "all" && (
-                  <View style={styles.activeIndicator} />
-                )}
               </TouchableOpacity>
 
               {types.map((type) => (
@@ -412,26 +421,33 @@ const AllJobs = () => {
                   <Text style={[styles.tabText, activeType === type.$id && styles.tabTextActive]}>
                     {type.type_name}
                   </Text>
-                  {activeType === type.$id && (
-                    <View style={styles.activeIndicator} />
-                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* Jobs List */}
+            {/* Jobs List - Using native Animated instead of reanimated */}
             <View style={styles.jobsContainer}>
               {filteredJobs.map((job, index) => (
-                <Animated.View
+                <RNAnimated.View
                   key={job.$id}
-                  entering={FadeInDown.delay(index * 50).duration(400)}
+                  style={{
+                    opacity: fadeAnims[index] || 1,
+                    transform: [{
+                      translateY: fadeAnims[index] 
+                        ? fadeAnims[index].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [20, 0],
+                          })
+                        : 0,
+                    }],
+                  }}
                 >
                   <TouchableOpacity
                     style={styles.jobCard}
                     activeOpacity={0.7}
                     onPress={() => router.push({ pathname: "/(shared)/jobDescription", params: { jobId: job.$id } })}
                   >
-                    {/* ✅ Job Image with fallback */}
+                    {/* Job Image with fallback */}
                     {(job as any).displayImage ? (
                       <Image source={{ uri: (job as any).displayImage }} style={styles.jobImage} />
                     ) : (
@@ -445,7 +461,7 @@ const AllJobs = () => {
                         {job.title}
                       </Text>
                       
-                      {/* ✅ Company Name */}
+                      {/* Company Name */}
                       <View style={styles.infoRow}>
                         <Ionicons name="business-outline" size={14} color="#64748b" />
                         <Text style={styles.jobCompany} numberOfLines={1}>
@@ -453,7 +469,7 @@ const AllJobs = () => {
                         </Text>
                       </View>
 
-                      {/* ✅ Location */}
+                      {/* Location */}
                       <View style={styles.infoRow}>
                         <Ionicons name="location-outline" size={14} color="#64748b" />
                         <Text style={styles.jobLocation} numberOfLines={1}>
@@ -461,7 +477,7 @@ const AllJobs = () => {
                         </Text>
                       </View>
 
-                      {/* ✅ Salary */}
+                      {/* Salary */}
                       <View style={styles.infoRow}>
                         <Ionicons name="cash-outline" size={14} color="#10b981" />
                         <Text style={styles.jobSalary} numberOfLines={1}>
@@ -469,7 +485,7 @@ const AllJobs = () => {
                         </Text>
                       </View>
 
-                      {/* ✅ Job Type & Category Badges */}
+                      {/* Job Type & Category Badges */}
                       <View style={styles.badgeRow}>
                         {job.jobTypes && (
                           <View style={styles.badge}>
@@ -491,14 +507,11 @@ const AllJobs = () => {
                     {/* Arrow icon */}
                     <Ionicons name="chevron-forward" size={20} color="#cbd5e1" style={styles.arrowIcon} />
                   </TouchableOpacity>
-                </Animated.View>
+                </RNAnimated.View>
               ))}
 
               {filteredJobs.length === 0 && (
-                <Animated.View 
-                  entering={FadeIn.duration(400)}
-                  style={styles.emptyContainer}
-                >
+                <View style={styles.emptyContainer}>
                   <View style={styles.emptyIcon}>
                     <Ionicons name="briefcase-outline" size={64} color="#cbd5e1" />
                   </View>
@@ -517,11 +530,11 @@ const AllJobs = () => {
                       <Text style={styles.resetButtonText}>Xóa bộ lọc</Text>
                     </TouchableOpacity>
                   )}
-                </Animated.View>
+                </View>
               )}
             </View>
           </ScrollView>
-        </Animated.View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -639,35 +652,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tabButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     backgroundColor: "#fff",
     marginRight: 8,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
-    position: "relative",
   },
   tabButtonActive: {
     backgroundColor: "#4A80F0",
     borderColor: "#4A80F0",
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#64748b",
   },
   tabTextActive: {
     color: "#fff",
-  },
-  activeIndicator: {
-    position: "absolute",
-    bottom: -2,
-    left: "25%",
-    right: "25%",
-    height: 3,
-    backgroundColor: "#fff",
-    borderRadius: 2,
   },
   jobsContainer: {
     padding: 16,

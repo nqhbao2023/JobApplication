@@ -4,9 +4,7 @@ import { API_ENDPOINTS } from '@/config/api';
 import { auth } from '@/config/firebase';
 import { AppRole, AppRoleOrNull, StudentProfile } from '@/types';
 
-/* -------------------------------------------------------------------------- */
-/*                       🔐  Auth API service – Job4S                         */
-/* -------------------------------------------------------------------------- */
+// Auth API service - Job4S
 
 export interface LoginRequest {
   email: string;
@@ -51,50 +49,47 @@ export interface UserProfile {
 }
 
 export const authApiService = {
-  /* ---------------------------------------------------------------------- */
-  /* 🔑  Verify Firebase token với backend                                  */
-  /* ---------------------------------------------------------------------- */
+  // Verify Firebase token with backend
   async verifyToken(): Promise<AuthResponse | null> {
     try {
       const res = await apiClient.get<AuthResponse>(API_ENDPOINTS.auth.verify);
-      return res; // apiClient đã unwrap .data
+      return res;
     } catch (err: any) {
-      // Handle network errors gracefully
       if (err?.code === 'ECONNABORTED' || !err?.response) {
-        console.warn('⚠️ verifyToken: Network error, will retry later');
+        console.warn('verifyToken: Network error, will retry later');
         return null;
       }
       if (axios.isAxiosError(err) && err.response?.status === 404) {
-        console.warn('⚠️ verifyToken: user not found → return null');
+        console.warn('verifyToken: user not found, return null');
         return null;
       }
-      console.error('❌ verifyToken error:', err.message);
+      console.error('verifyToken error:', err.message);
       throw err;
     }
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* 🛂  Lấy role hiện tại của user                                          */
-  /* ---------------------------------------------------------------------- */
+  // Get current user role
   async getCurrentRole(): Promise<RoleResponse> {
     try {
       const res = await apiClient.get<RoleResponse>(API_ENDPOINTS.auth.role);
       return res;
     } catch (err: any) {
-      // Handle network/connection errors - return default role without throwing
+      // Handle network/connection errors
       if (err?.code === 'ECONNABORTED' || err?.code === 'ERR_NETWORK' || !err?.response) {
-        console.warn('⚠️ getCurrentRole: Network error, using default role');
+        console.warn('getCurrentRole: Network error, using default role');
         return { role: 'candidate', isAdmin: false };
       }
       
-      // Handle JSON parse errors (SyntaxError from bad response)
-      if (err?.name === 'SyntaxError' || err?.message?.includes('SyntaxError')) {
-        console.warn('⚠️ getCurrentRole: Invalid response format, using default role');
+      // Handle JSON parse errors
+      const errorName = String(err?.name || '');
+      const errorMsg = String(err?.message || '');
+      if (errorName === 'SyntaxError' || errorMsg.indexOf('SyntaxError') >= 0) {
+        console.warn('getCurrentRole: Invalid response format, using default role');
         return { role: 'candidate', isAdmin: false };
       }
       
       if (axios.isAxiosError(err) && err.response?.status === 404) {
-        console.warn('⚠️ getCurrentRole: user not found → creating default profile');
+        console.warn('getCurrentRole: user not found, creating default profile');
 
         const firebaseUser = auth.currentUser;
         if (firebaseUser) {
@@ -104,25 +99,23 @@ export const authApiService = {
               email: firebaseUser.email,
               role: 'candidate',
             })
-            .catch(() => {}); // Silent fail on sync
+            .catch(function() {});
         }
 
         return { role: 'candidate', isAdmin: false };
       }
       
-      // 401 is normal when not logged in - don't log as error
+      // 401 is normal when not logged in
       if (axios.isAxiosError(err) && err.response?.status === 401) {
         return { role: null, isAdmin: false };
       }
       
-      console.error('❌ getCurrentRole error:', err.message);
+      console.error('getCurrentRole error:', err.message);
       throw err;
     }
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* 🔄  Đồng bộ user sau đăng ký / đăng nhập                                */
-  /* ---------------------------------------------------------------------- */
+  // Sync user after register/login
   async syncUser(userData: {
     uid: string;
     email: string;
@@ -134,27 +127,22 @@ export const authApiService = {
     await apiClient.post<void>(API_ENDPOINTS.auth.sync, userData);
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* 📝  Update role (admin)                                                 */
-  /* ---------------------------------------------------------------------- */
+  // Update role (admin)
   async updateRole(userId: string, role: AppRole): Promise<void> {
-    await apiClient.patch<void>(`/api/auth/users/${userId}/role`, { role });
+    await apiClient.patch<void>('/api/auth/users/' + userId + '/role', { role });
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* 🗑   Xoá (soft-delete) tài khoản                                        */
-  /* ---------------------------------------------------------------------- */
+  // Delete account
   async deleteAccount(userId: string): Promise<void> {
-    await apiClient.delete<void>(`/api/auth/users/${userId}`);
+    await apiClient.delete<void>('/api/auth/users/' + userId);
   },
 
-  /* ---------------------------------------------------------------------- */
-  /* 👤  Lấy & cập nhật profile                                              */
-  /* ---------------------------------------------------------------------- */
+  // Get profile
   async getProfile(): Promise<UserProfile> {
     return apiClient.get<UserProfile>(API_ENDPOINTS.auth.profile);
   },
 
+  // Update profile
   async updateProfile(updates: {
     name?: string;
     phone?: string;

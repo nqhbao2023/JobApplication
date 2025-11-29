@@ -43,6 +43,7 @@ export interface UserProfile {
   phone: string | null;
   photoURL: string | null;
   role: AppRoleOrNull;
+  skills?: string[]; // ✅ Add skills for AI recommendations
   createdAt: string | null;
   updatedAt: string | null;
   studentProfile?: StudentProfile;

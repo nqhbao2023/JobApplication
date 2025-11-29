@@ -62,31 +62,37 @@ export const useJobNotifications = ({
           currentLocation.current || undefined
         );
 
+        // Ensure job.$id exists before sending notifications
+        if (!job.$id) return;
+        const jobId = job.$id;
+        const jobTitle = job.title || 'Công việc mới';
+        const companyName = job.company_name || 'Ẩn danh';
+
         if (matchScore.totalScore > 0.7) {
           pushNotificationService.notifyNewJobMatch(
-            job.title,
-            job.company_name || 'Ẩn danh',
+            jobTitle,
+            companyName,
             matchScore.totalScore,
-            job.$id
+            jobId
           );
         }
 
         if (matchScore.breakdown.distanceKm && matchScore.breakdown.distanceKm < 3) {
           pushNotificationService.notifyNearbyJob(
-            job.title,
-            job.company_name || 'Ẩn danh',
+            jobTitle,
+            companyName,
             matchScore.breakdown.distanceKm,
-            job.$id
+            jobId
           );
         }
 
         if (shouldNotifyHighSalary(job, studentProfile)) {
           const salaryText = job.salary_text || formatSalary(job);
           pushNotificationService.notifyHighSalaryJob(
-            job.title,
-            job.company_name || 'Ẩn danh',
+            jobTitle,
+            companyName,
             salaryText,
-            job.$id
+            jobId
           );
         }
 
@@ -105,16 +111,18 @@ export const useJobNotifications = ({
       if (match) {
         jobHourlyRate = parseInt(match[1]) * (job.salary_text.includes('k') ? 1000 : 1);
       }
+    } else if (job.hourlyRate) {
+      // Use direct hourlyRate field from Job
+      jobHourlyRate = job.hourlyRate;
     } else if (job.salary && typeof job.salary === 'object') {
-      if (job.salary.hourlyRate) {
-        jobHourlyRate = job.salary.hourlyRate;
-      } else if (job.salary.min && job.salary.max) {
+      if (job.salary.min && job.salary.max) {
         const avgMonthly = (job.salary.min + job.salary.max) / 2;
         jobHourlyRate = avgMonthly / (8 * 22);
       }
     }
 
-    const expectedRate = profile.expectedSalary?.hourlyRate || 25000;
+    // Use desiredSalary.hourly from StudentProfile 
+    const expectedRate = profile.desiredSalary?.hourly || 25000;
     const threshold = expectedRate * 1.2;
 
     return jobHourlyRate > threshold;
@@ -123,10 +131,11 @@ export const useJobNotifications = ({
   const formatSalary = (job: Job): string => {
     if (job.salary_text) return job.salary_text;
     
+    if (job.hourlyRate) {
+      return `${job.hourlyRate.toLocaleString()}đ/giờ`;
+    }
+    
     if (job.salary && typeof job.salary === 'object') {
-      if (job.salary.hourlyRate) {
-        return `${job.salary.hourlyRate.toLocaleString()}đ/giờ`;
-      }
       if (job.salary.min && job.salary.max) {
         return `${job.salary.min.toLocaleString()} - ${job.salary.max.toLocaleString()} ${job.salary.currency || 'VND'}`;
       }

@@ -173,7 +173,9 @@ export const getJobSections = (job: any): ParsedJobSections => {
     requirements: Array.isArray(job.requirements) 
       ? job.requirements.map((r: string) => `• ${r}`).join('\n')
       : (job.requirements || ''),
-    benefits: job.benefits || '',
+    benefits: Array.isArray(job.benefits) 
+      ? job.benefits.map((b: string) => `• ${b}`).join('\n')
+      : (job.benefits || ''),
     companyInfo: '',
   };
 };

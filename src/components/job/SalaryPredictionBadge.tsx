@@ -1,6 +1,9 @@
 /**
  * Salary Prediction Badge - AI-powered salary estimation
- * Shows predicted salary range for a job
+ * Shows predicted salary range for a job AND compares with actual salary
+ * 
+ * IMPORTANT: This AI predicts market salary, not validates the job's posted salary.
+ * If actual salary differs significantly from market rate, it shows a warning.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -136,16 +139,151 @@ interface SalaryPredictionBadgeProps {
     location: string;
     type: 'part-time' | 'full-time' | 'internship' | 'freelance';
   };
+  /** Actual salary posted by employer (if available) */
+  actualSalary?: {
+    min?: number;
+    max?: number;
+    text?: string; // e.g., "Thỏa thuận", "99.999.999 - 1.000.000.000 VND"
+  };
   autoLoad?: boolean;
 }
 
+/**
+ * Parse salary text to extract min/max values
+ * Handles formats like: "99.999.999 - 1.000.000.000 VND", "10 - 15 triệu", etc.
+ */
+const parseSalaryText = (text: string): { min?: number; max?: number } => {
+  if (!text) return {};
+  
+  const cleanText = text.toLowerCase().replace(/\./g, '').replace(/,/g, '');
+  
+  // Check for "thỏa thuận" or similar
+  if (cleanText.includes('thỏa') || cleanText.includes('negotiate') || cleanText.includes('deal')) {
+    return {};
+  }
+  
+  // Extract numbers
+  const numbers = cleanText.match(/\d+/g);
+  if (!numbers || numbers.length === 0) return {};
+  
+  let min = parseInt(numbers[0]);
+  let max = numbers.length > 1 ? parseInt(numbers[1]) : min;
+  
+  // Determine unit multiplier
+  if (cleanText.includes('triệu') || cleanText.includes('tr')) {
+    min *= 1000000;
+    max *= 1000000;
+  } else if (cleanText.includes('k') || cleanText.includes('nghìn')) {
+    min *= 1000;
+    max *= 1000;
+  }
+  // If numbers are already large (> 1M), assume they're in VND
+  
+  return { min, max };
+};
+
+/**
+ * Analyze salary comparison and return insight
+ */
+const analyzeSalaryComparison = (
+  actual: { min?: number; max?: number },
+  predicted: SalaryPrediction
+): {
+  status: 'match' | 'above' | 'below' | 'way_above' | 'suspicious';
+  message: string;
+  icon: string;
+  color: string;
+} => {
+  const actualMin = actual.min || 0;
+  const actualMax = actual.max || actualMin;
+  const actualAvg = (actualMin + actualMax) / 2;
+  
+  const predictedAvg = predicted.avg;
+  
+  // If no actual salary, just show prediction
+  if (!actualMin && !actualMax) {
+    return {
+      status: 'match',
+      message: 'Dựa trên dữ liệu thị trường',
+      icon: 'information-circle',
+      color: '#64748b',
+    };
+  }
+  
+  // Calculate difference ratio
+  const ratio = actualAvg / predictedAvg;
+  
+  // Way above market (> 5x) - Very suspicious!
+  if (ratio > 5) {
+    return {
+      status: 'suspicious',
+      message: `⚠️ Lương đăng (${formatNumber(actualAvg)}) cao hơn thị trường ${Math.round(ratio)}x - Cần xác minh!`,
+      icon: 'warning',
+      color: '#dc2626',
+    };
+  }
+  
+  // Above market (2-5x) - Might be senior position or suspicious
+  if (ratio > 2) {
+    return {
+      status: 'way_above',
+      message: `Lương cao hơn thị trường ${Math.round(ratio)}x - Có thể vị trí senior hoặc cần xác minh`,
+      icon: 'trending-up',
+      color: '#f59e0b',
+    };
+  }
+  
+  // Slightly above market (1.3-2x)
+  if (ratio > 1.3) {
+    return {
+      status: 'above',
+      message: 'Lương cao hơn trung bình thị trường',
+      icon: 'arrow-up-circle',
+      color: '#10b981',
+    };
+  }
+  
+  // Around market rate (0.7-1.3x)
+  if (ratio >= 0.7) {
+    return {
+      status: 'match',
+      message: 'Phù hợp với mức lương thị trường',
+      icon: 'checkmark-circle',
+      color: '#10b981',
+    };
+  }
+  
+  // Below market (< 0.7x)
+  return {
+    status: 'below',
+    message: 'Lương thấp hơn trung bình thị trường',
+    icon: 'arrow-down-circle',
+    color: '#f59e0b',
+  };
+};
+
+const formatNumber = (num: number): string => {
+  if (num >= 1000000000) {
+    return `${(num / 1000000000).toFixed(1)} tỷ`;
+  }
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(1)}M`;
+  }
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(0)}K`;
+  }
+  return num.toLocaleString('vi-VN');
+};
+
 export const SalaryPredictionBadge: React.FC<SalaryPredictionBadgeProps> = ({
   jobData,
+  actualSalary,
   autoLoad = false,
 }) => {
   const [prediction, setPrediction] = useState<SalaryPrediction | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [comparison, setComparison] = useState<ReturnType<typeof analyzeSalaryComparison> | null>(null);
 
   useEffect(() => {
     if (autoLoad) {
@@ -164,6 +302,7 @@ export const SalaryPredictionBadge: React.FC<SalaryPredictionBadgeProps> = ({
       if (__DEV__) {
         console.log('[SalaryPrediction] Input category:', jobData.category);
         console.log('[SalaryPrediction] Mapped to:', mappedCategory);
+        console.log('[SalaryPrediction] Actual salary:', actualSalary);
       }
       
       const result = await aiApiService.predictSalary({
@@ -172,6 +311,25 @@ export const SalaryPredictionBadge: React.FC<SalaryPredictionBadgeProps> = ({
       });
       setPrediction(result);
       setExpanded(true);
+      
+      // Compare with actual salary if available
+      if (result && actualSalary) {
+        let parsedActual: { min?: number; max?: number } = { min: actualSalary.min, max: actualSalary.max };
+        
+        // Try to parse from text if min/max not provided
+        if (!parsedActual.min && !parsedActual.max && actualSalary.text) {
+          parsedActual = parseSalaryText(actualSalary.text);
+        }
+        
+        if (parsedActual.min || parsedActual.max) {
+          const comparisonResult = analyzeSalaryComparison(parsedActual, result);
+          setComparison(comparisonResult);
+          
+          if (__DEV__) {
+            console.log('[SalaryPrediction] Comparison:', comparisonResult);
+          }
+        }
+      }
       
       if (result) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -236,7 +394,7 @@ export const SalaryPredictionBadge: React.FC<SalaryPredictionBadgeProps> = ({
             <View style={styles.predictionContent}>
               {/* Salary Range */}
               <View style={styles.salaryRange}>
-                <Text style={styles.salaryLabel}>Khoảng lương:</Text>
+                <Text style={styles.salaryLabel}>Khoảng lương thị trường:</Text>
                 <Text style={styles.salaryValue}>
                   {formatSalary(prediction.min, prediction.unit)} - {formatSalary(prediction.max, prediction.unit)}
                 </Text>
@@ -245,34 +403,57 @@ export const SalaryPredictionBadge: React.FC<SalaryPredictionBadgeProps> = ({
                 </Text>
               </View>
 
-              {/* Confidence */}
-              <View style={styles.confidence}>
-                <Ionicons
-                  name={
-                    prediction.confidence === 'high'
-                      ? 'checkmark-circle'
+              {/* Comparison with actual salary (if available) */}
+              {comparison && (
+                <View style={[styles.comparisonContainer, { borderColor: comparison.color }]}>
+                  <View style={styles.comparisonHeader}>
+                    <Ionicons
+                      name={comparison.icon as any}
+                      size={18}
+                      color={comparison.color}
+                    />
+                    <Text style={[styles.comparisonText, { color: comparison.color }]}>
+                      {comparison.message}
+                    </Text>
+                  </View>
+                  {comparison.status === 'suspicious' && (
+                    <Text style={styles.warningNote}>
+                      🚨 Lương đăng cao bất thường so với thị trường. Hãy xác minh kỹ trước khi ứng tuyển!
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* Confidence - only show if no comparison or comparison is positive */}
+              {(!comparison || comparison.status === 'match' || comparison.status === 'above') && (
+                <View style={styles.confidence}>
+                  <Ionicons
+                    name={
+                      prediction.confidence === 'high'
+                        ? 'checkmark-circle'
+                        : prediction.confidence === 'medium'
+                        ? 'alert-circle'
+                        : 'help-circle'
+                    }
+                    size={16}
+                    color={
+                      prediction.confidence === 'high'
+                        ? '#10b981'
+                        : prediction.confidence === 'medium'
+                        ? '#f59e0b'
+                        : '#94a3b8'
+                    }
+                  />
+                  <Text style={styles.confidenceText}>
+                    Độ tin cậy dự đoán:{' '}
+                    {prediction.confidence === 'high'
+                      ? 'Cao'
                       : prediction.confidence === 'medium'
-                      ? 'alert-circle'
-                      : 'help-circle'
-                  }
-                  size={16}
-                  color={
-                    prediction.confidence === 'high'
-                      ? '#10b981'
-                      : prediction.confidence === 'medium'
-                      ? '#f59e0b'
-                      : '#94a3b8'
-                  }
-                />
-                <Text style={styles.confidenceText}>
-                  Độ tin cậy:{' '}
-                  {prediction.confidence === 'high'
-                    ? 'Cao'
-                    : prediction.confidence === 'medium'
-                    ? 'Trung bình'
-                    : 'Thấp'}
-                </Text>
-              </View>
+                      ? 'Trung bình'
+                      : 'Thấp'}
+                  </Text>
+                </View>
+              )}
 
               {/* Note */}
               <Text style={styles.note}>
@@ -401,6 +582,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     fontStyle: 'italic',
+  },
+  comparisonContainer: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
+  comparisonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  comparisonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+    lineHeight: 18,
+  },
+  warningNote: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#dc2626',
+    backgroundColor: '#fef2f2',
+    padding: 8,
+    borderRadius: 6,
+    fontWeight: '500',
   },
   errorContainer: {
     alignItems: 'center',

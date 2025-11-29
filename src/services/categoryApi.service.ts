@@ -10,8 +10,8 @@ export interface Category {
 
 export const categoryApiService = {
   async getAllCategories(limit?: number): Promise<Category[]> {
-    const params = limit ? { limit } : undefined;
-    return apiClient.get<Category[]>(API_ENDPOINTS.categories, params);
+    const config = limit ? { params: { limit } } : undefined;
+    return apiClient.get<Category[]>(API_ENDPOINTS.categories, config);
   },
 
   async getCategoryById(id: string): Promise<Category> {

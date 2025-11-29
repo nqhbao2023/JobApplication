@@ -103,6 +103,7 @@ export const useCandidateHome = () => {
         name: profile.name || displayName,
         photoURL: profile.photoURL || auth.currentUser?.photoURL || null,
         role: profile.role || 'candidate',
+        skills: profile.skills || [], // ✅ Include skills for AI recommendations
       };
     } catch (e: any) {
       handleApiError(e, 'update_profile', { silent: true });
@@ -116,6 +117,7 @@ export const useCandidateHome = () => {
           displayName: user.displayName || user.email || '',
           photoURL: user.photoURL,
           role: 'candidate',
+          skills: [], // ✅ Empty skills fallback
         };
       }
       return undefined;

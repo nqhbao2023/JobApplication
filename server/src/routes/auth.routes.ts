@@ -15,6 +15,8 @@ const buildProfileResponse = (
   phone: userData?.phone || null,
   photoURL: userData?.photoURL || null,
   role: userData?.role || 'candidate',
+  skills: userData?.skills || [], // ✅ Add skills for AI recommendations
+  studentProfile: userData?.studentProfile || null, // ✅ Add student profile
   createdAt: userData?.createdAt || null,
   updatedAt: userData?.updatedAt || null,
 });
@@ -103,7 +105,7 @@ router.get('/profile', authenticate, async (req: AuthRequest, res: Response): Pr
  */
 router.patch('/profile', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, phone, photoURL } = req.body;
+    const { name, phone, photoURL, skills, studentProfile } = req.body;
     const { db } = await import('../config/firebase');
 
     const updates: any = {
@@ -113,6 +115,8 @@ router.patch('/profile', authenticate, async (req: AuthRequest, res: Response): 
     if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
     if (photoURL !== undefined) updates.photoURL = photoURL;
+    if (skills !== undefined) updates.skills = skills; // ✅ Allow skills update
+    if (studentProfile !== undefined) updates.studentProfile = studentProfile; // ✅ Allow student profile update
 
     await db.collection('users').doc(req.user!.uid).update(updates);
 

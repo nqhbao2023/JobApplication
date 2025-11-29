@@ -148,13 +148,17 @@ Chỉ trả về TÊN CATEGORY duy nhất, không giải thích. Ví dụ: "IT-S
     return [...new Set(found)];
   }
 
-  // 5. EXTRACT USER SKILLS (từ user object hoặc giả định)
-  private extractUserSkills(_user: User): string[] {
-    // Giả sử user có field skills (nếu không có, return empty)
-    // Hoặc extract từ name/email nếu test
+  // 5. EXTRACT USER SKILLS (từ user profile thực tế)
+  private extractUserSkills(user: User): string[] {
+    // ✅ Lấy skills thực tế từ user profile
+    if (user.skills && Array.isArray(user.skills) && user.skills.length > 0) {
+      console.log(`📋 [AI] Extracted ${user.skills.length} skills from user profile`);
+      return user.skills;
+    }
     
-    // VD: Giả định user có skills
-    return ['React Native', 'JavaScript', 'TypeScript', 'Firebase'];
+    // Fallback: Không có skills
+    console.log(`⚠️ [AI] User has no skills in profile`);
+    return [];
   }
 
   // HELPER: Match skills

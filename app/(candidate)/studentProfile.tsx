@@ -200,13 +200,31 @@ const StudentProfileSettings = () => {
   const getCurrentLocation = async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Check if location services are available
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert(
+          'Dịch vụ vị trí chưa bật',
+          'Bạn có thể nhập địa chỉ thủ công bên trên, hoặc bật dịch vụ vị trí trong Cài đặt.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return;
+      }
+      
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Lỗi', 'Cần cấp quyền truy cập vị trí');
+        Alert.alert(
+          'Cần quyền truy cập vị trí',
+          'Bạn có thể nhập địa chỉ thủ công bên trên, hoặc cấp quyền vị trí trong Cài đặt.',
+          [{ text: 'OK', style: 'default' }]
+        );
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
       const [address] = await Location.reverseGeocodeAsync({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -229,9 +247,14 @@ const StudentProfileSettings = () => {
       setSchoolAddress(fullAddress);
       
       Alert.alert('Thành công', 'Đã lấy vị trí hiện tại');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting location:', error);
-      Alert.alert('Lỗi', 'Không thể lấy vị trí');
+      // User-friendly message
+      Alert.alert(
+        'Không thể lấy vị trí',
+        'Vui lòng nhập địa chỉ thủ công bên trên.\n\n(Lỗi: ' + (error?.message || 'Không xác định') + ')',
+        [{ text: 'OK', style: 'default' }]
+      );
     }
   };
 

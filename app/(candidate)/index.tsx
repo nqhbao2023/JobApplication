@@ -32,8 +32,9 @@ import {
   EmptyState,
   JobAlertCTA,
 } from '@/components/candidate/HomeComponents';
-import { StudentAdvancedFilters } from '@/components/candidate/StudentAdvancedFilters';
+import { ProfileFilterToggle } from '@/components/candidate/ProfileFilterToggle';
 import { DrawerMenuButton } from '@/components/candidate/DrawerMenu';
+import { RecommendedJobsSection } from '@/components/candidate/RecommendedJobsSection';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import {
   HEADER_MAX_HEIGHT,
@@ -63,6 +64,10 @@ const CandidateHome = () => {
     filters: studentFilters,
     filteredJobs,
     handleFiltersChange,
+    profileFilterActive,
+    handleProfileFilterToggle,
+    matchedJobsCount,
+    totalJobsCount,
   } = useStudentFilters(
     forYouJobs,
     data?.user?.studentProfile
@@ -233,11 +238,14 @@ const CandidateHome = () => {
         <View style={styles.contentWrapper}>
           <QuickFilters selectedFilter={selectedFilter} onFilterChange={handleFilterChange} />
           
-          {/* Student Advanced Filters */}
+          {/* Profile-based Filter Toggle (replaces StudentAdvancedFilters) */}
           <View style={styles.advancedFiltersContainer}>
-            <StudentAdvancedFilters
-              filters={studentFilters}
-              onFiltersChange={handleFiltersChange}
+            <ProfileFilterToggle
+              studentProfile={data?.user?.studentProfile}
+              isActive={profileFilterActive}
+              onToggle={handleProfileFilterToggle}
+              matchedJobsCount={matchedJobsCount}
+              totalJobsCount={totalJobsCount}
             />
           </View>
 
@@ -293,8 +301,18 @@ const CandidateHome = () => {
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* ✅ AI Job Recommendations Section */}
+          <RecommendedJobsSection
+            userSkills={data?.user?.skills || []}
+            onAddSkillsPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/(candidate)/profile' as any);
+            }}
+            limit={5}
+          />
+
           <SectionHeader 
-            title={studentFilters.isActive ? "Kết quả lọc" : "Dành cho bạn"} 
+            title={profileFilterActive ? `Việc phù hợp (${matchedJobsCount})` : "Dành cho bạn"} 
             onPressShowAll={() => router.push('/(shared)/jobList')} 
           />
           {filteredJobs.length > 0 ? (
@@ -310,7 +328,7 @@ const CandidateHome = () => {
             ))
           ) : (
             <EmptyState 
-              message={studentFilters.isActive ? "Không có công việc phù hợp với bộ lọc" : "Chưa có việc làm phù hợp"} 
+              message={profileFilterActive ? "Không có công việc phù hợp với hồ sơ của bạn. Hãy thử tắt bộ lọc hoặc cập nhật hồ sơ." : "Chưa có việc làm phù hợp"} 
               icon="briefcase-outline" 
             />
           )}

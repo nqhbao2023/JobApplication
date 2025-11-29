@@ -100,8 +100,8 @@ export interface Job {
   salary?: SalaryValue;
   location?: string;
   description?: string;
-  requirements?: string;
-  benefits?: string;
+  requirements?: string | string[]; // ✅ Can be string or array (viecoi jobs use array)
+  benefits?: string | string[]; // ✅ Can be string or array (viecoi jobs use array)
   status?: 'active' | 'closed' | 'draft' | 'inactive';
   companyId?: string;   // ✅ Company ID reference (employer-created jobs)
   employerId?: string;  // ✅ Added to match server type

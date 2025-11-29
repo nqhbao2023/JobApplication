@@ -2,6 +2,7 @@
 import { db } from '../config/firebase';
 import { Job } from '../types';
 import { AppError } from '../middleware/errorHandler';
+import aiService from './ai.service';
 
 const JOBS_COLLECTION = 'jobs';
 
@@ -179,8 +180,28 @@ export class JobService {
         throw new AppError('Missing employerId for job creation', 400);
       }
 
+      // ✅ AI AUTO-CATEGORIZE: Tự động phân loại nếu category rỗng hoặc là 'other'/'khác'
+      let finalCategory = jobData.category;
+      const needsAutoCategorize = !finalCategory || 
+        finalCategory.trim() === '' || 
+        finalCategory.toLowerCase() === 'other' || 
+        finalCategory.toLowerCase() === 'khác';
+
+      if (needsAutoCategorize && jobData.title && jobData.description) {
+        try {
+          console.log('🤖 [AI Auto-categorize] Starting for job:', jobData.title);
+          const aiCategory = await aiService.autoCategorizeJob(jobData.title, jobData.description);
+          finalCategory = aiCategory;
+          console.log(`✅ [AI Auto-categorize] Result: "${jobData.title}" → ${aiCategory}`);
+        } catch (aiError: any) {
+          console.warn('⚠️ [AI Auto-categorize] Failed, using fallback:', aiError.message);
+          finalCategory = finalCategory || 'Other';
+        }
+      }
+
       const newJob: any = {
         ...jobData,
+        category: finalCategory, // ✅ Use AI-categorized or original category
         employerId: normalizedEmployerId,
         ownerId: (jobData as any).ownerId || normalizedEmployerId,
         id: jobRef.id,

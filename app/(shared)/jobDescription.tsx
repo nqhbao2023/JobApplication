@@ -356,6 +356,15 @@ const JobDescription = () => {
                 })() as any,
               }}
               autoLoad={false}
+              actualSalary={(() => {
+                const salary = (jobData as Job)?.salary;
+                const salaryObj = typeof salary === 'object' && salary ? salary : undefined;
+                return {
+                  min: salaryObj?.min,
+                  max: salaryObj?.max,
+                  text: (jobData as any)?.salary_text || undefined,
+                };
+              })()}
             />
           )}
         </View>

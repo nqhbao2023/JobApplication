@@ -4,13 +4,18 @@ import * as Notifications from 'expo-notifications';
 import { pushNotificationService, NotificationData } from '@/services/pushNotification.service';
 import { auth } from '@/config/firebase';
 
+// Type for subscription (expo-notifications returns this)
+interface NotificationSubscription {
+  remove: () => void;
+}
+
 export const usePushNotifications = () => {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
   
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<NotificationSubscription | null>(null);
+  const responseListener = useRef<NotificationSubscription | null>(null);
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -18,14 +23,14 @@ export const usePushNotifications = () => {
     registerForPushNotifications();
 
     notificationListener.current = pushNotificationService.addNotificationReceivedListener(
-      (notification) => {
+      (notification: Notifications.Notification) => {
         console.log('📬 Notification received:', notification);
         setNotification(notification);
       }
     );
 
     responseListener.current = pushNotificationService.addNotificationResponseListener(
-      (response) => {
+      (response: Notifications.NotificationResponse) => {
         console.log('👆 Notification tapped:', response);
         handleNotificationTap(response.notification);
       }
@@ -33,12 +38,9 @@ export const usePushNotifications = () => {
 
     return () => {
       try {
-        if (notificationListener.current && Notifications.removeNotificationSubscription) {
-          Notifications.removeNotificationSubscription(notificationListener.current);
-        }
-        if (responseListener.current && Notifications.removeNotificationSubscription) {
-          Notifications.removeNotificationSubscription(responseListener.current);
-        }
+        // Use the remove() method from the subscription object
+        notificationListener.current?.remove();
+        responseListener.current?.remove();
       } catch (error) {
         console.log('Cleanup notification subscriptions failed:', error);
       }
@@ -63,7 +65,7 @@ export const usePushNotifications = () => {
   };
 
   const handleNotificationTap = (notification: Notifications.Notification) => {
-    const data = notification.request.content.data as NotificationData;
+    const data = notification.request.content.data as unknown as NotificationData;
 
     if (data.jobId) {
       router.push({

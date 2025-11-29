@@ -13,8 +13,8 @@ export interface Company {
 
 export const companyApiService = {
   async getAllCompanies(limit?: number): Promise<Company[]> {
-    const params = limit ? { limit } : undefined;
-    return apiClient.get<Company[]>(API_ENDPOINTS.companies, params);
+    const config = limit ? { params: { limit } } : undefined;
+    return apiClient.get<Company[]>(API_ENDPOINTS.companies, config);
   },
 
   async getCompanyById(id: string): Promise<Company> {

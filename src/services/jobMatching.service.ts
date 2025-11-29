@@ -296,10 +296,15 @@ const calculateSkillMatch = (
     return 0.5; // Neutral if no skills listed
   }
 
+  // Handle requirements as array or string (viecoi jobs have array)
+  const requirementsText = Array.isArray(job.requirements) 
+    ? job.requirements.join(' ') 
+    : (job.requirements || '');
+
   const jobText = (
     (job.description || '') +
     ' ' +
-    (job.requirements || '') +
+    requirementsText +
     ' ' +
     (job.skills_required || '')
   ).toLowerCase();

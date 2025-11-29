@@ -18,8 +18,8 @@ export const notificationApiService = {
   },
 
   async getNotifications(limit?: number): Promise<Notification[]> {
-    const params = limit ? { limit } : undefined;
-    return apiClient.get<Notification[]>(API_ENDPOINTS.notifications.list, params);
+    const config = limit ? { params: { limit } } : undefined;
+    return apiClient.get<Notification[]>(API_ENDPOINTS.notifications.list, config);
   },
 };
 

@@ -1,20 +1,84 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import aiService from '../services/ai.service';
+import jobService from '../services/job.service';
+import { userService } from '../services/user.service';
+import { User, AIRecommendation } from '../types';
 
+/**
+ * AI Job Recommendations Controller
+ * Gợi ý việc làm phù hợp dựa trên skills của candidate
+ * 
+ * @route GET /api/ai/recommend
+ * @query limit - Số lượng gợi ý tối đa (default: 10, max: 50)
+ * @returns Array<AIRecommendation> - Danh sách jobs được gợi ý kèm điểm số và lý do
+ */
 export const recommendJobs = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Lấy candidateId từ req để tránh lỗi 'req' không được dùng
     const candidateId = req.user?.uid;
-    // TODO: Lấy danh sách jobs từ database và gọi aiService.recommendJobs
-    // Hiện tại chưa có DB truy xuất, trả về mảng trống tạm thời
-    console.log('recommendJobs requested by candidate:', candidateId);
-    res.json([]);
-  } catch (error) {
+    
+    if (!candidateId) {
+      res.status(401).json({ error: 'Unauthorized - User ID not found' });
+      return;
+    }
+
+    // Parse limit from query (default 10, max 50)
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+    
+    console.log(`🤖 [AI Recommend] Starting for candidate: ${candidateId}, limit: ${limit}`);
+
+    // 1. Fetch user profile to get skills
+    let user: User;
+    try {
+      user = await userService.getUserById(candidateId) as User;
+      console.log(`📋 [AI Recommend] User skills:`, user.skills || 'No skills found');
+    } catch (userError: any) {
+      console.warn(`⚠️ [AI Recommend] User not found: ${userError.message}`);
+      // Return empty array if user not found (new user without profile)
+      res.json([]);
+      return;
+    }
+
+    // 2. Check if user has skills
+    if (!user.skills || user.skills.length === 0) {
+      console.log(`ℹ️ [AI Recommend] User has no skills, returning empty recommendations`);
+      res.json([]);
+      return;
+    }
+
+    // 3. Fetch active jobs from database
+    const { jobs: allJobs } = await jobService.getAllJobs({
+      status: 'active',
+      limit: 200, // Fetch more jobs to filter
+    });
+    
+    console.log(`📦 [AI Recommend] Found ${allJobs.length} active jobs`);
+
+    if (allJobs.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    // 4. Get AI recommendations
+    const recommendations = await aiService.recommendJobs(user, allJobs, limit);
+    
+    console.log(`✅ [AI Recommend] Generated ${recommendations.length} recommendations`);
+
+    // 5. Transform to API response format
+    const response: AIRecommendation[] = recommendations.map(rec => ({
+      jobId: rec.job.id || rec.job.$id || '',
+      score: rec.score,
+      reason: rec.reason,
+      matchedSkills: rec.matchedSkills,
+    }));
+
+    res.json(response);
+  } catch (error: any) {
+    console.error('❌ [AI Recommend] Error:', error.message);
     next(error);
   }
 };

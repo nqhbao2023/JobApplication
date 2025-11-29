@@ -14,6 +14,7 @@ export type CandidateHomeUser = {
   photoURL?: string | null;
   role?: string | null;
   phone?: string | null;
+  skills?: string[]; // ✅ Added for AI Job Recommendations
   createdAt?: string | null;
   updatedAt?: string | null;
   studentProfile?: StudentProfile;

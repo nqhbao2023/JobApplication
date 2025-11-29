@@ -1,14 +1,17 @@
 /**
  * Hook for managing student advanced filters
+ * 
+ * NEW: Auto-apply filters from studentProfile when toggle is ON
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { StudentFilterState } from '@/components/candidate/StudentAdvancedFilters';
 import { Job, StudentProfile } from '@/types';
 import { rankJobsByMatch, JobWithScore } from '@/services/jobMatching.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const FILTERS_STORAGE_KEY = '@student_filters';
+const PROFILE_FILTER_ACTIVE_KEY = '@profile_filter_active';
 
 const DEFAULT_FILTERS: StudentFilterState = {
   availableDays: [],
@@ -25,25 +28,42 @@ const DEFAULT_FILTERS: StudentFilterState = {
 
 export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) => {
   const [filters, setFilters] = useState<StudentFilterState>(DEFAULT_FILTERS);
+  const [profileFilterActive, setProfileFilterActive] = useState(false);
   const [filteredJobs, setFilteredJobs] = useState<JobWithScore[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load saved filters from AsyncStorage
+  // Load saved state from AsyncStorage
   useEffect(() => {
-    loadSavedFilters();
+    loadSavedState();
   }, []);
+
+  // Auto-apply profile data when profileFilterActive changes or profile updates
+  useEffect(() => {
+    if (profileFilterActive && studentProfile) {
+      applyProfileToFilters();
+    } else if (!profileFilterActive) {
+      // Reset to default when turned off
+      setFilters(prev => ({ ...prev, isActive: false }));
+    }
+  }, [profileFilterActive, studentProfile]);
 
   // Apply filters when jobs or filters change
   useEffect(() => {
     applyFilters();
   }, [jobs, filters, studentProfile]);
 
-  const loadSavedFilters = async () => {
+  const loadSavedState = async () => {
     try {
-      const saved = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setFilters(parsed);
+      const [savedFilters, savedActive] = await Promise.all([
+        AsyncStorage.getItem(FILTERS_STORAGE_KEY),
+        AsyncStorage.getItem(PROFILE_FILTER_ACTIVE_KEY),
+      ]);
+      
+      if (savedFilters) {
+        setFilters(JSON.parse(savedFilters));
+      }
+      if (savedActive) {
+        setProfileFilterActive(JSON.parse(savedActive));
       }
     } catch (error) {
       console.error('Error loading filters:', error);
@@ -60,126 +80,339 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
     }
   };
 
+  const saveProfileFilterActive = async (active: boolean) => {
+    try {
+      await AsyncStorage.setItem(PROFILE_FILTER_ACTIVE_KEY, JSON.stringify(active));
+    } catch (error) {
+      console.error('Error saving profile filter state:', error);
+    }
+  };
+
+  // Apply studentProfile data to filters
+  const applyProfileToFilters = useCallback(() => {
+    if (!studentProfile) return;
+
+    const newFilters: StudentFilterState = {
+      availableDays: studentProfile.availableDays || [],
+      timeSlots: {
+        morning: studentProfile.availableTimeSlots?.morning || false,
+        afternoon: studentProfile.availableTimeSlots?.afternoon || false,
+        evening: studentProfile.availableTimeSlots?.evening || false,
+        weekend: studentProfile.availableTimeSlots?.weekend || false,
+      },
+      maxDistance: studentProfile.maxDistance || 50,
+      minHourlyRate: studentProfile.desiredSalary?.hourly || 0,
+      isActive: true,
+    };
+
+    setFilters(newFilters);
+    saveFilters(newFilters);
+  }, [studentProfile]);
+
   const handleFiltersChange = useCallback((newFilters: StudentFilterState) => {
     setFilters(newFilters);
     saveFilters(newFilters);
   }, []);
 
+  // Toggle profile-based filtering
+  const handleProfileFilterToggle = useCallback((active: boolean) => {
+    setProfileFilterActive(active);
+    saveProfileFilterActive(active);
+    
+    if (active && studentProfile) {
+      applyProfileToFilters();
+    } else {
+      setFilters(prev => ({ ...prev, isActive: false }));
+    }
+  }, [studentProfile, applyProfileToFilters]);
+
   const applyFilters = useCallback(() => {
     if (!filters.isActive) {
-      // No filters active, return all jobs
+      // No filters active, return all jobs with default sorting
       setFilteredJobs(jobs.map(job => ({ ...job })));
       return;
     }
 
-    let result = [...jobs];
-
-    // Filter by available days
-    if (filters.availableDays.length > 0) {
-      result = result.filter(job => {
-        const schedule = job.workSchedule?.toLowerCase() || '';
-        const description = job.description?.toLowerCase() || '';
-        const combined = schedule + ' ' + description;
-
-        return filters.availableDays.some(day => {
-          const dayPatterns = getDayPatterns(day);
-          return dayPatterns.some(pattern => combined.includes(pattern));
-        });
-      });
+    // ========== NEW: Scoring-based filtering instead of hard filtering ==========
+    // Jobs are RANKED by match, not filtered out completely
+    // Only filter out if score is below threshold (0.1)
+    
+    const MIN_SCORE_THRESHOLD = 0.1; // Very low - include most jobs
+    
+    // Check if user has any filter preferences
+    const hasSchedulePrefs = filters.availableDays.length > 0;
+    const hasTimeSlotPrefs = Object.values(filters.timeSlots).some(v => v);
+    const hasSalaryPrefs = filters.minHourlyRate > 0;
+    
+    // If no preferences set, return all jobs
+    if (!hasSchedulePrefs && !hasTimeSlotPrefs && !hasSalaryPrefs) {
+      console.log('[Filter] No preferences set, returning all jobs');
+      setFilteredJobs(jobs.map(job => ({ ...job })));
+      return;
     }
 
-    // Filter by time slots
-    const activeTimeSlots = Object.entries(filters.timeSlots)
-      .filter(([_, value]) => value)
-      .map(([key, _]) => key);
+    // Score and rank all jobs
+    const scoredJobs = jobs.map(job => {
+      let score = 0;
+      let maxScore = 0;
+      const matchDetails: string[] = [];
 
-    if (activeTimeSlots.length > 0) {
-      result = result.filter(job => {
-        const description = (job.description || '').toLowerCase();
-        const schedule = (job.workSchedule || '').toLowerCase();
-        const combined = description + ' ' + schedule;
-
-        return activeTimeSlots.some(slot => {
-          switch (slot) {
-            case 'morning':
-              return combined.includes('sáng') || /\b[6-9]h|10h|11h/.test(combined);
-            case 'afternoon':
-              return combined.includes('chiều') || /\b1[2-7]h/.test(combined);
-            case 'evening':
-              return combined.includes('tối') || /\b1[8-9]h|20h|21h|22h/.test(combined);
-            case 'weekend':
-              return combined.includes('cuối tuần') || combined.includes('thứ 7') || combined.includes('chủ nhật');
-            default:
-              return false;
-          }
-        });
-      });
-    }
-
-    // Filter by distance (simplified - keyword matching)
-    if (filters.maxDistance < 50) {
-      result = result.filter(job => {
-        const location = (job.location || '').toLowerCase();
-        // Nearby keywords for Thủ Dầu Một area
-        const nearbyKeywords = ['thủ dầu một', 'tdmu', 'bình dương', 'dĩ an', 'thuận an'];
-        return nearbyKeywords.some(keyword => location.includes(keyword));
-      });
-    }
-
-    // Filter by hourly rate
-    if (filters.minHourlyRate > 0) {
-      result = result.filter(job => {
-        if (job.hourlyRate && job.hourlyRate >= filters.minHourlyRate) {
-          return true;
+      // ========== 1. SCHEDULE MATCH (weight: 40%) ==========
+      if (hasSchedulePrefs) {
+        maxScore += 40;
+        const scheduleScore = calculateScheduleScore(job, filters.availableDays);
+        score += scheduleScore * 40;
+        if (scheduleScore > 0) {
+          matchDetails.push(`schedule:${Math.round(scheduleScore * 100)}%`);
         }
+      }
 
-        // Try to parse salary
-        const salaryText = getSalaryText(job);
-        if (!salaryText) return false;
+      // ========== 2. TIME SLOT MATCH (weight: 30%) ==========
+      if (hasTimeSlotPrefs) {
+        maxScore += 30;
+        const timeSlotScore = calculateTimeSlotScore(job, filters.timeSlots);
+        score += timeSlotScore * 30;
+        if (timeSlotScore > 0) {
+          matchDetails.push(`timeSlot:${Math.round(timeSlotScore * 100)}%`);
+        }
+      }
 
-        const hourlyRate = extractHourlyRate(salaryText);
-        return hourlyRate && hourlyRate >= filters.minHourlyRate;
-      });
-    }
+      // ========== 3. SALARY MATCH (weight: 30%) ==========
+      if (hasSalaryPrefs) {
+        maxScore += 30;
+        const salaryScore = calculateSalaryMatchScore(job, filters.minHourlyRate);
+        score += salaryScore * 30;
+        if (salaryScore > 0) {
+          matchDetails.push(`salary:${Math.round(salaryScore * 100)}%`);
+        }
+      }
 
-    // Rank by matching score if studentProfile is available
-    if (studentProfile) {
-      const profile: StudentProfile = {
-        ...studentProfile,
-        availableDays: filters.availableDays,
-        availableTimeSlots: filters.timeSlots,
-        maxDistance: filters.maxDistance,
-        desiredSalary: {
-          ...studentProfile.desiredSalary,
-          hourly: filters.minHourlyRate || studentProfile.desiredSalary?.hourly,
+      // Normalize score to 0-1
+      const normalizedScore = maxScore > 0 ? score / maxScore : 0;
+
+      if (__DEV__ && normalizedScore > 0) {
+        console.log(`[Filter] ${job.title}: score=${normalizedScore.toFixed(2)} (${matchDetails.join(', ')})`);
+      }
+
+      return {
+        ...job,
+        matchScore: {
+          totalScore: normalizedScore,
+          scheduleScore: hasSchedulePrefs ? calculateScheduleScore(job, filters.availableDays) : 0,
+          distanceScore: 0.5, // Not filtering by distance anymore
+          salaryScore: hasSalaryPrefs ? calculateSalaryMatchScore(job, filters.minHourlyRate) : 0,
+          skillScore: 0,
+          breakdown: {
+            scheduleMatch: [],
+            matchedSkills: [],
+          },
         },
-      };
-      
-      const ranked = rankJobsByMatch(result, profile);
-      setFilteredJobs(ranked);
+        isHighMatch: normalizedScore >= 0.6,
+      } as JobWithScore;
+    });
+
+    // Sort by score descending
+    const sortedJobs = scoredJobs.sort((a, b) => {
+      const scoreA = a.matchScore?.totalScore || 0;
+      const scoreB = b.matchScore?.totalScore || 0;
+      return scoreB - scoreA;
+    });
+
+    // Include all jobs with score > threshold (to show partial matches)
+    const result = sortedJobs.filter(job => 
+      (job.matchScore?.totalScore || 0) >= MIN_SCORE_THRESHOLD
+    );
+
+    // If no jobs match at all, return top 10 by score anyway (as suggestions)
+    if (result.length === 0) {
+      console.log('[Filter] No jobs above threshold, returning top suggestions');
+      setFilteredJobs(sortedJobs.slice(0, 10));
     } else {
-      setFilteredJobs(result.map(job => ({ ...job })));
+      console.log(`[Filter] Found ${result.length} matching jobs`);
+      setFilteredJobs(result);
     }
   }, [jobs, filters, studentProfile]);
+
+  // Count for UI display
+  const matchedJobsCount = filteredJobs.length;
+  const totalJobsCount = jobs.length;
 
   return {
     filters,
     filteredJobs,
     loading,
     handleFiltersChange,
+    // NEW: Profile filter toggle
+    profileFilterActive,
+    handleProfileFilterToggle,
+    matchedJobsCount,
+    totalJobsCount,
   };
 };
 
 // Helper functions
+
+/**
+ * Calculate schedule match score (0-1) - how well job schedule matches user's available days
+ */
+const calculateScheduleScore = (job: Job, availableDays: string[]): number => {
+  if (!availableDays.length) return 0;
+  
+  const schedule = (job.workSchedule || '').toLowerCase();
+  const description = (job.description || '').toLowerCase();
+  const title = (job.title || '').toLowerCase();
+  // Handle requirements/benefits that can be string OR array
+  const requirements = Array.isArray(job.requirements) 
+    ? job.requirements.join(' ').toLowerCase() 
+    : (typeof job.requirements === 'string' ? job.requirements.toLowerCase() : '');
+  const benefits = Array.isArray(job.benefits) 
+    ? job.benefits.join(' ').toLowerCase() 
+    : (typeof job.benefits === 'string' ? job.benefits.toLowerCase() : '');
+  
+  // Combine all text fields for better matching (especially for viecoi jobs)
+  const combined = `${schedule} ${description} ${title} ${requirements} ${benefits}`;
+  
+  // If job mentions "linh hoạt" or "flexible", it's a good match for any schedule
+  if (combined.includes('linh hoạt') || combined.includes('flexible') || combined.includes('tự chọn') || 
+      combined.includes('sắp xếp') || combined.includes('thoải mái')) {
+    return 0.9;
+  }
+  
+  // Count matching days
+  let matchCount = 0;
+  availableDays.forEach(day => {
+    const patterns = getDayPatterns(day);
+    if (patterns.some(pattern => combined.includes(pattern))) {
+      matchCount++;
+    }
+  });
+  
+  // Also check for "cuối tuần" if user selected sat/sun
+  const wantsWeekend = availableDays.includes('saturday') || availableDays.includes('sunday');
+  if (wantsWeekend && (combined.includes('cuối tuần') || combined.includes('weekend'))) {
+    matchCount += 0.5;
+  }
+  
+  // Check for "full week" patterns
+  if (combined.includes('cả tuần') || combined.includes('toàn thời gian') || combined.includes('full-time')) {
+    matchCount = availableDays.length * 0.7; // Good but not perfect match
+  }
+  
+  // ✅ NEW: If no schedule info in job, assume it's flexible (viecoi jobs often don't have explicit schedule)
+  const hasScheduleKeywords = combined.match(/thứ|t[2-7]|cn|monday|tuesday|ca\s|giờ\s|buổi|sáng|chiều|tối/i);
+  if (!schedule && !hasScheduleKeywords) {
+    return 0.5; // Neutral - may or may not match
+  }
+  
+  return Math.min(matchCount / availableDays.length, 1);
+};
+
+/**
+ * Calculate time slot match score (0-1)
+ */
+const calculateTimeSlotScore = (job: Job, timeSlots: StudentFilterState['timeSlots']): number => {
+  const description = (job.description || '').toLowerCase();
+  const schedule = (job.workSchedule || '').toLowerCase();
+  const title = (job.title || '').toLowerCase();
+  // Handle requirements/benefits that can be string OR array
+  const requirements = Array.isArray(job.requirements) 
+    ? job.requirements.join(' ').toLowerCase() 
+    : (typeof job.requirements === 'string' ? job.requirements.toLowerCase() : '');
+  const benefits = Array.isArray(job.benefits) 
+    ? job.benefits.join(' ').toLowerCase() 
+    : (typeof job.benefits === 'string' ? job.benefits.toLowerCase() : '');
+  
+  // Combine all text for better matching (especially viecoi jobs)
+  const combined = `${description} ${schedule} ${title} ${requirements} ${benefits}`;
+  
+  // If job mentions "linh hoạt", it matches all time slots
+  if (combined.includes('linh hoạt') || combined.includes('flexible') || combined.includes('tự chọn')) {
+    return 0.9;
+  }
+  
+  const activeSlots = Object.entries(timeSlots).filter(([_, v]) => v).map(([k]) => k);
+  if (!activeSlots.length) return 0;
+  
+  let matchCount = 0;
+  
+  activeSlots.forEach(slot => {
+    switch (slot) {
+      case 'morning':
+        if (combined.includes('sáng') || /\b[6-9]h|10h|11h/.test(combined)) matchCount++;
+        break;
+      case 'afternoon':
+        if (combined.includes('chiều') || /\b1[2-7]h/.test(combined)) matchCount++;
+        break;
+      case 'evening':
+        if (combined.includes('tối') || /\b1[8-9]h|20h|21h|22h/.test(combined)) matchCount++;
+        break;
+      case 'weekend':
+        if (combined.includes('cuối tuần') || combined.includes('t7') || combined.includes('cn') || combined.includes('chủ nhật')) matchCount++;
+        break;
+    }
+  });
+  
+  // If no time info in job, give neutral score
+  if (!combined.match(/sáng|chiều|tối|cuối tuần|\d+h/i)) {
+    return 0.5;
+  }
+  
+  return matchCount / activeSlots.length;
+};
+
+/**
+ * Calculate salary match score (0-1)
+ */
+const calculateSalaryMatchScore = (job: Job, minHourlyRate: number): number => {
+  if (!minHourlyRate) return 0;
+  
+  // Check hourlyRate field first
+  if (job.hourlyRate) {
+    const ratio = job.hourlyRate / minHourlyRate;
+    if (ratio >= 1) return Math.min(ratio, 1.5) / 1.5;
+    return ratio * 0.5; // Partial score if below desired
+  }
+  
+  // Try to parse from salary text
+  const salaryText = getSalaryText(job);
+  if (!salaryText) return 0.5; // Neutral if no salary info
+  
+  // Try to extract hourly rate
+  const hourlyRate = extractHourlyRate(salaryText);
+  if (hourlyRate) {
+    const ratio = hourlyRate / minHourlyRate;
+    if (ratio >= 1) return Math.min(ratio, 1.5) / 1.5;
+    return ratio * 0.5;
+  }
+  
+  // Try to estimate from monthly salary
+  const monthlyMatch = salaryText.match(/(\d+)\s*(triệu|tr)/i);
+  if (monthlyMatch) {
+    const monthly = parseInt(monthlyMatch[1]) * 1_000_000;
+    // Estimate hourly: monthly / 26 days / 8 hours
+    const estimatedHourly = monthly / 26 / 8;
+    const ratio = estimatedHourly / minHourlyRate;
+    if (ratio >= 1) return Math.min(ratio, 1.5) / 1.5;
+    return ratio * 0.5;
+  }
+  
+  // If "thỏa thuận" or negotiable, give neutral score
+  if (salaryText.includes('thỏa thuận') || salaryText.includes('thương lượng')) {
+    return 0.5;
+  }
+  
+  return 0.3; // Low score if salary info unclear
+};
+
 const getDayPatterns = (day: string): string[] => {
   const patterns: Record<string, string[]> = {
-    monday: ['thứ 2', 'thứ hai', 't2'],
-    tuesday: ['thứ 3', 'thứ ba', 't3'],
-    wednesday: ['thứ 4', 'thứ tư', 't4'],
-    thursday: ['thứ 5', 'thứ năm', 't5'],
-    friday: ['thứ 6', 'thứ sáu', 't6'],
-    saturday: ['thứ 7', 'thứ bảy', 't7'],
-    sunday: ['chủ nhật', 'cn'],
+    monday: ['thứ 2', 'thứ hai', 't2', 'monday'],
+    tuesday: ['thứ 3', 'thứ ba', 't3', 'tuesday'],
+    wednesday: ['thứ 4', 'thứ tư', 't4', 'wednesday'],
+    thursday: ['thứ 5', 'thứ năm', 't5', 'thursday'],
+    friday: ['thứ 6', 'thứ sáu', 't6', 'friday'],
+    saturday: ['thứ 7', 'thứ bảy', 't7', 'saturday'],
+    sunday: ['chủ nhật', 'cn', 'sunday'],
   };
   return patterns[day] || [];
 };

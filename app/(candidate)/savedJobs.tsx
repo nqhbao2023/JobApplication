@@ -82,7 +82,7 @@ const SavedJobsScreen = () => {
                         companyName = companySnap.data().corp_name || companySnap.data().name || '';
                         companyLogo = companyLogo || companySnap.data().image || '';
                       }
-                    } catch {}
+                    } catch (_companyErr) { /* ignore company fetch error */ }
                   }
                 }
                 

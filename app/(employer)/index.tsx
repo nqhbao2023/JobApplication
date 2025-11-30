@@ -126,7 +126,7 @@ export default function EmployerHome() {
     if (value.toDate && typeof value.toDate === 'function') {
       try {
         return value.toDate();
-      } catch {
+      } catch (_e) {
         return null;
       }
     }

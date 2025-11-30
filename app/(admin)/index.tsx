@@ -189,9 +189,9 @@ const AdminDashboard = () => {
       <View style={styles.quickActions}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
-        <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(admin)/user-create')}>
-          <Ionicons name="person-add-outline" size={20} color="#007AFF" />
-          <Text style={styles.actionText}>Thêm User mới</Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(admin)/users')}>
+          <Ionicons name="people-outline" size={20} color="#007AFF" />
+          <Text style={styles.actionText}>Quản lý Users</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(admin)/job-create')}>

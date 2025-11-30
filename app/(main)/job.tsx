@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { db, auth } from '../../src/config/firebase';
 import { collection, doc, getDocs, getDoc, query, where, addDoc, deleteDoc } from 'firebase/firestore';
+import { formatSalary } from '@/utils/salary.utils';
 
 const Job = () => {
   const [selectedTab, setSelectedTab] = useState(0);
@@ -90,7 +91,7 @@ const Job = () => {
           <Text style={styles.jobLocation}>{item.company?.city}, {item.company?.nation}</Text>
         </View>
         <View style={styles.jobRight}>
-          <Text style={styles.jobSalary}>$ {item.salary}</Text>
+          <Text style={styles.jobSalary}>{formatSalary(item.salary) || 'Thỏa thuận'}</Text>
           <Text style={styles.jobType}>{item.jobTypes?.type_name}</Text>
           <TouchableOpacity onPress={() => handleSaveJob(item.$id)} style={{ padding: 4 }}>
   <Ionicons

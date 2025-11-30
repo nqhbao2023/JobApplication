@@ -11,9 +11,7 @@ import {
   RefreshControl,
   Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import axios from 'axios';
 import { auth } from '@/config/firebase';
 import { API_BASE_URL } from '@/config/api';
@@ -269,22 +267,25 @@ const QuickPostsPending = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4A80F0" />
-      </SafeAreaView>
+        <Text style={styles.loadingText}>Đang tải danh sách...</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1F2937" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pending Quick Posts ({posts.length})</Text>
-        <TouchableOpacity onPress={fetchPendingPosts}>
-          <Ionicons name="refresh" size={24} color="#4A80F0" />
+    <View style={styles.container}>
+      {/* Stats Bar */}
+      <View style={styles.statsBar}>
+        <View style={styles.statItem}>
+          <Ionicons name="document-text" size={18} color="#4A80F0" />
+          <Text style={styles.statText}>
+            <Text style={styles.statNumber}>{posts.length}</Text> tin chờ duyệt
+          </Text>
+        </View>
+        <TouchableOpacity onPress={fetchPendingPosts} style={styles.refreshBtn}>
+          <Ionicons name="refresh" size={20} color="#4A80F0" />
         </TouchableOpacity>
       </View>
 
@@ -299,12 +300,13 @@ const QuickPostsPending = () => {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="checkmark-done-circle" size={64} color="#9CA3AF" />
-            <Text style={styles.emptyText}>No pending posts</Text>
+            <Ionicons name="checkmark-done-circle" size={64} color="#10B981" />
+            <Text style={styles.emptyTitle}>Không có tin chờ duyệt</Text>
+            <Text style={styles.emptyText}>Tất cả Quick Posts đã được xử lý</Text>
           </View>
         }
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -313,7 +315,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  header: {
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  statsBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -323,13 +336,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
-  headerTitle: {
-    fontSize: 18,
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  statNumber: {
     fontWeight: '700',
     color: '#1F2937',
   },
+  refreshBtn: {
+    padding: 8,
+  },
   list: {
     padding: 16,
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: '#FFF',
@@ -462,12 +487,18 @@ const styles = StyleSheet.create({
   empty: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginTop: 16,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#9CA3AF',
-    marginTop: 12,
+    marginTop: 8,
   },
 });
 

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { deleteDoc, doc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
-import { Button } from '@/components/base/Button';
 import { SearchBar } from '@/components/base/SearchBar';
 import { EmptyState } from '@/components/base/EmptyState';
 import { LoadingSpinner } from '@/components/base/LoadingSpinner';
@@ -21,9 +20,12 @@ type User = {
   isAdmin?: boolean;
   phone?: string;
   created_at?: string;
+  disabled?: boolean;
+  disabledAt?: string;
+  disabledReason?: string;
 };
 
-type RoleFilter = 'all' | 'admin' | 'employer' | 'candidate';
+type RoleFilter = 'all' | 'admin' | 'employer' | 'candidate' | 'disabled';
 
 const UsersScreen = () => {
   const { data: users, loading, reload } = useFirestoreCollection<User>('users');
@@ -32,59 +34,88 @@ const UsersScreen = () => {
   const { filter: roleFilter, setFilter: setRoleFilter, filtered: filteredUsers } = useFilter<User, RoleFilter>(
     searchResults,
     (user, filter) => {
+      if (filter === 'all') return true;
+      if (filter === 'disabled') return user.disabled === true;
       if (filter === 'admin') return user.isAdmin === true;
       return user.role === filter;
     }
   );
 
-  const handleEdit = (userId: string) => {
+  const handleViewDetail = (userId: string) => {
     router.push({ pathname: '/(admin)/user-detail', params: { userId } } as any);
   };
 
-  const handleDelete = (userId: string, name: string, user: User) => {
-    // Ngăn admin tự xóa chính mình
+  const handleToggleDisable = (userId: string, userName: string, user: User) => {
+    // Ngăn admin tự disable chính mình
     const currentUserId = auth.currentUser?.uid;
     if (userId === currentUserId) {
-      Alert.alert('Không thể xóa', 'Bạn không thể xóa chính tài khoản của mình!');
+      Alert.alert('Không thể thực hiện', 'Bạn không thể vô hiệu hóa chính tài khoản của mình!');
       return;
     }
 
-    // Cảnh báo khi xóa admin khác
+    const isCurrentlyDisabled = user.disabled === true;
+    const action = isCurrentlyDisabled ? 'kích hoạt lại' : 'vô hiệu hóa';
+    
+    // Cảnh báo khi disable admin khác
     const isAdminUser = user.isAdmin === true;
-    const warningMessage = isAdminUser
-      ? `⚠️ CẢNH BÁO: "${name}" là ADMIN!\n\nBạn có chắc chắn muốn xóa tài khoản admin này?`
-      : `Bạn có chắc muốn xóa user "${name}"?`;
+    const warningMessage = isAdminUser && !isCurrentlyDisabled
+      ? `⚠️ CẢNH BÁO: "${userName}" là ADMIN!\n\nBạn có chắc chắn muốn vô hiệu hóa tài khoản admin này?`
+      : `Bạn có chắc muốn ${action} tài khoản "${userName}"?`;
 
-    Alert.alert('Xác nhận', warningMessage, [
-      { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Xóa',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'users', userId));
-            await reload();
-            Alert.alert('Thành công', 'Đã xóa user');
-          } catch (error) {
-            Alert.alert('Lỗi', 'Không thể xóa user');
-          }
+    Alert.alert(
+      isCurrentlyDisabled ? 'Kích hoạt tài khoản' : 'Vô hiệu hóa tài khoản',
+      warningMessage,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: isCurrentlyDisabled ? 'Kích hoạt' : 'Vô hiệu hóa',
+          style: isCurrentlyDisabled ? 'default' : 'destructive',
+          onPress: async () => {
+            try {
+              if (isCurrentlyDisabled) {
+                // Kích hoạt lại
+                await updateDoc(doc(db, 'users', userId), {
+                  disabled: false,
+                  disabledAt: null,
+                  disabledReason: null,
+                  enabledAt: new Date().toISOString(),
+                  enabledBy: currentUserId,
+                });
+                Alert.alert('Thành công', `Đã kích hoạt lại tài khoản "${userName}"`);
+              } else {
+                // Vô hiệu hóa
+                await updateDoc(doc(db, 'users', userId), {
+                  disabled: true,
+                  disabledAt: new Date().toISOString(),
+                  disabledBy: currentUserId,
+                  disabledReason: 'Bị vô hiệu hóa bởi admin',
+                });
+                Alert.alert('Thành công', `Đã vô hiệu hóa tài khoản "${userName}"`);
+              }
+              await reload();
+            } catch (error) {
+              console.error('Error toggling user status:', error);
+              Alert.alert('Lỗi', `Không thể ${action} tài khoản`);
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
+
+  // Đếm số user theo trạng thái
+  const disabledCount = users.filter(u => u.disabled === true).length;
+  const activeCount = users.length - disabledCount;
 
   if (loading) return <LoadingSpinner text="Đang tải danh sách users..." />;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Button
-          title="Tạo User"
-          icon="person-add"
-          variant="success"
-          onPress={() => router.push('/(admin)/user-create')}
-          fullWidth
-        />
+      {/* Info Banner */}
+      <View style={styles.infoBanner}>
+        <Text style={styles.infoText}>
+          ℹ️ Admin chỉ có thể xem và quản lý trạng thái tài khoản. User tự đăng ký qua ứng dụng.
+        </Text>
       </View>
 
       <SearchBar
@@ -94,7 +125,7 @@ const UsersScreen = () => {
       />
 
       <FilterTabs
-        options={['all', 'admin', 'employer', 'candidate'] as const}
+        options={['all', 'admin', 'employer', 'candidate', 'disabled'] as const}
         active={roleFilter}
         onChange={setRoleFilter}
         labels={{
@@ -102,19 +133,26 @@ const UsersScreen = () => {
           admin: 'Admin',
           employer: 'Employer',
           candidate: 'Candidate',
+          disabled: `Đã khóa (${disabledCount})`,
         }}
       />
 
       <View style={styles.stats}>
         <Text style={styles.statsText}>
-          Hiển thị {filteredUsers.length} / {users.length} users
+          Hiển thị {filteredUsers.length} / {users.length} users • 
+          <Text style={styles.activeText}> {activeCount} hoạt động</Text> • 
+          <Text style={styles.disabledText}> {disabledCount} bị khóa</Text>
         </Text>
       </View>
 
       <FlatList
         data={filteredUsers}
         renderItem={({ item }) => (
-          <UserCard user={item} onEdit={handleEdit} onDelete={handleDelete} />
+          <UserCard 
+            user={item} 
+            onView={handleViewDetail} 
+            onToggleDisable={handleToggleDisable} 
+          />
         )}
         keyExtractor={(item) => item.$id}
         contentContainerStyle={styles.list}
@@ -130,8 +168,21 @@ export default UsersScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f1f5f9' },
-  header: { padding: 16, paddingBottom: 0 },
+  infoBanner: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BFDBFE',
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#1E40AF',
+    lineHeight: 18,
+  },
   stats: { paddingHorizontal: 16, paddingVertical: 12 },
   statsText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  activeText: { color: '#10B981' },
+  disabledText: { color: '#EF4444' },
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
 });

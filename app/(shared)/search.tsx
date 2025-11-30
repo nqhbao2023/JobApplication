@@ -1,8 +1,14 @@
 /**
  * Trang tìm kiếm việc làm - ViecLam24h Style
  * Flow: Home -> SearchInputPage -> SearchResultsPage
+ * 
+ * ✅ Hỗ trợ:
+ * - Tìm kiếm tự do (free-text search)
+ * - Gợi ý từ Algolia real-time
+ * - Gợi ý từ danh sách local
+ * - Lịch sử tìm kiếm
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,23 +19,40 @@ import {
   FlatList,
   Alert,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { VIETNAM_CITIES } from '@/constants/locations';
-import { filterJobPositions } from '@/constants/jobPositions';
+import { filterJobPositions, POPULAR_JOB_POSITIONS } from '@/constants/jobPositions';
+import { getJobSuggestions, isAlgoliaAvailable } from '@/services/algoliaSearch.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 
 const RECENT_SEARCHES_KEY = '@recent_searches';
 
+// Hot searches - Các từ khóa phổ biến để gợi ý khi chưa có recent searches
+const HOT_SEARCHES = [
+  { keyword: 'IT', icon: 'laptop-outline' as const },
+  { keyword: 'Marketing', icon: 'megaphone-outline' as const },
+  { keyword: 'Kế toán', icon: 'calculator-outline' as const },
+  { keyword: 'Kinh doanh', icon: 'trending-up-outline' as const },
+  { keyword: 'Nhân sự', icon: 'people-outline' as const },
+  { keyword: 'Thiết kế', icon: 'color-palette-outline' as const },
+];
+
 interface RecentSearch {
   position: string;
   location: string;
   timestamp: number;
+}
+
+interface AlgoliaSuggestion {
+  title: string;
+  company: string;
 }
 
 export default function SearchInputPage() {
@@ -39,23 +62,63 @@ export default function SearchInputPage() {
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [filteredPositions, setFilteredPositions] = useState<string[]>([]);
+  const [algoliaSuggestions, setAlgoliaSuggestions] = useState<AlgoliaSuggestion[]>([]);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  
+  // Debounce timer for Algolia search
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Load recent searches
   useEffect(() => {
     loadRecentSearches();
   }, []);
 
-  // Filter positions as user types - CHỈ KHI CÓ INPUT
+  // Filter positions as user types - Kết hợp Local + Algolia
   useEffect(() => {
     if (position.trim().length > 0) {
+      // 1. Local filtering - instant
       const filtered = filterJobPositions(position);
-      setFilteredPositions(filtered);
+      setFilteredPositions(filtered.slice(0, 8)); // Limit to 8 local suggestions
       setShowPositionSuggestions(true);
+      
+      // 2. Algolia suggestions - debounced (disabled for now - network issues)
+      // Chỉ dùng local suggestions để tránh lỗi mạng
+      setAlgoliaSuggestions([]);
+      /*
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+      
+      debounceTimer.current = setTimeout(async () => {
+        if (position.trim().length >= 2 && isAlgoliaAvailable()) {
+          setIsLoadingSuggestions(true);
+          try {
+            const suggestions = await getJobSuggestions(position.trim(), 5);
+            setAlgoliaSuggestions(suggestions);
+          } catch (error) {
+            console.log('Algolia suggestions error:', error);
+            setAlgoliaSuggestions([]);
+          } finally {
+            setIsLoadingSuggestions(false);
+          }
+        } else {
+          setAlgoliaSuggestions([]);
+        }
+      }, 300); // 300ms debounce
+      */
     } else {
       setFilteredPositions([]);
+      setAlgoliaSuggestions([]);
       setShowPositionSuggestions(false);
     }
+    
+    // Cleanup
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
   }, [position]);
 
   const loadRecentSearches = async () => {
@@ -250,6 +313,10 @@ export default function SearchInputPage() {
                 setShowPositionSuggestions(true);
               }}
               onFocus={() => setShowPositionSuggestions(true)}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
             />
             {position.length > 0 && (
               <TouchableOpacity
@@ -264,40 +331,102 @@ export default function SearchInputPage() {
             )}
           </TouchableOpacity>
 
-          {/* Position Suggestions */}
+          {/* Position Suggestions - Combined Local + Algolia */}
           {showPositionSuggestions && (
             <Animated.View
               entering={FadeInDown.duration(200)}
               style={styles.suggestionsContainer}
             >
-              <FlatList
-                data={filteredPositions}
-                keyExtractor={(item, index) => `${item}-${index}`}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      setPosition(item);
-                      setShowPositionSuggestions(false);
-                    }}
+              <ScrollView 
+                style={styles.suggestionsScroll} 
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+              >
+                {/* Loading indicator */}
+                {isLoadingSuggestions && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#7c3aed" />
+                    <Text style={styles.loadingText}>Đang tìm kiếm...</Text>
+                  </View>
+                )}
+
+                {/* Algolia Real-time Suggestions */}
+                {algoliaSuggestions.length > 0 && (
+                  <View style={styles.suggestionSection}>
+                    <View style={styles.suggestionHeader}>
+                      <Ionicons name="flash" size={14} color="#7c3aed" />
+                      <Text style={styles.suggestionHeaderText}>Từ việc làm thực tế</Text>
+                    </View>
+                    {algoliaSuggestions.map((item, index) => (
+                      <TouchableOpacity
+                        key={`algolia-${index}`}
+                        style={styles.suggestionItem}
+                        onPress={() => {
+                          setPosition(item.title);
+                          setShowPositionSuggestions(false);
+                          Keyboard.dismiss();
+                        }}
+                      >
+                        <View style={[styles.suggestionIcon, styles.algoliaIcon]}>
+                          <Ionicons name="briefcase" size={16} color="#7c3aed" />
+                        </View>
+                        <View style={styles.suggestionContent}>
+                          <Text style={styles.suggestionText} numberOfLines={1}>
+                            {item.title}
+                          </Text>
+                          <Text style={styles.suggestionCompany} numberOfLines={1}>
+                            {item.company}
+                          </Text>
+                        </View>
+                        <Ionicons name="arrow-forward" size={16} color="#cbd5e1" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Local Suggestions */}
+                {filteredPositions.length > 0 && (
+                  <View style={styles.suggestionSection}>
+                    <View style={styles.suggestionHeader}>
+                      <Ionicons name="list" size={14} color="#64748b" />
+                      <Text style={styles.suggestionHeaderText}>Gợi ý vị trí</Text>
+                    </View>
+                    {filteredPositions.map((item, index) => (
+                      <TouchableOpacity
+                        key={`local-${index}`}
+                        style={styles.suggestionItem}
+                        onPress={() => {
+                          setPosition(item);
+                          setShowPositionSuggestions(false);
+                          Keyboard.dismiss();
+                        }}
+                      >
+                        <View style={styles.suggestionIcon}>
+                          <Ionicons name="briefcase-outline" size={16} color="#64748b" />
+                        </View>
+                        <Text style={[styles.suggestionText, { flex: 1 }]}>{item}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Free search hint - Always show when no suggestions */}
+                {filteredPositions.length === 0 && algoliaSuggestions.length === 0 && !isLoadingSuggestions && position.trim().length > 0 && (
+                  <TouchableOpacity 
+                    style={styles.freeSearchHint}
+                    onPress={handleSearch}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons
-                      name="briefcase-outline"
-                      size={18}
-                      color="#64748b"
-                    />
-                    <Text style={styles.suggestionText}>{item}</Text>
+                    <View style={styles.freeSearchIcon}>
+                      <Ionicons name="search" size={20} color="#7c3aed" />
+                    </View>
+                    <Text style={styles.freeSearchTitle} numberOfLines={1}>
+                      Tìm "{position.trim()}"
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color="#7c3aed" />
                   </TouchableOpacity>
                 )}
-                scrollEnabled={false}
-                ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>
-                      Không tìm thấy vị trí phù hợp
-                    </Text>
-                  </View>
-                }
-              />
+              </ScrollView>
             </Animated.View>
           )}
         </View>
@@ -463,6 +592,40 @@ export default function SearchInputPage() {
             ))}
           </View>
         )}
+
+        {/* Hot Searches - Show when no recent searches and not typing */}
+        {recentSearches.length === 0 && !showPositionSuggestions && !showLocationPicker && (
+          <View style={styles.hotSearchSection}>
+            <Text style={styles.hotSearchTitle}>🔥 Tìm kiếm phổ biến</Text>
+            <View style={styles.hotSearchGrid}>
+              {HOT_SEARCHES.map((item, index) => (
+                <Animated.View
+                  key={item.keyword}
+                  entering={FadeInDown.delay(index * 50).duration(300)}
+                >
+                  <TouchableOpacity
+                    style={styles.hotSearchChip}
+                    onPress={() => {
+                      setPosition(item.keyword);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                  >
+                    <Ionicons name={item.icon} size={16} color="#7c3aed" />
+                    <Text style={styles.hotSearchText}>{item.keyword}</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </View>
+            
+            {/* Tips for demo */}
+            <View style={styles.searchTips}>
+              <Text style={styles.searchTipsTitle}>💡 Mẹo tìm kiếm</Text>
+              <Text style={styles.searchTipsText}>• Nhập bất kỳ từ khóa nào để tìm kiếm</Text>
+              <Text style={styles.searchTipsText}>• Kết quả sử dụng Algolia AI Search</Text>
+              <Text style={styles.searchTipsText}>• Lọc theo địa điểm, kinh nghiệm...</Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -534,21 +697,97 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    maxHeight: 300,
+    maxHeight: 350,
     overflow: 'hidden',
+  },
+  suggestionsScroll: {
+    maxHeight: 350,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#7c3aed',
+  },
+  suggestionSection: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  suggestionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#f8fafc',
+  },
+  suggestionHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    padding: 12,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
-    gap: 12,
+    gap: 10,
+  },
+  suggestionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  algoliaIcon: {
+    backgroundColor: '#f3e8ff',
+  },
+  suggestionContent: {
+    flex: 1,
   },
   suggestionText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#334155',
+    fontWeight: '500',
+  },
+  suggestionCompany: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  freeSearchHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+    backgroundColor: '#faf5ff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  freeSearchIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#f3e8ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  freeSearchTitle: {
     flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6b21a8',
   },
   locationPicker: {
     marginTop: 8,
@@ -687,12 +926,58 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
   },
-  emptyContainer: {
-    padding: 20,
-    alignItems: 'center',
+  hotSearchSection: {
+    marginTop: 24,
   },
-  emptyText: {
+  hotSearchTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  hotSearchGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 24,
+  },
+  hotSearchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  hotSearchText: {
     fontSize: 14,
-    color: '#94a3b8',
+    fontWeight: '600',
+    color: '#6b21a8',
+  },
+  searchTips: {
+    backgroundColor: '#f0fdf4',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  searchTipsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#166534',
+    marginBottom: 8,
+  },
+  searchTipsText: {
+    fontSize: 13,
+    color: '#15803d',
+    lineHeight: 22,
   },
 });

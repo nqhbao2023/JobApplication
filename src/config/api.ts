@@ -119,5 +119,11 @@ export const API_ENDPOINTS = {
     role: '/api/auth/role',
     sync: '/api/auth/sync',
     profile: '/api/auth/profile',
+    // OTP endpoints
+    sendOTP: '/api/auth/send-otp',
+    verifyOTP: '/api/auth/verify-otp',
+    resetPassword: '/api/auth/reset-password',
+    checkOTPStatus: '/api/auth/check-otp-status',
+    consumeOTP: '/api/auth/consume-otp',
   },
 };

@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
+import { formatSalary } from '@/utils/salary.utils';
 
 import { jobApiService } from '@/services/jobApi.service';
 
@@ -105,13 +106,7 @@ export default function MyJobs() {
       : null;
 
     // Handle salary (có thể là number hoặc object với min/max)
-    const salaryText = item.salary 
-      ? (typeof item.salary === 'number' 
-          ? item.salary.toLocaleString('vi-VN') + ' VNĐ'
-          : item.salary.min && item.salary.max
-            ? `${item.salary.min.toLocaleString('vi-VN')} - ${item.salary.max.toLocaleString('vi-VN')} ${item.salary.currency || 'VNĐ'}`
-            : 'Thỏa thuận')
-      : 'Thỏa thuận';
+    const salaryText = formatSalary(item.salary) || 'Thỏa thuận';
 
     const jobType = textify(item.jobTypes, 'type');
     const jobCategory = textify(item.jobCategories, 'category');

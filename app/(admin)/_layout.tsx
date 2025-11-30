@@ -96,10 +96,10 @@ export default function AdminLayout() {
       <Stack.Screen name="analytics" options={{ title: "Thống kê" }} />
       <Stack.Screen name="job-types" options={{ title: "Job Types" }} />
       <Stack.Screen name="job-categories" options={{ title: "Job Categories" }} />
-      <Stack.Screen name="user-detail" options={{ title: "Chỉnh sửa User" }} />
+      <Stack.Screen name="user-detail" options={{ title: "Chi tiết User" }} />
       <Stack.Screen name="job-detail" options={{ title: "Chỉnh sửa Job" }} />
-      <Stack.Screen name="user-create" options={{ title: "Tạo User Mới" }} />
       <Stack.Screen name="job-create" options={{ title: "Tạo Job Mới" }} />
+      <Stack.Screen name="quick-posts-pending" options={{ title: "Quick Posts Chờ duyệt" }} />
     </Stack>
   );
 }

@@ -49,6 +49,15 @@ export interface UserProfile {
   studentProfile?: StudentProfile;
 }
 
+// OTP Response Types
+export interface OTPResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  cooldownRemaining?: number;
+  verified?: boolean;
+}
+
 export const authApiService = {
   // Verify Firebase token with backend
   async verifyToken(): Promise<AuthResponse | null> {
@@ -151,5 +160,124 @@ export const authApiService = {
     studentProfile?: StudentProfile;
   }): Promise<UserProfile> {
     return apiClient.patch<UserProfile>(API_ENDPOINTS.auth.profile, updates);
+  },
+
+  // ===== OTP Methods =====
+
+  /**
+   * Send OTP to email for verification or password reset
+   */
+  async sendOTP(
+    email: string,
+    purpose: 'email_verification' | 'password_reset'
+  ): Promise<OTPResponse> {
+    try {
+      const response = await apiClient.post<OTPResponse>(API_ENDPOINTS.auth.sendOTP, {
+        email,
+        purpose,
+      });
+      return response;
+    } catch (err: any) {
+      if (err?.response?.data) {
+        return {
+          success: false,
+          error: err.response.data.error || 'Không thể gửi mã OTP',
+          cooldownRemaining: err.response.data.cooldownRemaining,
+        };
+      }
+      return {
+        success: false,
+        error: err?.message || 'Đã xảy ra lỗi khi gửi mã OTP',
+      };
+    }
+  },
+
+  /**
+   * Verify OTP code
+   */
+  async verifyOTP(
+    email: string,
+    code: string,
+    purpose: 'email_verification' | 'password_reset'
+  ): Promise<OTPResponse> {
+    try {
+      const response = await apiClient.post<OTPResponse>(API_ENDPOINTS.auth.verifyOTP, {
+        email,
+        code,
+        purpose,
+      });
+      return response;
+    } catch (err: any) {
+      if (err?.response?.data) {
+        return {
+          success: false,
+          error: err.response.data.error || 'Mã OTP không chính xác',
+        };
+      }
+      return {
+        success: false,
+        error: err?.message || 'Đã xảy ra lỗi khi xác thực OTP',
+      };
+    }
+  },
+
+  /**
+   * Reset password after OTP verification
+   */
+  async resetPassword(email: string, newPassword: string): Promise<OTPResponse> {
+    try {
+      const response = await apiClient.post<OTPResponse>(API_ENDPOINTS.auth.resetPassword, {
+        email,
+        newPassword,
+      });
+      return response;
+    } catch (err: any) {
+      if (err?.response?.data) {
+        return {
+          success: false,
+          error: err.response.data.error || 'Không thể đặt lại mật khẩu',
+        };
+      }
+      return {
+        success: false,
+        error: err?.message || 'Đã xảy ra lỗi khi đặt lại mật khẩu',
+      };
+    }
+  },
+
+  /**
+   * Check if OTP is verified
+   */
+  async checkOTPStatus(
+    email: string,
+    purpose: 'email_verification' | 'password_reset'
+  ): Promise<{ success: boolean; verified: boolean }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; verified: boolean }>(
+        API_ENDPOINTS.auth.checkOTPStatus,
+        { email, purpose }
+      );
+      return response;
+    } catch (err: any) {
+      return { success: false, verified: false };
+    }
+  },
+
+  /**
+   * Consume OTP after successful action
+   */
+  async consumeOTP(
+    email: string,
+    purpose: 'email_verification' | 'password_reset'
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await apiClient.post<{ success: boolean }>(
+        API_ENDPOINTS.auth.consumeOTP,
+        { email, purpose }
+      );
+      return response;
+    } catch (err: any) {
+      return { success: false };
+    }
   },
 };

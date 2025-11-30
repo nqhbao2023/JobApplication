@@ -6,12 +6,13 @@ import { db } from '@/config/firebase';
 import { Button } from '@/components/base/Button';
 import { LoadingSpinner } from '@/components/base/LoadingSpinner';
 import { FormInput } from '@/components/admin/FormInput';
+import { formatSalary as formatSalaryUtil } from '@/utils/salary.utils';
 
 type Job = {
   title?: string;
   job_Description?: string;
   description?: string;
-  salary?: string;
+  salary?: string | { min?: number; max?: number; currency?: string };
   salary_text?: string;
   salary_min?: number;
   salary_max?: number;
@@ -107,7 +108,8 @@ const JobDetailScreen = () => {
     if (job.salary_min && job.salary_max) {
       return `${(job.salary_min / 1_000_000).toFixed(0)}-${(job.salary_max / 1_000_000).toFixed(0)} triệu`;
     }
-    if (job.salary) return job.salary;
+    // Use utility function for safe formatting
+    if (job.salary) return formatSalaryUtil(job.salary) || '';
     return '';
   };
 

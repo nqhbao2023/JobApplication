@@ -5,7 +5,7 @@
 
 import { algoliasearch, SearchClient } from 'algoliasearch';
 
-// Configuration
+// Configuration - lấy từ Algolia Dashboard
 const ALGOLIA_APP_ID = '3JGCR12NR5';
 const ALGOLIA_SEARCH_KEY = '6011dda6f3a88ab936e3ae448da2efca'; // Search-Only Key
 
@@ -16,14 +16,29 @@ export const INDEX_NAMES = {
   COMPANIES: 'companies',
 } as const;
 
-// Initialize Algolia client
+// Initialize Algolia client lazily to avoid blocking app startup
 let client: SearchClient | null = null;
+let algoliaAvailable = false;
+let initAttempted = false;
 
-try {
-  client = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_SEARCH_KEY);
-  console.log('✅ Algolia search client initialized');
-} catch (error) {
-  console.error('❌ Failed to initialize Algolia:', error);
+function initAlgoliaClient(): SearchClient | null {
+  if (initAttempted) return client;
+  initAttempted = true;
+  
+  try {
+    if (ALGOLIA_APP_ID && ALGOLIA_SEARCH_KEY) {
+      client = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_SEARCH_KEY);
+      algoliaAvailable = true;
+      console.log('✅ Algolia search client initialized');
+    } else {
+      console.warn('⚠️ Algolia credentials missing, search will use Firestore fallback');
+    }
+  } catch (error) {
+    console.error('❌ Failed to initialize Algolia:', error);
+    algoliaAvailable = false;
+  }
+  
+  return client;
 }
 
 /**
@@ -40,7 +55,8 @@ export async function searchJobs(params: {
   page?: number;
   hitsPerPage?: number;
 }) {
-  if (!client) {
+  const algoliaClient = initAlgoliaClient();
+  if (!algoliaClient) {
     throw new Error('Algolia client not initialized');
   }
 
@@ -80,7 +96,7 @@ export async function searchJobs(params: {
   console.log('🔍 Algolia search:', { query: searchQuery, filters: filterString });
 
   try {
-    const result = await client.search({
+    const result = await algoliaClient.search({
       requests: [
         {
           indexName: INDEX_NAMES.JOBS,
@@ -152,12 +168,13 @@ export async function searchJobs(params: {
  * Get search suggestions/autocomplete
  */
 export async function getJobSuggestions(query: string, limit: number = 5) {
-  if (!client || !query.trim()) {
+  const algoliaClient = initAlgoliaClient();
+  if (!algoliaClient || !query.trim()) {
     return [];
   }
 
   try {
-    const result = await client.search({
+    const result = await algoliaClient.search({
       requests: [
         {
           indexName: INDEX_NAMES.JOBS,
@@ -185,12 +202,13 @@ export async function getJobSuggestions(query: string, limit: number = 5) {
  * Get facet values (for filter dropdowns)
  */
 export async function getFacetValues(facetName: 'jobType' | 'jobCategory' | 'jobLocation') {
-  if (!client) {
+  const algoliaClient = initAlgoliaClient();
+  if (!algoliaClient) {
     throw new Error('Algolia client not initialized');
   }
 
   try {
-    const result = await client.search({
+    const result = await algoliaClient.search({
       requests: [
         {
           indexName: INDEX_NAMES.JOBS,
@@ -223,5 +241,9 @@ export async function getFacetValues(facetName: 'jobType' | 'jobCategory' | 'job
  * Check if Algolia is available
  */
 export function isAlgoliaAvailable(): boolean {
-  return client !== null;
+  // Try to initialize if not attempted yet
+  if (!initAttempted) {
+    initAlgoliaClient();
+  }
+  return algoliaAvailable && client !== null;
 }

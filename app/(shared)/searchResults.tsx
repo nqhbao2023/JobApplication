@@ -10,17 +10,17 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Image,
   RefreshControl,
   Modal,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { searchJobs, isAlgoliaAvailable } from '@/services/algoliaSearch.service';
 import { db } from '@/config/firebase';
-import { collection, getDocs, query, limit } from 'firebase/firestore';
+import { collection, getDocs, query, limit, doc, getDoc, documentId, where } from 'firebase/firestore';
 import { VIETNAM_CITIES, SEARCH_RADIUS, EXPERIENCE_LEVELS } from '@/constants/locations';
 
 interface Job {
@@ -28,8 +28,9 @@ interface Job {
   id?: string;
   title?: string;
   company?: string;
+  companyId?: string;
   location?: string;
-  salary?: string;
+  salary?: string | { min?: number; max?: number; currency?: string };
   image?: string;
   company_logo?: string;
   company_name?: string;
@@ -41,12 +42,117 @@ interface Job {
   _highlightResult?: any;
 }
 
+/**
+ * Format salary for display - handles both string and object formats
+ * ALWAYS returns a string to avoid React rendering issues
+ */
+function formatSalary(salary: unknown): string {
+  // Handle null/undefined
+  if (salary === null || salary === undefined) return 'Thỏa thuận';
+  
+  // If already a string, return as-is (or default if empty)
+  if (typeof salary === 'string') {
+    return salary.trim() || 'Thỏa thuận';
+  }
+  
+  // Handle object format {min, max, currency}
+  if (typeof salary === 'object' && salary !== null) {
+    const salaryObj = salary as { min?: number; max?: number; currency?: string };
+    const { min, max, currency = 'VND' } = salaryObj;
+    
+    if (!min && !max) return 'Thỏa thuận';
+    
+    const formatNumber = (num: number) => {
+      if (num >= 1000000) return `${(num / 1000000).toFixed(0)}tr`;
+      if (num >= 1000) return `${(num / 1000).toFixed(0)}k`;
+      return num.toString();
+    };
+    
+    if (min && max) {
+      return `${formatNumber(min)} - ${formatNumber(max)} ${currency}`;
+    }
+    if (min) return `Từ ${formatNumber(min)} ${currency}`;
+    if (max) return `Đến ${formatNumber(max)} ${currency}`;
+  }
+  
+  return 'Thỏa thuận';
+}
+
+/**
+ * Safe salary display - ensures we never render an object
+ */
+function getSafeDisplaySalary(job: Job): string {
+  // Priority 1: salary_text (should be string from crawler)
+  if (job.salary_text && typeof job.salary_text === 'string') {
+    return job.salary_text;
+  }
+  
+  // Priority 2: format salary object/string
+  return formatSalary(job.salary);
+}
+
+// Cache for company logos to avoid repeated queries
+const companyLogoCache: Record<string, string> = {};
+
+/**
+ * Enrich jobs with company logos from Firestore if missing
+ * This helps display proper logos for jobs from Algolia that may not have company_logo synced
+ */
+async function enrichJobsWithCompanyLogos(jobs: Job[]): Promise<Job[]> {
+  // Find jobs missing company logos but have companyId
+  const jobsNeedingLogos = jobs.filter(
+    job => !job.image && !job.company_logo && job.companyId && !companyLogoCache[job.companyId]
+  );
+  
+  if (jobsNeedingLogos.length === 0) {
+    // Apply cached logos
+    return jobs.map(job => {
+      if (!job.image && !job.company_logo && job.companyId && companyLogoCache[job.companyId]) {
+        return { ...job, company_logo: companyLogoCache[job.companyId] };
+      }
+      return job;
+    });
+  }
+  
+  // Get unique company IDs
+  const companyIds = [...new Set(jobsNeedingLogos.map(job => job.companyId).filter(Boolean))] as string[];
+  
+  // Batch fetch companies (max 10 at a time due to Firestore 'in' query limit)
+  const batchSize = 10;
+  for (let i = 0; i < companyIds.length; i += batchSize) {
+    const batch = companyIds.slice(i, i + batchSize);
+    try {
+      const companiesRef = collection(db, 'companies');
+      const companiesQuery = query(companiesRef, where(documentId(), 'in', batch));
+      const snapshot = await getDocs(companiesQuery);
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.image && typeof data.image === 'string' && data.image.startsWith('http')) {
+          companyLogoCache[doc.id] = data.image;
+        }
+      });
+    } catch (error) {
+      console.log('Error fetching company logos:', error);
+    }
+  }
+  
+  // Return jobs with enriched logos
+  return jobs.map(job => {
+    if (!job.image && !job.company_logo && job.companyId && companyLogoCache[job.companyId]) {
+      return { ...job, company_logo: companyLogoCache[job.companyId] };
+    }
+    return job;
+  });
+}
+
 export default function SearchResultsPage() {
   const params = useLocalSearchParams<{ position?: string; location?: string }>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [totalResults, setTotalResults] = useState(0);
+  const [searchSource, setSearchSource] = useState<'algolia' | 'firestore'>('algolia');
 
   // Filters
   const [selectedLocation, setSelectedLocation] = useState(params.location || 'Hà Nội');
@@ -79,8 +185,12 @@ export default function SearchResultsPage() {
             hitsPerPage: 100,
           });
 
-          setJobs(result.jobs || []);
+          // ✅ Enrich jobs with company logos if missing
+          const jobsWithLogos = await enrichJobsWithCompanyLogos(result.jobs || []);
+          
+          setJobs(jobsWithLogos);
           setTotalResults(result.total || 0);
+          setSearchSource('algolia');
           setLoading(false);
           setRefreshing(false);
           return;
@@ -91,6 +201,7 @@ export default function SearchResultsPage() {
 
       // Fallback to Firestore
       console.log('Using Firestore fallback search');
+      setSearchSource('firestore');
       const jobsRef = collection(db, 'jobs');
       const jobsQuery = query(jobsRef, limit(100));
       const snapshot = await getDocs(jobsQuery);
@@ -199,8 +310,11 @@ export default function SearchResultsPage() {
         });
       }
 
-      setJobs(allJobs);
-      setTotalResults(allJobs.length);
+      // ✅ Enrich Firestore jobs with company logos too
+      const enrichedJobs = await enrichJobsWithCompanyLogos(allJobs);
+      
+      setJobs(enrichedJobs);
+      setTotalResults(enrichedJobs.length);
     } catch (error) {
       console.error('Error fetching jobs:', error);
       setJobs([]);
@@ -242,7 +356,7 @@ export default function SearchResultsPage() {
             {params.position}
           </Text>
           <Text style={styles.headerSubtitle}>
-            {selectedLocation} • {totalResults} kết quả
+            {selectedLocation} • {totalResults} kết quả {searchSource === 'algolia' ? '⚡' : ''}
           </Text>
         </View>
       </View>
@@ -323,8 +437,33 @@ export default function SearchResultsPage() {
           {jobs.length > 0 ? (
             <View style={styles.jobsContainer}>
               {jobs.map((job, index) => {
-                // ✅ Priority: job.image (employer-uploaded) > job.company_logo (viecoi) > placeholder
-                const jobImage = job.image || job.company_logo;
+                // ✅ Smart logo detection - same as home page
+                const getJobImage = () => {
+                  // Debug log to see what data we have
+                  if (index === 0) {
+                    console.log('🖼️ Job image fields:', {
+                      id: job.$id,
+                      image: job.image,
+                      company_logo: job.company_logo,
+                      company_name: job.company_name,
+                      company: job.company,
+                    });
+                  }
+                  
+                  // Priority 1: Job image (employer-uploaded)
+                  if (job.image && typeof job.image === 'string' && job.image.trim() !== '') {
+                    return job.image;
+                  }
+                  // Priority 2: Company logo (crawled jobs)
+                  if (job.company_logo && typeof job.company_logo === 'string' && job.company_logo.trim() !== '') {
+                    return job.company_logo;
+                  }
+                  // Fallback: UI Avatars with company name
+                  const companyName = job.company_name || job.company || 'Company';
+                  return `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&size=120&background=4A80F0&color=fff&bold=true&format=png`;
+                };
+                
+                const jobImage = getJobImage();
                 
                 return (
                 <Animated.View key={job.$id} entering={FadeInDown.delay(index * 50).duration(400)}>
@@ -334,17 +473,14 @@ export default function SearchResultsPage() {
                       router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.$id } })
                     }
                   >
-                    {/* Job Image */}
-                    {jobImage ? (
-                      <Image
-                        source={{ uri: jobImage }}
-                        style={styles.jobImage}
-                      />
-                    ) : (
-                      <View style={[styles.jobImage, styles.placeholderImage]}>
-                        <Ionicons name="briefcase-outline" size={24} color="#94a3b8" />
-                      </View>
-                    )}
+                    {/* Job/Company Image */}
+                    <Image
+                      source={{ uri: jobImage }}
+                      style={styles.jobImage}
+                      contentFit="contain"
+                      transition={200}
+                      cachePolicy="memory-disk"
+                    />
 
                     <View style={styles.jobInfo}>
                       <Text style={styles.jobTitle} numberOfLines={2}>
@@ -365,7 +501,7 @@ export default function SearchResultsPage() {
                       <View style={styles.jobMeta}>
                         <Ionicons name="cash-outline" size={14} color="#10b981" />
                         <Text style={styles.jobSalary} numberOfLines={1}>
-                          {job.salary_text || job.salary || 'Thỏa thuận'}
+                          {getSafeDisplaySalary(job)}
                         </Text>
                       </View>
                     </View>
@@ -383,8 +519,20 @@ export default function SearchResultsPage() {
               </View>
               <Text style={styles.emptyTitle}>Không tìm thấy công việc</Text>
               <Text style={styles.emptySubtitle}>
-                Thử điều chỉnh bộ lọc hoặc tìm kiếm với từ khóa khác
+                Không tìm thấy kết quả cho "{params.position}" {selectedLocation !== 'Toàn quốc' ? `tại ${selectedLocation}` : ''}
               </Text>
+              <View style={styles.emptySuggestions}>
+                <Text style={styles.emptySuggestTitle}>💡 Gợi ý:</Text>
+                <Text style={styles.emptySuggestItem}>• Thử từ khóa ngắn gọn hơn (VD: "IT", "Marketing")</Text>
+                <Text style={styles.emptySuggestItem}>• Chọn "Toàn quốc" để mở rộng phạm vi</Text>
+                <Text style={styles.emptySuggestItem}>• Bỏ bộ lọc kinh nghiệm</Text>
+              </View>
+              {activeFiltersCount > 0 && (
+                <TouchableOpacity style={styles.clearAllButton} onPress={handleClearFilters}>
+                  <Ionicons name="refresh" size={18} color="#fff" />
+                  <Text style={styles.clearAllButtonText}>Xóa tất cả bộ lọc</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </ScrollView>
@@ -730,6 +878,40 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 20,
+  },
+  emptySuggestions: {
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 12,
+    width: '100%',
+    marginBottom: 16,
+  },
+  emptySuggestTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  emptySuggestItem: {
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 22,
+  },
+  clearAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#7c3aed',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    gap: 8,
+  },
+  clearAllButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
   modalOverlay: {
     flex: 1,

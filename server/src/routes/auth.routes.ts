@@ -2,6 +2,13 @@ import { Router, Request, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';
 import admin from '../config/firebase';
+import {
+  sendOTP,
+  verifyOTP,
+  resetPassword,
+  checkOTPStatus,
+  consumeOTP,
+} from '../controllers/auth.controller';
 
 const router = Router();
 const buildProfileResponse = (
@@ -30,6 +37,44 @@ router.get('/verify', authLimiter, authenticate, (req: AuthRequest, res: Respons
     message: 'Token is valid',
   });
 });
+
+/**
+ * ===== OTP ROUTES (Public - No Auth Required) =====
+ */
+
+/**
+ * POST /api/auth/send-otp
+ * Gửi mã OTP đến email
+ */
+router.post('/send-otp', authLimiter, sendOTP);
+
+/**
+ * POST /api/auth/verify-otp
+ * Xác thực mã OTP
+ */
+router.post('/verify-otp', authLimiter, verifyOTP);
+
+/**
+ * POST /api/auth/reset-password
+ * Đặt lại mật khẩu sau khi xác thực OTP
+ */
+router.post('/reset-password', authLimiter, resetPassword);
+
+/**
+ * POST /api/auth/check-otp-status
+ * Kiểm tra trạng thái xác thực OTP
+ */
+router.post('/check-otp-status', authLimiter, checkOTPStatus);
+
+/**
+ * POST /api/auth/consume-otp
+ * Sử dụng OTP sau khi hoàn thành hành động
+ */
+router.post('/consume-otp', authLimiter, consumeOTP);
+
+/**
+ * ===== END OTP ROUTES =====
+ */
 
 /**
  * GET /api/auth/role

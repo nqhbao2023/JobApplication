@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, KeyboardAvoidingView, Platform, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { Button } from '@/components/base/Button';
@@ -8,6 +9,7 @@ import { PasswordInput } from '@/components/auth/PasswordInput';
 import { RoleSelector } from '@/components/auth/RoleSelector';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAuthValidation } from '@/hooks/auth/useAuthValidation';
+import { authApiService } from '@/services/authApi.service';
 import { AppRole } from '@/types';
 
 export default function RegisterScreen() {
@@ -17,6 +19,8 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<Exclude<AppRole, 'admin'>>('candidate');
+  const [sendingOTP, setSendingOTP] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
 
   const { signUp, loading: authLoading, error: authError, clearError } = useAuth();
   const { errors, clearError: clearFieldError, validateRegisterForm, getPasswordStrength } = useAuthValidation();
@@ -26,15 +30,40 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!validateRegisterForm(name, phone, email, password, confirmPassword)) return;
 
+    // Clear previous errors
+    setRegisterError(null);
+    clearError();
+
+    // Send OTP to email for verification
+    setSendingOTP(true);
     try {
-      await signUp(name, phone, email, password, role);
-      Alert.alert('🎉 Thành công', 'Tạo tài khoản thành công!', [
-        { text: 'OK', onPress: () => router.replace('/(auth)/login') },
-      ]);
-    } catch (err) {
-      // Error handled by AuthContext
+      const result = await authApiService.sendOTP(email.trim(), 'email_verification');
+      
+      if (result.success) {
+        // Navigate to OTP verification screen with registration data
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: {
+            email: email.trim(),
+            purpose: 'email_verification',
+            name: name.trim(),
+            phone: phone.trim(),
+            password,
+            role,
+          },
+        });
+      } else {
+        // Show error inline instead of Alert
+        setRegisterError(result.error || 'Không thể gửi mã xác thực. Vui lòng thử lại.');
+      }
+    } catch (err: any) {
+      setRegisterError(err?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.');
+    } finally {
+      setSendingOTP(false);
     }
   };
+
+  const isLoading = authLoading || sendingOTP;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -48,7 +77,7 @@ export default function RegisterScreen() {
           <Text style={styles.subtitle}>Tham gia cộng đồng và mở khóa hàng ngàn cơ hội việc làm</Text>
         </Animated.View>
 
-        <RoleSelector selected={role} onChange={setRole} disabled={authLoading} />
+        <RoleSelector selected={role} onChange={setRole} disabled={isLoading} />
 
         <View style={styles.form}>
           <AuthInput
@@ -61,7 +90,7 @@ export default function RegisterScreen() {
               clearError();
             }}
             error={errors.name}
-            editable={!authLoading}
+            editable={!isLoading}
             returnKeyType="next"
           />
 
@@ -76,7 +105,7 @@ export default function RegisterScreen() {
             }}
             error={errors.phone}
             keyboardType="phone-pad"
-            editable={!authLoading}
+            editable={!isLoading}
             returnKeyType="next"
           />
 
@@ -88,12 +117,13 @@ export default function RegisterScreen() {
               setEmail(text);
               clearFieldError('email');
               clearError();
+              setRegisterError(null);
             }}
             error={errors.email}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!authLoading}
+            editable={!isLoading}
             returnKeyType="next"
           />
 
@@ -108,7 +138,7 @@ export default function RegisterScreen() {
             error={errors.password}
             showStrength
             strength={passwordStrength}
-            editable={!authLoading}
+            editable={!isLoading}
             returnKeyType="next"
           />
 
@@ -121,29 +151,36 @@ export default function RegisterScreen() {
               clearError();
             }}
             error={errors.confirmPassword}
-            editable={!authLoading}
+            editable={!isLoading}
             returnKeyType="done"
             onSubmitEditing={handleRegister}
           />
 
-          {authError && (
-            <Animated.Text entering={FadeInDown.duration(300)} style={styles.errorText}>
-              {authError}
-            </Animated.Text>
+          {(authError || registerError) && (
+            <Animated.View entering={FadeInDown.duration(300)} style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color="#991b1b" />
+              <Text style={styles.errorText}>
+                {registerError || authError}
+              </Text>
+            </Animated.View>
           )}
 
           <Button
-            title={role === 'employer' ? 'Tạo tài khoản nhà tuyển dụng' : 'Tạo tài khoản ứng viên'}
+            title={sendingOTP ? 'Đang gửi mã xác thực...' : (role === 'employer' ? 'Tạo tài khoản nhà tuyển dụng' : 'Tạo tài khoản ứng viên')}
             onPress={handleRegister}
-            loading={authLoading}
-            disabled={authLoading}
+            loading={isLoading}
+            disabled={isLoading}
             fullWidth
             size="large"
           />
 
+          <Text style={styles.otpNote}>
+            📧 Mã xác thực sẽ được gửi đến email của bạn
+          </Text>
+
           <TouchableOpacity 
             onPress={() => router.replace('/(auth)/login')} 
-            disabled={authLoading}
+            disabled={isLoading}
             style={styles.linkContainer}
           >
             <Text style={styles.linkText}>Đã có tài khoản? </Text>
@@ -186,12 +223,21 @@ const styles = StyleSheet.create({
   form: {
     marginTop: 8,
   },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 14,
-    textAlign: 'center',
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
     marginBottom: 12,
-    paddingHorizontal: 16,
+    gap: 10,
+  },
+  errorText: {
+    flex: 1,
+    color: '#991b1b',
+    fontSize: 14,
     lineHeight: 20,
   },
   linkContainer: {
@@ -208,5 +254,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4A80F0',
     fontWeight: '700',
+  },
+  otpNote: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });

@@ -114,7 +114,7 @@ export default function Submit() {
       setCvFile({ uri: f.uri, name: f.name!, type: f.mimeType! });
       setCvSource('upload');
       setSelectedCV(null); // Clear library selection
-    } catch {
+    } catch (_e) {
       Alert.alert("Lỗi", "Không thể chọn file, vui lòng thử lại.");
     }
   };
@@ -259,7 +259,7 @@ router.replace({
         try {
           await deleteObject(uploadRef.current.snapshot.ref);
           console.log("🧹 Đã xóa file lỗi khi upload.");
-        } catch {}
+        } catch (_cleanupErr) { /* ignore cleanup error */ }
       }
     } finally {
       setIsUploading(false);

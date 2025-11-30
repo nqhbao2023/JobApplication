@@ -96,6 +96,16 @@ export default function LoginScreen() {
 
         <Button title="Đăng nhập" onPress={handleLogin} loading={authLoading} disabled={authLoading} fullWidth size="large" />
 
+        {/* Forgot Password Link */}
+        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.forgotPasswordContainer}>
+          <Text 
+            style={styles.forgotPasswordLink} 
+            onPress={() => !authLoading && router.push('/(auth)/forgot-password')}
+          >
+            Quên mật khẩu?
+          </Text>
+        </Animated.View>
+
         <SocialLogin 
           onGooglePress={() => promptAsync()}
           disabled={authLoading || !request}
@@ -127,6 +137,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontSize: 14,
     color: '#991b1b',
+  },
+  forgotPasswordContainer: {
+    alignItems: 'flex-end',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  forgotPasswordLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4A80F0',
   },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24 },
   footerText: { fontSize: 15, color: '#64748b' },

@@ -50,7 +50,7 @@ try {
   auth = initializeAuth(app, {
     persistence: getReactNativePersistence(AsyncStorage),
   });
-} catch {
+} catch (_e) {
   auth = getAuth(app);
 }
 

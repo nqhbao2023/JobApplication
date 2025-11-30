@@ -13,12 +13,14 @@ type User = {
   isAdmin?: boolean;
   phone?: string;
   created_at?: string;
+  disabled?: boolean;
+  disabledAt?: string;
 };
 
 type UserCardProps = {
   user: User;
-  onEdit: (userId: string) => void;
-  onDelete: (userId: string, name: string, user: User) => void;
+  onView: (userId: string) => void;
+  onToggleDisable: (userId: string, name: string, user: User) => void;
 };
 
 const getRoleBadgeVariant = (role?: string) => {
@@ -30,19 +32,28 @@ const getRoleBadgeVariant = (role?: string) => {
   }
 };
 
-export const UserCard = ({ user, onEdit, onDelete }: UserCardProps) => {
+export const UserCard = ({ user, onView, onToggleDisable }: UserCardProps) => {
+  const isDisabled = user.disabled === true;
+
   return (
-    <Card>
+    <Card style={isDisabled ? styles.disabledCard : undefined}>
       <View style={styles.container}>
         <View style={styles.info}>
-          <Text style={styles.name}>{user.name || 'N/A'}</Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, isDisabled && styles.disabledText]}>
+              {user.name || 'N/A'}
+            </Text>
+            {isDisabled && (
+              <Badge label="Đã khóa" variant="danger" />
+            )}
+          </View>
           <Text style={styles.email}>{user.email}</Text>
           
           {user.phone && (
             <View style={styles.phoneRow}>
-            <Ionicons name="call-outline" size={14} color="#475569" />
-            <Text style={styles.phone}>{user.phone}</Text>
-          </View>
+              <Ionicons name="call-outline" size={14} color="#475569" />
+              <Text style={styles.phone}>{user.phone}</Text>
+            </View>
           )}
           
           <View style={styles.badges}>
@@ -58,18 +69,24 @@ export const UserCard = ({ user, onEdit, onDelete }: UserCardProps) => {
               Tạo: {new Date(user.created_at).toLocaleDateString('vi-VN')}
             </Text>
           )}
+          
+          {isDisabled && user.disabledAt && (
+            <Text style={styles.disabledMeta}>
+              🚫 Khóa lúc: {new Date(user.disabledAt).toLocaleDateString('vi-VN')}
+            </Text>
+          )}
         </View>
 
         <View style={styles.actions}>
           <IconButton 
-            icon="pencil" 
+            icon="eye-outline" 
             color="#3b82f6" 
-            onPress={() => onEdit(user.$id)} 
+            onPress={() => onView(user.$id)} 
           />
           <IconButton 
-            icon="trash-outline" 
-            color="#ef4444" 
-            onPress={() => onDelete(user.$id, user.name || user.email || '', user)} 
+            icon={isDisabled ? "checkmark-circle-outline" : "ban-outline"} 
+            color={isDisabled ? "#10B981" : "#f59e0b"} 
+            onPress={() => onToggleDisable(user.$id, user.name || user.email || '', user)} 
           />
         </View>
       </View>
@@ -83,13 +100,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  disabledCard: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
+  },
   info: { flex: 1, marginRight: 12 },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   name: {
     fontSize: 17,
     fontWeight: '700',
     color: '#0f172a',
-    marginBottom: 4,
     letterSpacing: 0.2,
+  },
+  disabledText: {
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
   },
   email: {
     fontSize: 14,
@@ -111,6 +142,11 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontStyle: 'italic',
   },
+  disabledMeta: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 4,
+  },
   actions: {
     flexDirection: 'row',
     gap: 12,
@@ -121,5 +157,4 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 4,
   },
-  
 });

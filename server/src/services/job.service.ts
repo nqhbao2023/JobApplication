@@ -3,6 +3,7 @@ import { db } from '../config/firebase';
 import { Job } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import aiService from './ai.service';
+import { isAlgoliaEnabled, getAlgoliaClient, INDEX_NAMES } from '../config/algolia';
 
 const JOBS_COLLECTION = 'jobs';
 
@@ -73,6 +74,75 @@ function mapDocToJob(doc: FirebaseFirestore.DocumentSnapshot): Job {
     company_logo: data.company_logo,
     salary_text: data.salary_text,
   } as Job;
+}
+
+/**
+ * ✅ Helper: Auto-sync job to Algolia after create/update
+ * Runs in background, không block response
+ */
+async function syncJobToAlgolia(job: Job): Promise<void> {
+  if (!isAlgoliaEnabled()) {
+    console.log('⚠️ Algolia disabled, skipping sync for job:', job.id);
+    return;
+  }
+
+  try {
+    const client = getAlgoliaClient();
+    const algoliaObject = {
+      objectID: job.id,
+      title: job.title || '',
+      company: job.company || '',
+      companyId: job.companyId || '',
+      description: job.description || '',
+      location: job.location || '',
+      type: job.type || '',
+      category: job.category || '',
+      status: job.status || 'active',
+      salary: job.salary || null,
+      skills: job.skills || [],
+      requirements: job.requirements || [],
+      createdAt: job.createdAt instanceof Date ? job.createdAt.getTime() / 1000 : Date.now() / 1000,
+      image: job.image || null,
+      company_logo: job.company_logo || null,
+      company_name: job.company_name || job.company || '',
+      salary_text: job.salary_text || null,
+      _tags: [job.type, job.category, job.status, job.location].filter(Boolean),
+      companyName: job.company,
+      jobType: job.type,
+      jobCategory: job.category,
+      jobLocation: job.location,
+    };
+
+    await client.saveObjects({
+      indexName: INDEX_NAMES.JOBS,
+      objects: [algoliaObject],
+    });
+
+    console.log(`✅ Synced job "${job.title}" (${job.id}) to Algolia`);
+  } catch (error: any) {
+    console.error('⚠️ Failed to sync job to Algolia:', error.message);
+    // Don't throw - sync failure should not block job creation
+  }
+}
+
+/**
+ * ✅ Helper: Delete job from Algolia
+ */
+async function deleteJobFromAlgolia(jobId: string): Promise<void> {
+  if (!isAlgoliaEnabled()) {
+    return;
+  }
+
+  try {
+    const client = getAlgoliaClient();
+    await client.deleteObject({
+      indexName: INDEX_NAMES.JOBS,
+      objectID: jobId,
+    });
+    console.log(`✅ Deleted job ${jobId} from Algolia`);
+  } catch (error: any) {
+    console.error('⚠️ Failed to delete job from Algolia:', error.message);
+  }
 }
 
 export class JobService {
@@ -221,7 +291,12 @@ export class JobService {
       
       // Fetch created job
       const doc = await jobRef.get();
-      return mapDocToJob(doc);
+      const createdJob = mapDocToJob(doc);
+      
+      // ✅ Auto-sync to Algolia (background, non-blocking)
+      syncJobToAlgolia(createdJob).catch(err => console.error('Algolia sync error:', err));
+      
+      return createdJob;
     } catch (error: any) {
       console.error('❌ JobService.createJob error:', error);
       throw new AppError(`Failed to create job: ${error.message}`, 500);
@@ -255,7 +330,12 @@ export class JobService {
       
       // Fetch updated job
       const updated = await jobRef.get();
-      return mapDocToJob(updated);
+      const updatedJob = mapDocToJob(updated);
+      
+      // ✅ Auto-sync to Algolia (background, non-blocking)
+      syncJobToAlgolia(updatedJob).catch(err => console.error('Algolia sync error:', err));
+      
+      return updatedJob;
     } catch (error: any) {
       if (error instanceof AppError) throw error;
       console.error('❌ JobService.updateJob error:', error);
@@ -273,6 +353,9 @@ export class JobService {
       }
 
       await jobRef.delete();
+      
+      // ✅ Auto-delete from Algolia (background, non-blocking)
+      deleteJobFromAlgolia(jobId).catch(err => console.error('Algolia delete error:', err));
     } catch (error: any) {
       if (error instanceof AppError) throw error;
       console.error('❌ JobService.deleteJob error:', error);

@@ -1,0 +1,342 @@
+@startuml Job4S - Complete Use Case Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam actorStyle awesome
+skinparam defaultFontSize 11
+skinparam wrapWidth 150
+
+' ==================== COLOR SETTINGS ====================
+skinparam usecase {
+  BackgroundColor<<auth>> #E3F2FD
+  BorderColor<<auth>> #1976D2
+  BackgroundColor<<candidate>> #FFF3E0
+  BorderColor<<candidate>> #F57C00
+  BackgroundColor<<employer>> #E8F5E9
+  BorderColor<<employer>> #388E3C
+  BackgroundColor<<admin>> #F3E5F5
+  BorderColor<<admin>> #7B1FA2
+  BackgroundColor<<shared>> #ECEFF1
+  BorderColor<<shared>> #607D8B
+  ArrowColor #666666
+}
+
+title __SƠ ĐỒ USE CASE TỔNG QUÁT__\n**Hệ thống tìm việc làm Job4S**\n
+
+left to right direction
+
+' ==================== ACTORS ====================
+actor "Ứng viên\n(Candidate)" as candidate #FFA726
+actor "Nhà tuyển dụng\n(Employer)" as employer #AB47BC
+actor "Quản trị viên\n(Admin)" as admin #66BB6A
+
+' ==================== HỆ THỐNG ====================
+rectangle "Hệ thống Job4S" {
+
+  ' ========== XÁC THỰC (CHUNG) ==========
+  usecase "Đăng ký tài khoản" as UC_Register <<auth>>
+  usecase "Đăng nhập" as UC_Login <<auth>>
+  usecase "Đăng xuất" as UC_Logout <<auth>>
+  usecase "Chọn vai trò" as UC_SelectRole <<auth>>
+
+  ' ========== CHỨC NĂNG CHUNG ==========
+  usecase "Xem thông báo" as UC_Notifications <<shared>>
+  usecase "Nhắn tin (Chat)" as UC_Chat <<shared>>
+  usecase "Sử dụng AI Assistant" as UC_AIAssistant <<shared>>
+
+  ' ==================== CANDIDATE USE CASES ====================
+  
+  ' --- Tìm kiếm việc làm (Main) ---
+  usecase "Tìm kiếm việc làm" as UC_C_SearchMain <<candidate>>
+  usecase "Khám phá việc làm" as UC_C_ExploreJobs <<candidate>>
+  usecase "Tìm kiếm theo từ khóa" as UC_C_SearchKeyword <<candidate>>
+  usecase "Lọc việc làm" as UC_C_FilterJobs <<candidate>>
+  usecase "Xem gợi ý từ AI" as UC_C_AIRecommend <<candidate>>
+  usecase "Xem chi tiết việc làm" as UC_C_ViewJobDetail <<candidate>>
+  usecase "Xem theo danh mục" as UC_C_ViewByCategory <<candidate>>
+  usecase "Xem theo công ty" as UC_C_ViewByCompany <<candidate>>
+  
+  ' --- Quản lý việc đã lưu (Main) ---
+  usecase "Quản lý việc đã lưu" as UC_C_SavedMain <<candidate>>
+  usecase "Lưu việc làm" as UC_C_SaveJob <<candidate>>
+  usecase "Xem danh sách đã lưu" as UC_C_ViewSavedJobs <<candidate>>
+  usecase "Bỏ lưu việc làm" as UC_C_UnsaveJob <<candidate>>
+  
+  ' --- Ứng tuyển (Main) ---
+  usecase "Ứng tuyển việc làm" as UC_C_ApplyMain <<candidate>>
+  usecase "Nộp đơn ứng tuyển" as UC_C_ApplyJob <<candidate>>
+  usecase "Chọn CV ứng tuyển" as UC_C_SelectCV <<candidate>>
+  usecase "Viết Cover Letter" as UC_C_WriteCover <<candidate>>
+  usecase "Xem đơn đã nộp" as UC_C_ViewApplied <<candidate>>
+  usecase "Rút đơn ứng tuyển" as UC_C_Withdraw <<candidate>>
+  usecase "Theo dõi trạng thái" as UC_C_TrackStatus <<candidate>>
+  
+  ' --- Quản lý CV (Main) ---
+  usecase "Quản lý CV" as UC_C_CVMain <<candidate>>
+  usecase "Xem danh sách CV" as UC_C_ViewCVs <<candidate>>
+  usecase "Tạo CV từ template" as UC_C_CreateCV <<candidate>>
+  usecase "Upload CV" as UC_C_UploadCV <<candidate>>
+  usecase "Chỉnh sửa CV" as UC_C_EditCV <<candidate>>
+  usecase "Xóa CV" as UC_C_DeleteCV <<candidate>>
+  usecase "Xuất CV (PDF)" as UC_C_ExportCV <<candidate>>
+  usecase "Đặt CV mặc định" as UC_C_SetDefaultCV <<candidate>>
+  
+  ' --- Hồ sơ cá nhân (Main) ---
+  usecase "Quản lý hồ sơ cá nhân" as UC_C_ProfileMain <<candidate>>
+  usecase "Xem hồ sơ" as UC_C_ViewProfile <<candidate>>
+  usecase "Cập nhật hồ sơ" as UC_C_UpdateProfile <<candidate>>
+  usecase "Thiết lập hồ sơ sinh viên" as UC_C_StudentProfile <<candidate>>
+  usecase "Cài đặt lịch làm việc" as UC_C_SetSchedule <<candidate>>
+  usecase "Thêm kỹ năng" as UC_C_AddSkills <<candidate>>
+  
+  ' --- Đăng tin tìm việc (Main) ---
+  usecase "Đăng tin tìm việc" as UC_C_QuickPostMain <<candidate>>
+  usecase "Tạo tin tìm việc nhanh" as UC_C_CreateQuickPost <<candidate>>
+  usecase "Xem tin đã đăng" as UC_C_ViewMyPosts <<candidate>>
+  usecase "Chỉnh sửa tin" as UC_C_EditPost <<candidate>>
+
+  ' ==================== EMPLOYER USE CASES ====================
+  
+  ' --- Dashboard (Main) ---
+  usecase "Xem Dashboard" as UC_E_DashboardMain <<employer>>
+  usecase "Xem thống kê tuyển dụng" as UC_E_ViewStats <<employer>>
+  usecase "Xem ứng viên mới" as UC_E_RecentApps <<employer>>
+  
+  ' --- Quản lý tin tuyển dụng (Main) ---
+  usecase "Quản lý tin tuyển dụng" as UC_E_JobMain <<employer>>
+  usecase "Xem tin đã đăng" as UC_E_ViewMyJobs <<employer>>
+  usecase "Tạo tin tuyển dụng" as UC_E_CreateJob <<employer>>
+  usecase "Sử dụng AI Template" as UC_E_AITemplate <<employer>>
+  usecase "Chỉnh sửa tin" as UC_E_EditJob <<employer>>
+  usecase "Xóa tin" as UC_E_DeleteJob <<employer>>
+  usecase "Lưu bản nháp" as UC_E_SaveDraft <<employer>>
+  
+  ' --- Quản lý ứng viên (Main) ---
+  usecase "Quản lý ứng viên" as UC_E_ApplicantMain <<employer>>
+  usecase "Xem danh sách ứng viên" as UC_E_ViewApplicants <<employer>>
+  usecase "Xem chi tiết ứng viên" as UC_E_ViewAppDetail <<employer>>
+  usecase "Xem CV ứng viên" as UC_E_ViewCV <<employer>>
+  usecase "Chấp nhận ứng viên" as UC_E_Accept <<employer>>
+  usecase "Từ chối ứng viên" as UC_E_Reject <<employer>>
+  
+  ' --- Tìm kiếm ứng viên (Main) ---
+  usecase "Tìm kiếm ứng viên" as UC_E_FindMain <<employer>>
+  usecase "Tìm theo tiêu chí" as UC_E_FindCandidates <<employer>>
+  usecase "Xem hồ sơ ứng viên" as UC_E_ViewCandProfile <<employer>>
+  usecase "Liên hệ ứng viên" as UC_E_Contact <<employer>>
+  
+  ' --- Hồ sơ công ty (Main) ---
+  usecase "Quản lý hồ sơ công ty" as UC_E_CompanyMain <<employer>>
+  usecase "Xem hồ sơ công ty" as UC_E_ViewCompany <<employer>>
+  usecase "Cập nhật hồ sơ công ty" as UC_E_UpdateCompany <<employer>>
+
+  ' ==================== ADMIN USE CASES ====================
+  
+  ' --- Quản lý hệ thống (Main) ---
+  usecase "Quản lý hệ thống" as UC_A_SystemMain <<admin>>
+  usecase "Xem Admin Dashboard" as UC_A_Dashboard <<admin>>
+  usecase "Xem thống kê hệ thống" as UC_A_Analytics <<admin>>
+  
+  ' --- Quản lý người dùng (Main) ---
+  usecase "Quản lý người dùng" as UC_A_UserMain <<admin>>
+  usecase "Xem danh sách Users" as UC_A_ViewUsers <<admin>>
+  usecase "Tạo User mới" as UC_A_CreateUser <<admin>>
+  usecase "Chỉnh sửa User" as UC_A_EditUser <<admin>>
+  usecase "Xóa User" as UC_A_DeleteUser <<admin>>
+  usecase "Gán quyền Admin" as UC_A_AssignAdmin <<admin>>
+  
+  ' --- Quản lý việc làm (Main) ---
+  usecase "Quản lý việc làm" as UC_A_JobMain <<admin>>
+  usecase "Xem tất cả Jobs" as UC_A_ViewJobs <<admin>>
+  usecase "Tạo Job (Admin)" as UC_A_CreateJob <<admin>>
+  usecase "Chỉnh sửa Job" as UC_A_EditJob <<admin>>
+  usecase "Xóa Job" as UC_A_DeleteJob <<admin>>
+  usecase "Duyệt Job" as UC_A_ApproveJob <<admin>>
+  usecase "Từ chối Job" as UC_A_RejectJob <<admin>>
+  
+  ' --- Duyệt Quick Posts (Main) ---
+  usecase "Duyệt Quick Posts" as UC_A_QuickPostMain <<admin>>
+  usecase "Xem Posts chờ duyệt" as UC_A_ViewPending <<admin>>
+  usecase "Duyệt Quick Post" as UC_A_ApprovePost <<admin>>
+  usecase "Từ chối Quick Post" as UC_A_RejectPost <<admin>>
+  usecase "Xem Spam Score" as UC_A_SpamScore <<admin>>
+  
+  ' --- Quản lý danh mục (Main) ---
+  usecase "Quản lý danh mục & dữ liệu" as UC_A_CategoryMain <<admin>>
+  usecase "Quản lý Categories" as UC_A_Categories <<admin>>
+  usecase "Quản lý Job Types" as UC_A_JobTypes <<admin>>
+  usecase "Quản lý Companies" as UC_A_Companies <<admin>>
+}
+
+' ==================== ACTOR CONNECTIONS ====================
+
+' --- Candidate connections (chỉ nối với use case chính) ---
+candidate --> UC_Register
+candidate --> UC_Login
+candidate --> UC_Logout
+candidate --> UC_Notifications
+candidate --> UC_Chat
+candidate --> UC_AIAssistant
+candidate --> UC_C_SearchMain
+candidate --> UC_C_SavedMain
+candidate --> UC_C_ApplyMain
+candidate --> UC_C_CVMain
+candidate --> UC_C_ProfileMain
+candidate --> UC_C_QuickPostMain
+
+' --- Employer connections (chỉ nối với use case chính) ---
+employer --> UC_Register
+employer --> UC_Login
+employer --> UC_Logout
+employer --> UC_Notifications
+employer --> UC_Chat
+employer --> UC_E_DashboardMain
+employer --> UC_E_JobMain
+employer --> UC_E_ApplicantMain
+employer --> UC_E_FindMain
+employer --> UC_E_CompanyMain
+
+' --- Admin connections (chỉ nối với use case chính) ---
+admin --> UC_Login
+admin --> UC_Logout
+admin --> UC_A_SystemMain
+admin --> UC_A_UserMain
+admin --> UC_A_JobMain
+admin --> UC_A_QuickPostMain
+admin --> UC_A_CategoryMain
+
+' ==================== INCLUDE/EXTEND RELATIONSHIPS ====================
+
+' --- Authentication ---
+UC_Register ..> UC_SelectRole : <<include>>
+
+' --- Candidate: Tìm kiếm việc làm ---
+UC_C_SearchMain ..> UC_C_ExploreJobs : <<include>>
+UC_C_SearchMain ..> UC_C_SearchKeyword : <<include>>
+UC_C_SearchMain ..> UC_C_ViewJobDetail : <<include>>
+UC_C_ExploreJobs ..> UC_C_FilterJobs : <<extend>>
+UC_C_ExploreJobs ..> UC_C_AIRecommend : <<extend>>
+UC_C_SearchKeyword ..> UC_C_ViewByCategory : <<extend>>
+UC_C_SearchKeyword ..> UC_C_ViewByCompany : <<extend>>
+
+' --- Candidate: Việc đã lưu ---
+UC_C_SavedMain ..> UC_C_SaveJob : <<include>>
+UC_C_SavedMain ..> UC_C_ViewSavedJobs : <<include>>
+UC_C_ViewSavedJobs ..> UC_C_UnsaveJob : <<extend>>
+
+' --- Candidate: Ứng tuyển ---
+UC_C_ApplyMain ..> UC_C_ApplyJob : <<include>>
+UC_C_ApplyMain ..> UC_C_ViewApplied : <<include>>
+UC_C_ApplyMain ..> UC_C_TrackStatus : <<include>>
+UC_C_ApplyJob ..> UC_C_SelectCV : <<include>>
+UC_C_ApplyJob ..> UC_C_WriteCover : <<extend>>
+UC_C_ViewApplied ..> UC_C_Withdraw : <<extend>>
+
+' --- Candidate: Quản lý CV ---
+UC_C_CVMain ..> UC_C_ViewCVs : <<include>>
+UC_C_CVMain ..> UC_C_CreateCV : <<include>>
+UC_C_CVMain ..> UC_C_UploadCV : <<include>>
+UC_C_ViewCVs ..> UC_C_EditCV : <<extend>>
+UC_C_ViewCVs ..> UC_C_DeleteCV : <<extend>>
+UC_C_ViewCVs ..> UC_C_ExportCV : <<extend>>
+UC_C_ViewCVs ..> UC_C_SetDefaultCV : <<extend>>
+
+' --- Candidate: Hồ sơ cá nhân ---
+UC_C_ProfileMain ..> UC_C_ViewProfile : <<include>>
+UC_C_ProfileMain ..> UC_C_UpdateProfile : <<include>>
+UC_C_ProfileMain ..> UC_C_StudentProfile : <<include>>
+UC_C_StudentProfile ..> UC_C_SetSchedule : <<include>>
+UC_C_StudentProfile ..> UC_C_AddSkills : <<include>>
+
+' --- Candidate: Đăng tin tìm việc ---
+UC_C_QuickPostMain ..> UC_C_CreateQuickPost : <<include>>
+UC_C_QuickPostMain ..> UC_C_ViewMyPosts : <<include>>
+UC_C_ViewMyPosts ..> UC_C_EditPost : <<extend>>
+
+' --- Employer: Dashboard ---
+UC_E_DashboardMain ..> UC_E_ViewStats : <<include>>
+UC_E_DashboardMain ..> UC_E_RecentApps : <<include>>
+
+' --- Employer: Quản lý tin tuyển dụng ---
+UC_E_JobMain ..> UC_E_ViewMyJobs : <<include>>
+UC_E_JobMain ..> UC_E_CreateJob : <<include>>
+UC_E_CreateJob ..> UC_E_AITemplate : <<extend>>
+UC_E_CreateJob ..> UC_E_SaveDraft : <<extend>>
+UC_E_ViewMyJobs ..> UC_E_EditJob : <<extend>>
+UC_E_ViewMyJobs ..> UC_E_DeleteJob : <<extend>>
+
+' --- Employer: Quản lý ứng viên ---
+UC_E_ApplicantMain ..> UC_E_ViewApplicants : <<include>>
+UC_E_ApplicantMain ..> UC_E_ViewAppDetail : <<include>>
+UC_E_ViewAppDetail ..> UC_E_ViewCV : <<include>>
+UC_E_ViewAppDetail ..> UC_E_Accept : <<extend>>
+UC_E_ViewAppDetail ..> UC_E_Reject : <<extend>>
+
+' --- Employer: Tìm kiếm ứng viên ---
+UC_E_FindMain ..> UC_E_FindCandidates : <<include>>
+UC_E_FindCandidates ..> UC_E_ViewCandProfile : <<extend>>
+UC_E_ViewCandProfile ..> UC_E_Contact : <<extend>>
+
+' --- Employer: Hồ sơ công ty ---
+UC_E_CompanyMain ..> UC_E_ViewCompany : <<include>>
+UC_E_CompanyMain ..> UC_E_UpdateCompany : <<include>>
+
+' --- Admin: Quản lý hệ thống ---
+UC_A_SystemMain ..> UC_A_Dashboard : <<include>>
+UC_A_SystemMain ..> UC_A_Analytics : <<include>>
+
+' --- Admin: Quản lý người dùng ---
+UC_A_UserMain ..> UC_A_ViewUsers : <<include>>
+UC_A_UserMain ..> UC_A_CreateUser : <<include>>
+UC_A_ViewUsers ..> UC_A_EditUser : <<extend>>
+UC_A_ViewUsers ..> UC_A_DeleteUser : <<extend>>
+UC_A_EditUser ..> UC_A_AssignAdmin : <<extend>>
+
+' --- Admin: Quản lý việc làm ---
+UC_A_JobMain ..> UC_A_ViewJobs : <<include>>
+UC_A_JobMain ..> UC_A_CreateJob : <<include>>
+UC_A_ViewJobs ..> UC_A_EditJob : <<extend>>
+UC_A_ViewJobs ..> UC_A_DeleteJob : <<extend>>
+UC_A_ViewJobs ..> UC_A_ApproveJob : <<extend>>
+UC_A_ViewJobs ..> UC_A_RejectJob : <<extend>>
+
+' --- Admin: Duyệt Quick Posts ---
+UC_A_QuickPostMain ..> UC_A_ViewPending : <<include>>
+UC_A_ViewPending ..> UC_A_SpamScore : <<include>>
+UC_A_ViewPending ..> UC_A_ApprovePost : <<extend>>
+UC_A_ViewPending ..> UC_A_RejectPost : <<extend>>
+
+' --- Admin: Quản lý danh mục ---
+UC_A_CategoryMain ..> UC_A_Categories : <<include>>
+UC_A_CategoryMain ..> UC_A_JobTypes : <<include>>
+UC_A_CategoryMain ..> UC_A_Companies : <<include>>
+
+' ==================== CROSS-MODULE RELATIONSHIPS ====================
+' Quick Post cần Admin duyệt
+UC_C_CreateQuickPost ..> UC_A_ViewPending : Chờ duyệt
+
+' Ứng tuyển gửi đến Employer
+UC_C_ApplyJob ..> UC_E_ViewApplicants : Gửi đơn
+
+' Accept/Reject gửi thông báo
+UC_E_Accept ..> UC_Notifications : Thông báo
+UC_E_Reject ..> UC_Notifications : Thông báo
+
+' Liên hệ qua Chat
+UC_E_Contact ..> UC_Chat : <<extend>>
+
+' ==================== LEGEND ====================
+legend right
+  |= Màu |= Loại Use Case |
+  | <#E3F2FD> | Xác thực (Auth) |
+  | <#FFF3E0> | Ứng viên (Candidate) |
+  | <#E8F5E9> | Nhà tuyển dụng (Employer) |
+  | <#F3E5F5> | Quản trị viên (Admin) |
+  | <#ECEFF1> | Chức năng chung (Shared) |
+  --
+  **Quan hệ:**
+  → : Actor sử dụng Use Case
+  ..> <<include>> : Bắt buộc thực hiện
+  ..> <<extend>> : Tùy chọn mở rộng
+endlegend
+
+@enduml

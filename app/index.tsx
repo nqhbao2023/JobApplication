@@ -34,21 +34,6 @@ const PublicHome = () => {
           </Text>
         </View>
 
-        {/* Quick Post CTA */}
-        <TouchableOpacity
-          style={styles.quickPostButton}
-          onPress={() => router.push('/(shared)/quickPost')}
-        >
-          <LinearGradient
-            colors={['#10B981', '#059669']}
-            style={styles.quickPostGradient}
-          >
-            <Ionicons name="flash-outline" size={24} color="#FFF" />
-            <Text style={styles.quickPostText}>Đăng tin tuyển dụng nhanh</Text>
-            <Text style={styles.quickPostSubtext}>Miễn phí • Không cần tài khoản</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
         {/* Features */}
         <View style={styles.features}>
           <View style={styles.feature}>
@@ -139,34 +124,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
     marginTop: 8,
-  },
-  quickPostButton: {
-    marginVertical: 24,
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  quickPostGradient: {
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    flexDirection: 'column',
-    gap: 4,
-  },
-  quickPostText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFF',
-    marginTop: 8,
-  },
-  quickPostSubtext: {
-    fontSize: 13,
-    color: '#FFF',
-    opacity: 0.9,
   },
   features: {
     marginTop: 24,

@@ -1,0 +1,178 @@
+@startuml Candidate Use Case Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #FFF3E0
+  BorderColor #FF9800
+  ArrowColor #666666
+}
+skinparam actor {
+  BackgroundColor #2196F3
+  BorderColor #1976D2
+}
+
+title Sơ đồ Use Case - Candidate (Ứng viên)\n(Hệ thống tìm việc làm Job4S)
+
+left to right direction
+
+actor "Candidate\n(Ứng viên)" as candidate #2196F3
+
+' ==================== XÁC THỰC ====================
+rectangle "Xác thực" as Authentication {
+  usecase "Đăng ký tài khoản" as UC_Register
+  usecase "Đăng nhập" as UC_Login
+  usecase "Đăng xuất" as UC_Logout
+  usecase "Chọn vai trò Candidate" as UC_SelectRole
+}
+
+' ==================== TÌM KIẾM VIỆC LÀM ====================
+rectangle "Tìm kiếm việc làm" as JobSearch {
+  usecase "Khám phá việc làm" as UC_ExploreJobs
+  usecase "Tìm kiếm việc làm" as UC_SearchJobs
+  usecase "Lọc nhanh theo tiêu chí" as UC_QuickFilter
+  usecase "Lọc theo hồ sơ sinh viên" as UC_ProfileFilter
+  usecase "Xem việc làm gợi ý" as UC_RecommendedJobs
+  usecase "Xem việc làm mới nhất" as UC_LatestJobs
+  usecase "Xem danh mục nổi bật" as UC_TrendingCategories
+  usecase "Xem công ty hàng đầu" as UC_TopCompanies
+  usecase "Xem chi tiết việc làm" as UC_ViewJobDetail
+  usecase "Xem theo danh mục" as UC_ViewByCategory
+  usecase "Xem theo công ty" as UC_ViewByCompany
+}
+
+' ==================== QUẢN LÝ VIỆC LÀM ĐÃ LƯU ====================
+rectangle "Quản lý việc làm đã lưu" as SavedJobs {
+  usecase "Lưu việc làm" as UC_SaveJob
+  usecase "Bỏ lưu việc làm" as UC_UnsaveJob
+  usecase "Xem danh sách đã lưu" as UC_ViewSavedJobs
+}
+
+' ==================== ỨNG TUYỂN ====================
+rectangle "Ứng tuyển" as Application {
+  usecase "Ứng tuyển việc làm" as UC_ApplyJob
+  usecase "Chọn CV để ứng tuyển" as UC_SelectCV
+  usecase "Viết Cover Letter" as UC_WriteCoverLetter
+  usecase "Xem đơn đã ứng tuyển" as UC_ViewAppliedJobs
+  usecase "Rút đơn ứng tuyển" as UC_WithdrawApplication
+  usecase "Theo dõi trạng thái" as UC_TrackApplications
+  usecase "Xem thống kê ứng tuyển" as UC_ViewApplicationStats
+}
+
+' ==================== QUẢN LÝ CV ====================
+rectangle "Quản lý CV" as CVManagement {
+  usecase "Xem danh sách CV" as UC_ViewCVList
+  usecase "Tạo CV từ Template" as UC_CreateCVFromTemplate
+  usecase "Upload CV có sẵn" as UC_UploadCV
+  usecase "Chỉnh sửa CV" as UC_EditCV
+  usecase "Xóa CV" as UC_DeleteCV
+  usecase "Sao chép CV" as UC_DuplicateCV
+  usecase "Xuất CV ra PDF" as UC_ExportCVPDF
+  usecase "Đặt CV mặc định" as UC_SetDefaultCV
+  usecase "Tự động điền từ Profile" as UC_AutoFillFromProfile
+}
+
+' ==================== HỒ SƠ CÁ NHÂN ====================
+rectangle "Quản lý hồ sơ" as Profile {
+  usecase "Xem thông tin cá nhân" as UC_ViewProfile
+  usecase "Cập nhật thông tin" as UC_UpdateProfile
+  usecase "Thiết lập hồ sơ sinh viên" as UC_SetupStudentProfile
+  usecase "Chọn ngày làm việc" as UC_SelectWorkDays
+  usecase "Chọn khung giờ làm việc" as UC_SelectTimeSlots
+  usecase "Thiết lập vị trí" as UC_SetupLocation
+  usecase "Thiết lập lương mong muốn" as UC_SetupDesiredSalary
+  usecase "Thêm kỹ năng" as UC_AddSkills
+  usecase "Cập nhật kinh nghiệm" as UC_UpdateExperience
+}
+
+' ==================== ĐĂNG TIN TÌM VIỆC ====================
+rectangle "Đăng tin tìm việc" as QuickPost {
+  usecase "Đăng tin tìm việc nhanh" as UC_PostQuickJob
+  usecase "Xem tin đã đăng" as UC_ViewMyPosts
+  usecase "Nhập thông tin liên hệ" as UC_InputContactInfo
+  usecase "Đính kèm CV" as UC_AttachCV
+}
+
+' ==================== TƯƠNG TÁC ====================
+rectangle "Tương tác" as Interaction {
+  usecase "Xem thông báo" as UC_ViewNotifications
+  usecase "Nhận thông báo việc mới" as UC_ReceiveJobAlerts
+  usecase "Nhắn tin với NTD" as UC_ChatWithEmployer
+  usecase "Sử dụng AI Assistant" as UC_UseAIAssistant
+}
+
+' ==================== CONNECTIONS ====================
+' Authentication
+candidate --> UC_Register
+candidate --> UC_Login
+candidate --> UC_Logout
+UC_Register ..> UC_SelectRole : <<include>>
+
+' Job Search
+candidate --> UC_ExploreJobs
+candidate --> UC_SearchJobs
+candidate --> UC_ViewJobDetail
+
+UC_ExploreJobs ..> UC_QuickFilter : <<extend>>
+UC_ExploreJobs ..> UC_ProfileFilter : <<extend>>
+UC_ExploreJobs ..> UC_RecommendedJobs : <<include>>
+UC_ExploreJobs ..> UC_LatestJobs : <<include>>
+UC_ExploreJobs ..> UC_TrendingCategories : <<include>>
+UC_ExploreJobs ..> UC_TopCompanies : <<include>>
+UC_SearchJobs ..> UC_ViewByCategory : <<extend>>
+UC_SearchJobs ..> UC_ViewByCompany : <<extend>>
+
+' Saved Jobs
+candidate --> UC_SaveJob
+candidate --> UC_ViewSavedJobs
+UC_ViewSavedJobs ..> UC_UnsaveJob : <<extend>>
+
+' Application
+candidate --> UC_ApplyJob
+candidate --> UC_ViewAppliedJobs
+candidate --> UC_TrackApplications
+
+UC_ApplyJob ..> UC_SelectCV : <<include>>
+UC_ApplyJob ..> UC_WriteCoverLetter : <<extend>>
+UC_ViewAppliedJobs ..> UC_WithdrawApplication : <<extend>>
+UC_TrackApplications ..> UC_ViewApplicationStats : <<include>>
+
+' CV Management
+candidate --> UC_ViewCVList
+candidate --> UC_CreateCVFromTemplate
+candidate --> UC_UploadCV
+candidate --> UC_EditCV
+
+UC_CreateCVFromTemplate ..> UC_AutoFillFromProfile : <<include>>
+UC_ViewCVList ..> UC_DeleteCV : <<extend>>
+UC_ViewCVList ..> UC_DuplicateCV : <<extend>>
+UC_ViewCVList ..> UC_ExportCVPDF : <<extend>>
+UC_ViewCVList ..> UC_SetDefaultCV : <<extend>>
+
+' Profile
+candidate --> UC_ViewProfile
+candidate --> UC_UpdateProfile
+candidate --> UC_SetupStudentProfile
+
+UC_SetupStudentProfile ..> UC_SelectWorkDays : <<include>>
+UC_SetupStudentProfile ..> UC_SelectTimeSlots : <<include>>
+UC_SetupStudentProfile ..> UC_SetupLocation : <<include>>
+UC_SetupStudentProfile ..> UC_SetupDesiredSalary : <<include>>
+UC_SetupStudentProfile ..> UC_AddSkills : <<include>>
+UC_SetupStudentProfile ..> UC_UpdateExperience : <<extend>>
+
+' Quick Post
+candidate --> UC_PostQuickJob
+candidate --> UC_ViewMyPosts
+
+UC_PostQuickJob ..> UC_InputContactInfo : <<include>>
+UC_PostQuickJob ..> UC_AttachCV : <<extend>>
+
+' Interaction
+candidate --> UC_ViewNotifications
+candidate --> UC_ChatWithEmployer
+candidate --> UC_UseAIAssistant
+
+UC_ExploreJobs ..> UC_ReceiveJobAlerts : <<extend>>
+
+@enduml

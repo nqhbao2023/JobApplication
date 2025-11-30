@@ -1,0 +1,164 @@
+@startuml Employer Use Case Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #E8F5E9
+  BorderColor #4CAF50
+  ArrowColor #666666
+}
+skinparam actor {
+  BackgroundColor #9C27B0
+  BorderColor #7B1FA2
+}
+
+title Sơ đồ Use Case - Employer (Nhà tuyển dụng)\n(Hệ thống tìm việc làm Job4S)
+
+left to right direction
+
+actor "Employer\n(Nhà tuyển dụng)" as employer #9C27B0
+
+' ==================== XÁC THỰC ====================
+rectangle "Xác thực" as Authentication {
+  usecase "Đăng ký tài khoản" as UC_Register
+  usecase "Đăng nhập" as UC_Login
+  usecase "Đăng xuất" as UC_Logout
+  usecase "Chọn vai trò Employer" as UC_SelectRole
+}
+
+' ==================== DASHBOARD ====================
+rectangle "Trang chủ" as Dashboard {
+  usecase "Xem Dashboard" as UC_ViewDashboard
+  usecase "Xem thống kê tổng quan" as UC_ViewStats
+  usecase "Xem ứng viên mới nhất" as UC_ViewRecentApplicants
+  usecase "Xem thông báo" as UC_ViewNotifications
+}
+
+' ==================== QUẢN LÝ TIN TUYỂN DỤNG ====================
+rectangle "Quản lý tin tuyển dụng" as JobManagement {
+  usecase "Xem danh sách tin đã đăng" as UC_ViewMyJobs
+  usecase "Tạo tin tuyển dụng mới" as UC_CreateJob
+  usecase "Sử dụng AI Template" as UC_UseAITemplate
+  usecase "Nhập thông tin cơ bản" as UC_InputBasicInfo
+  usecase "Nhập chi tiết lương" as UC_InputSalary
+  usecase "Chọn loại công việc" as UC_SelectJobType
+  usecase "Chọn danh mục" as UC_SelectCategory
+  usecase "Chọn/Tạo công ty" as UC_SelectCompany
+  usecase "Tạo công ty mới" as UC_CreateCompany
+  usecase "Upload ảnh" as UC_UploadImage
+  usecase "Nhập thông tin liên hệ" as UC_InputContact
+  usecase "Xem trước tin đăng" as UC_PreviewJob
+  usecase "Chỉnh sửa tin tuyển dụng" as UC_EditJob
+  usecase "Xóa tin tuyển dụng" as UC_DeleteJob
+  usecase "Lưu bản nháp" as UC_SaveDraft
+}
+
+' ==================== ĐĂNG TIN NHANH ====================
+rectangle "Đăng tin nhanh (Quick Post)" as QuickPost {
+  usecase "Đăng tin tuyển dụng nhanh" as UC_PostQuickJob
+  usecase "Nhập thông tin liên hệ" as UC_QuickInputContact
+  usecase "Chờ Admin duyệt" as UC_WaitForApproval
+}
+
+' ==================== QUẢN LÝ ỨNG VIÊN ====================
+rectangle "Quản lý ứng viên" as ApplicantManagement {
+  usecase "Xem danh sách ứng viên" as UC_ViewApplicants
+  usecase "Xem chi tiết ứng viên" as UC_ViewApplicantDetail
+  usecase "Xem CV ứng viên" as UC_ViewApplicantCV
+  usecase "Xem Cover Letter" as UC_ViewCoverLetter
+  usecase "Chấp nhận ứng viên" as UC_AcceptApplicant
+  usecase "Từ chối ứng viên" as UC_RejectApplicant
+  usecase "Xóa đơn ứng tuyển" as UC_DeleteApplication
+  usecase "Lọc theo trạng thái" as UC_FilterByStatus
+}
+
+' ==================== TÌM ỨNG VIÊN ====================
+rectangle "Tìm kiếm ứng viên" as FindCandidates {
+  usecase "Tìm ứng viên đang tìm việc" as UC_FindCandidates
+  usecase "Xem hồ sơ ứng viên" as UC_ViewCandidateProfile
+  usecase "Liên hệ ứng viên" as UC_ContactCandidate
+  usecase "Gọi điện" as UC_CallCandidate
+  usecase "Nhắn Zalo" as UC_ZaloCandidate
+  usecase "Gửi Email" as UC_EmailCandidate
+}
+
+' ==================== TƯƠNG TÁC ====================
+rectangle "Tương tác" as Interaction {
+  usecase "Nhắn tin với ứng viên" as UC_ChatWithCandidate
+  usecase "Xem danh sách chat" as UC_ViewChatList
+  usecase "Gửi tin nhắn" as UC_SendMessage
+}
+
+' ==================== HỒ SƠ CÔNG TY ====================
+rectangle "Quản lý hồ sơ" as Profile {
+  usecase "Xem hồ sơ công ty" as UC_ViewCompanyProfile
+  usecase "Cập nhật hồ sơ công ty" as UC_UpdateCompanyProfile
+  usecase "Cập nhật ảnh đại diện" as UC_UpdateAvatar
+}
+
+' ==================== CONNECTIONS ====================
+' Authentication
+employer --> UC_Register
+employer --> UC_Login
+employer --> UC_Logout
+UC_Register ..> UC_SelectRole : <<include>>
+
+' Dashboard
+employer --> UC_ViewDashboard
+UC_ViewDashboard ..> UC_ViewStats : <<include>>
+UC_ViewDashboard ..> UC_ViewRecentApplicants : <<include>>
+UC_ViewDashboard ..> UC_ViewNotifications : <<extend>>
+
+' Job Management
+employer --> UC_ViewMyJobs
+employer --> UC_CreateJob
+employer --> UC_EditJob
+employer --> UC_DeleteJob
+
+UC_CreateJob ..> UC_InputBasicInfo : <<include>>
+UC_CreateJob ..> UC_InputSalary : <<include>>
+UC_CreateJob ..> UC_SelectJobType : <<include>>
+UC_CreateJob ..> UC_SelectCategory : <<include>>
+UC_CreateJob ..> UC_SelectCompany : <<include>>
+UC_CreateJob ..> UC_UploadImage : <<include>>
+UC_CreateJob ..> UC_InputContact : <<extend>>
+UC_CreateJob ..> UC_UseAITemplate : <<extend>>
+UC_CreateJob ..> UC_PreviewJob : <<extend>>
+UC_CreateJob ..> UC_SaveDraft : <<extend>>
+UC_SelectCompany ..> UC_CreateCompany : <<extend>>
+
+' Quick Post
+employer --> UC_PostQuickJob
+UC_PostQuickJob ..> UC_QuickInputContact : <<include>>
+UC_PostQuickJob ..> UC_WaitForApproval : <<include>>
+
+' Applicant Management
+employer --> UC_ViewApplicants
+employer --> UC_ViewApplicantDetail
+employer --> UC_AcceptApplicant
+employer --> UC_RejectApplicant
+
+UC_ViewApplicants ..> UC_FilterByStatus : <<extend>>
+UC_ViewApplicantDetail ..> UC_ViewApplicantCV : <<include>>
+UC_ViewApplicantDetail ..> UC_ViewCoverLetter : <<extend>>
+UC_ViewApplicantDetail ..> UC_DeleteApplication : <<extend>>
+
+' Find Candidates
+employer --> UC_FindCandidates
+UC_FindCandidates ..> UC_ViewCandidateProfile : <<extend>>
+UC_FindCandidates ..> UC_ContactCandidate : <<extend>>
+UC_ContactCandidate ..> UC_CallCandidate : <<extend>>
+UC_ContactCandidate ..> UC_ZaloCandidate : <<extend>>
+UC_ContactCandidate ..> UC_EmailCandidate : <<extend>>
+
+' Interaction
+employer --> UC_ChatWithCandidate
+employer --> UC_ViewChatList
+UC_ChatWithCandidate ..> UC_SendMessage : <<include>>
+
+' Profile
+employer --> UC_ViewCompanyProfile
+employer --> UC_UpdateCompanyProfile
+UC_UpdateCompanyProfile ..> UC_UpdateAvatar : <<extend>>
+
+@enduml

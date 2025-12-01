@@ -317,14 +317,14 @@ const CandidateHome = () => {
           />
           {filteredJobs.length > 0 ? (
             filteredJobs.map((item, idx) => (
-              <Animated.View key={item.$id} entering={FadeInDown.delay(idx * 50).duration(400)}>
+              <View key={item.$id} style={{ marginBottom: 0 }}>
                 <JobCard 
                   item={item} 
                   company={getJobCompany(item)}
                   matchScore={item.matchScore}
                   isHighMatch={item.isHighMatch}
                 />
-              </Animated.View>
+              </View>
             ))
           ) : (
             <EmptyState 
@@ -372,9 +372,9 @@ const CandidateHome = () => {
           <SectionHeader title="Việc làm mới nhất" onPressShowAll={() => router.push('/(shared)/jobList')} />
           {latestJobs.length > 0 ? (
             latestJobs.map((item, idx) => (
-              <Animated.View key={item.$id + '_latest'} entering={FadeInDown.delay(idx * 50).duration(400)}>
+              <View key={item.$id + '_latest'} style={{ marginBottom: 0 }}>
                 <JobCard item={item} company={getJobCompany(item)} />
-              </Animated.View>
+              </View>
             ))
           ) : (
             <EmptyState message="Chưa có việc mới" icon="time-outline" />

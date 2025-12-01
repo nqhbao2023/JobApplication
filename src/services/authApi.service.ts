@@ -82,7 +82,15 @@ export const authApiService = {
   async getCurrentRole(): Promise<RoleResponse> {
     try {
       const res = await apiClient.get<RoleResponse>(API_ENDPOINTS.auth.role);
-      return res;
+      
+      // Validate response is actually a RoleResponse object
+      if (res && typeof res === 'object' && 'role' in res) {
+        return res;
+      }
+      
+      // Invalid response format
+      console.warn('getCurrentRole: Invalid response format, using default role');
+      return { role: 'candidate', isAdmin: false };
     } catch (err: any) {
       // Handle network/connection errors
       if (err?.code === 'ECONNABORTED' || err?.code === 'ERR_NETWORK' || !err?.response) {
@@ -90,11 +98,17 @@ export const authApiService = {
         return { role: 'candidate', isAdmin: false };
       }
       
-      // Handle JSON parse errors
+      // Handle JSON parse errors / SyntaxError
       const errorName = String(err?.name || '');
       const errorMsg = String(err?.message || '');
-      if (errorName === 'SyntaxError' || errorMsg.indexOf('SyntaxError') >= 0) {
-        console.warn('getCurrentRole: Invalid response format, using default role');
+      if (
+        errorName === 'SyntaxError' || 
+        errorMsg.includes('SyntaxError') ||
+        errorMsg.includes('invalid expression') ||
+        errorMsg.includes('JSON') ||
+        errorMsg.includes('Unexpected token')
+      ) {
+        console.warn('getCurrentRole: Invalid response format (parse error), using default role');
         return { role: 'candidate', isAdmin: false };
       }
       
@@ -121,7 +135,8 @@ export const authApiService = {
       }
       
       console.error('getCurrentRole error:', err.message);
-      throw err;
+      // Return default instead of throwing to prevent app crash
+      return { role: 'candidate', isAdmin: false };
     }
   },
 

@@ -228,40 +228,59 @@ const JobDescription = () => {
                 uri: (() => {
                   const job = jobData as Job;
                   // ✅ Priority: job.image (employer-uploaded) > job.company_logo (viecoi) > companyData.image > company.image > placeholder
-                  if (job?.image) return job.image;
-                  if (job?.company_logo) return job.company_logo;
                   
-                  // Check fetched company data (employer jobs)
+                  // 1. Check job.image (employer uploaded)
+                  if (job?.image && job.image.startsWith('http')) return job.image;
+                  
+                  // 2. Check company_logo from viecoi (skip default/placeholder images)
+                  if (job?.company_logo && 
+                      job.company_logo.startsWith('http') &&
+                      !job.company_logo.includes('prof-img.png') && // viecoi default
+                      !job.company_logo.includes('placeholder') &&
+                      !job.company_logo.includes('default')) {
+                    return job.company_logo;
+                  }
+                  
+                  // 3. Check fetched company data (employer jobs)
                   if (companyData?.image && 
-                      (companyData.image.startsWith('http://') || companyData.image.startsWith('https://'))) {
+                      companyData.image.startsWith('http') &&
+                      !companyData.image.includes('ui-avatars')) {
                     return companyData.image;
                   }
                   
-                  // Check company object in job data
+                  // 4. Check company object in job data
                   const company = job?.company;
                   if (company && typeof company === 'object' && (company as any).image) {
                     const img = (company as any).image;
-                    if (img && (img.startsWith('http://') || img.startsWith('https://'))) {
+                    if (img && img.startsWith('http') && !img.includes('ui-avatars')) {
                       return img;
                     }
                   }
                   
-                  // Fallback to ui-avatars placeholder
+                  // 5. Fallback to ui-avatars placeholder with company name
                   const companyName = companyData?.corp_name || 
                     job?.company_name || 
                     (company && typeof company === 'object' ? company.corp_name : '') || 
                     'Job';
-                  return `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&size=200&background=4A80F0&color=fff&bold=true&format=png`;
+                  // Get first letter of each word for better avatar (handle empty strings safely)
+                  const initials = companyName
+                    .split(' ')
+                    .filter((w: string) => w.length > 0)
+                    .map((w: string) => w[0])
+                    .join('')
+                    .substring(0, 2)
+                    .toUpperCase() || 'JB';
+                  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&size=200&background=4A80F0&color=fff&bold=true&format=png`;
                 })(),
               }}
             />
           </View>
 
-          <Text style={styles.jobTitle}>{jobData?.title}</Text>
+          <Text style={styles.jobTitle} numberOfLines={3}>{jobData?.title}</Text>
           
           <View style={styles.companyRow}>
             <Ionicons name="business-outline" size={16} color="#666" />
-            <Text style={styles.companyName}>
+            <Text style={styles.companyName} numberOfLines={2}>
               {(() => {
                 const job = jobData as Job;
                 // Priority: companyData (employer jobs) > company_name (viecoi) > company object
@@ -285,17 +304,24 @@ const JobDescription = () => {
             </View>
           )}
 
-          {/* Meta Info Grid */}
+          {/* Meta Info - Vertical Layout */}
           <View style={styles.metaGrid}>
+            {/* Salary Row */}
             <View style={styles.metaItem}>
-              <Ionicons name="cash-outline" size={18} color="#4A80F0" />
-              <Text style={styles.metaText}>
+              <View style={styles.metaIcon}>
+                <Ionicons name="cash-outline" size={18} color="#4A80F0" />
+              </View>
+              <Text style={styles.metaText} numberOfLines={1}>
                 {formatSalary((jobData as Job)?.salary) || "Thoả thuận"}
               </Text>
             </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="location-outline" size={18} color="#4A80F0" />
-              <Text style={styles.metaText}>
+            
+            {/* Location Row - Full width, wrap text */}
+            <View style={styles.metaItemFull}>
+              <View style={styles.metaIcon}>
+                <Ionicons name="location-outline" size={18} color="#4A80F0" />
+              </View>
+              <Text style={styles.metaTextLocation} numberOfLines={2}>
                 {(jobData as Job)?.location || "Chưa cập nhật"}
               </Text>
             </View>
@@ -562,11 +588,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginBottom: 8,
+    paddingHorizontal: 12,
+    maxWidth: '100%',
   },
   companyName: { 
     fontSize: 15,
     color: "#666",
     fontWeight: "500",
+    flex: 1,
+    textAlign: 'center',
   },
   typeBadge: {
     paddingHorizontal: 12,
@@ -581,19 +611,40 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   metaGrid: {
-    flexDirection: "row",
-    gap: 16,
-    marginTop: 8,
+    width: '100%',
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 8,
   },
   metaItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
+  },
+  metaItemFull: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    width: '100%',
+  },
+  metaIcon: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   metaText: {
     fontSize: 14,
     color: "#4A80F0",
     fontWeight: "600",
+    flex: 1,
+  },
+  metaTextLocation: {
+    fontSize: 14,
+    color: "#4A80F0",
+    fontWeight: "500",
+    flex: 1,
+    lineHeight: 20,
   },
   sourceBadge: {
     flexDirection: "row",

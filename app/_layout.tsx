@@ -41,9 +41,15 @@ export default function RootLayout() {
       const inAdmin = group === "(admin)";
 
       if (user) {
+        let role: string | null = null;
         try {
-          const role = await getCurrentUserRole();
-          console.log("� User role:", role, "| Current segment:", group);
+          const roleData = await getCurrentUserRole();
+          role = roleData;
+          console.log("👤 User role:", role, "| Current segment:", group);
+        } catch (roleError) {
+          console.warn("⚠️ Error getting role, using default:", roleError);
+          role = "candidate"; // Default to candidate on error
+        }
 
           // Nếu đã ở đúng route, không cần redirect
           if (role === "admin" && inAdmin) {
@@ -65,13 +71,13 @@ export default function RootLayout() {
           // Redirect nếu cần
           if (inAuth) {
             if (role === "admin") {
-              console.log("� Routing to admin from auth screen");
+              console.log("🚀 Routing to admin from auth screen");
               router.replace("/(admin)" as any);
             } else if (role === "candidate") {
-              console.log("� Routing to candidate");
+              console.log("🚀 Routing to candidate");
               router.replace("/(candidate)");
             } else if (role === "employer") {
-              console.log("� Routing to employer");
+              console.log("🚀 Routing to employer");
               router.replace("/(employer)");
             } else {
               console.log("❌ Invalid role, signing out");
@@ -94,13 +100,6 @@ export default function RootLayout() {
             else if (role === "candidate") router.replace("/(candidate)");
             else router.replace("/(auth)/login");
           }
-        } catch (error) {
-          console.error("❌ Error getting role:", error);
-          if (inAdmin || inCandidate || inEmployer) {
-            await signOut(auth);
-            router.replace("/(auth)/login");
-          }
-        }
       } else {
         // No user logged in
         if (inCandidate || inEmployer || inAdmin) {

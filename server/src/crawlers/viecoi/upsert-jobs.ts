@@ -58,6 +58,8 @@ interface UpsertStats {
   updated: number;
   skipped: number;
   errors: number;
+  newJobs: string[]; // Track new job titles
+  duplicateJobs: string[]; // Track duplicate job titles
 }
 
 /**
@@ -173,6 +175,8 @@ async function upsertJobs(jobs: any[]): Promise<UpsertStats> {
     updated: 0,
     skipped: 0,
     errors: 0,
+    newJobs: [],
+    duplicateJobs: [],
   };
 
   console.log(`📤 Upserting ${jobs.length} jobs to Firestore...\n`);
@@ -186,11 +190,13 @@ async function upsertJobs(jobs: any[]): Promise<UpsertStats> {
     switch (result) {
       case 'inserted':
         stats.inserted++;
-        console.log('  ✅ Inserted');
+        stats.newJobs.push(job.title);
+        console.log('  ✅ Inserted (NEW JOB)');
         break;
       case 'updated':
         stats.updated++;
-        console.log('  🔄 Updated');
+        stats.duplicateJobs.push(job.title);
+        console.log('  🔄 Updated (already existed)');
         break;
       case 'skipped':
         stats.skipped++;
@@ -208,30 +214,60 @@ async function upsertJobs(jobs: any[]): Promise<UpsertStats> {
 /**
  * Main function
  */
-async function main() {
+export async function main() {
   try {
     console.log('🚀 Starting job upsert process...\n');
 
-    // Load normalized jobs from file
-    const normalizedJobsPath = path.join(__dirname, '../../../data/viecoi-jobs-normalized.json');
+    // Load normalized jobs from file - try puppeteer location first, then legacy
+    let normalizedJobsPath = path.join(__dirname, '../../../data/viecoi/normalized-jobs.json');
     
     if (!fs.existsSync(normalizedJobsPath)) {
-      throw new Error(`❌ Normalized jobs file not found: ${normalizedJobsPath}\nRun: npm run normalize:viecoi first`);
+      // Fallback to legacy location
+      normalizedJobsPath = path.join(__dirname, '../../../data/viecoi-jobs-normalized.json');
+    }
+    
+    if (!fs.existsSync(normalizedJobsPath)) {
+      throw new Error(`❌ Normalized jobs file not found.\nRun puppeteer-crawler first: npm run crawl:viecoi-puppeteer`);
     }
 
     const uniqueJobs = JSON.parse(fs.readFileSync(normalizedJobsPath, 'utf-8'));
-    console.log(`📋 Loaded ${uniqueJobs.length} normalized jobs from file\n`);
+    console.log(`📋 Loaded ${uniqueJobs.length} normalized jobs from ${normalizedJobsPath}\n`);
 
     // Upsert to Firestore
     const stats = await upsertJobs(uniqueJobs);
 
     // Print summary
-    console.log('\n📊 Upsert Summary:');
+    console.log('\n' + '═'.repeat(60));
+    console.log('📊 UPSERT SUMMARY - KIỂM TRA TRÙNG LẶP');
+    console.log('═'.repeat(60));
     console.log(`   Total processed: ${stats.total}`);
-    console.log(`   ✅ Inserted: ${stats.inserted}`);
-    console.log(`   🔄 Updated: ${stats.updated}`);
+    console.log(`   ✅ NEW JOBS (Inserted): ${stats.inserted}`);
+    console.log(`   🔄 DUPLICATES (Updated): ${stats.updated}`);
     console.log(`   ⏭️  Skipped: ${stats.skipped}`);
     console.log(`   ❌ Errors: ${stats.errors}`);
+    
+    // Show duplicate ratio
+    const duplicateRatio = stats.total > 0 ? Math.round((stats.updated / stats.total) * 100) : 0;
+    console.log(`\n📈 Duplicate Ratio: ${duplicateRatio}% (${stats.updated}/${stats.total} jobs đã tồn tại)`);
+    
+    // List new jobs if any
+    if (stats.newJobs.length > 0) {
+      console.log('\n🆕 DANH SÁCH JOBS MỚI:');
+      stats.newJobs.forEach((title, idx) => {
+        console.log(`   ${idx + 1}. ${title}`);
+      });
+    } else {
+      console.log('\n📋 Không có job mới - tất cả đã tồn tại trong database');
+    }
+    
+    // Summary message
+    if (stats.inserted === 0 && stats.updated > 0) {
+      console.log('\n💡 TIP: Tất cả jobs đều là cập nhật. Nếu muốn crawl jobs mới, hãy:');
+      console.log('   - Chạy crawler với --limit cao hơn');
+      console.log('   - Hoặc đợi viecoi.vn đăng jobs mới');
+    }
+    
+    console.log('═'.repeat(60));
 
     console.log('\n✅ Upsert completed!');
     

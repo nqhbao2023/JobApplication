@@ -17,10 +17,12 @@
     "crawl:viecoi-sitemap": "ts-node src/crawlers/viecoi/sitemap-crawler.ts",
     "crawl:viecoi-urls": "ts-node src/crawlers/viecoi/fetch-job-urls.ts",
     "crawl:viecoi-jobs": "ts-node src/crawlers/viecoi/job-crawler.ts",
+    "crawl:viecoi-puppeteer": "ts-node src/crawlers/viecoi/puppeteer-crawler.ts",
+    "crawl:viecoi-pipeline": "ts-node src/crawlers/viecoi/puppeteer-full-pipeline.ts",
     "normalize:viecoi": "ts-node src/crawlers/viecoi/normalize-runner.ts",
     "upsert:viecoi-jobs": "ts-node src/crawlers/viecoi/upsert-jobs.ts",
     "sync:viecoi-algolia": "ts-node src/crawlers/viecoi/sync-algolia.ts",
-    "crawl:viecoi-full": "npm run crawl:viecoi-jobs && npm run normalize:viecoi && npm run upsert:viecoi-jobs && npm run sync:viecoi-algolia"
+    "crawl:viecoi-full": "npm run crawl:viecoi-puppeteer -- --limit 50 && npm run crawl:viecoi-pipeline"
   },
   "keywords": [
     "job",

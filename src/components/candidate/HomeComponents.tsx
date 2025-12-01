@@ -167,9 +167,14 @@ export const JobCard = memo(({
       return item.image;
     }
     
-    // Priority 2: Company logo (for viecoi/crawled jobs)
+    // Priority 2: Company logo (for viecoi/crawled jobs) - skip default placeholder
     if (item.company_logo && typeof item.company_logo === 'string' && item.company_logo.trim() !== '') {
-      return item.company_logo;
+      // Skip viecoi default placeholder images
+      if (!item.company_logo.includes('prof-img.png') && 
+          !item.company_logo.includes('placeholder') &&
+          !item.company_logo.includes('default')) {
+        return item.company_logo;
+      }
     }
     
     // Priority 3: Company image from company collection
@@ -177,9 +182,16 @@ export const JobCard = memo(({
       return company.image;
     }
     
-    // Fallback: Use placeholder with company name
+    // Fallback: Use placeholder with company initials
     const companyName = company?.corp_name || item.company_name || 'Company';
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&size=200&background=4A80F0&color=fff&bold=true&format=png`;
+    const initials = companyName
+      .split(' ')
+      .filter((w: string) => w.length > 0)
+      .map((w: string) => w[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase() || 'CO';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&size=200&background=4A80F0&color=fff&bold=true&format=png`;
   };
   
   const imageUrl = getCompanyLogo();

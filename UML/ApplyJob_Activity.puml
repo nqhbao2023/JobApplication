@@ -1,0 +1,43 @@
+@startuml
+skinparam SwimlaneBorderColor black
+skinparam pageBorderColor black
+skinparam Shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam style strictuml
+
+title Sơ đồ hoạt động: Ứng tuyển việc làm
+
+|Ứng viên (Candidate)|
+start
+:Xem chi tiết việc làm;
+:Nhấn nút "Ứng tuyển ngay";
+
+|Hệ thống (System)|
+if (Đã đăng nhập?) then (Chưa)
+  :Yêu cầu đăng nhập;
+  stop
+else (Rồi)
+  :Kiểm tra hồ sơ/CV;
+endif
+
+if (Có CV mặc định?) then (Không)
+  :Yêu cầu tạo/tải lên CV;
+  stop
+else (Có)
+  :Hiển thị xác nhận ứng tuyển;
+endif
+
+|Ứng viên (Candidate)|
+:Xác nhận gửi hồ sơ;
+
+|Hệ thống (System)|
+:Lưu thông tin ứng tuyển;
+:Gửi thông báo cho Nhà tuyển dụng;
+:Cập nhật trạng thái "Đang chờ duyệt";
+
+|Ứng viên (Candidate)|
+:Nhận thông báo thành công;
+stop
+
+@enduml

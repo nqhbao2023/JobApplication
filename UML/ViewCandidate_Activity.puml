@@ -1,0 +1,41 @@
+@startuml
+skinparam SwimlaneBorderColor black
+skinparam pageBorderColor black
+skinparam Shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam style strictuml
+
+title Sơ đồ hoạt động: Xem/Duyệt ứng viên
+
+|Nhà tuyển dụng (Employer)|
+start
+:Truy cập danh sách Ứng viên;
+
+|Hệ thống (System)|
+:Tải danh sách đơn ứng tuyển;
+:Hiển thị danh sách (kèm trạng thái);
+
+|Nhà tuyển dụng (Employer)|
+:Chọn một ứng viên để xem chi tiết;
+:Xem thông tin CV & Thư giới thiệu;
+
+if (Quyết định?) then (Chấp nhận)
+  :Nhấn nút "Chấp nhận";
+  |Hệ thống (System)|
+  :Cập nhật trạng thái đơn -> "Accepted";
+  :Gửi thông báo cho Ứng viên;
+  
+else (Từ chối)
+  :Nhấn nút "Từ chối";
+  |Hệ thống (System)|
+  :Cập nhật trạng thái đơn -> "Rejected";
+  :Gửi thông báo cho Ứng viên;
+endif
+
+|Hệ thống (System)|
+:Cập nhật giao diện danh sách;
+
+stop
+
+@enduml

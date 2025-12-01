@@ -1,0 +1,43 @@
+@startuml
+skinparam SwimlaneBorderColor black
+skinparam pageBorderColor black
+skinparam Shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam style strictuml
+
+title Sơ đồ hoạt động: Ứng viên đăng tin tìm việc (Quick Post)
+
+|Ứng viên (Candidate)|
+start
+:Truy cập chức năng "Đăng tin tìm việc" (Quick Post);
+:Nhập thông tin nhu cầu (Vị trí, Mức lương, Kỹ năng);
+
+|Hệ thống (System)|
+:Kiểm tra dữ liệu đầu vào;
+if (Dữ liệu hợp lệ?) then (Có)
+  :Tạo Job mới với jobType = 'candidate_seeking';
+  :Lưu vào cơ sở dữ liệu (Firestore);
+  :Hiển thị thông báo "Đăng tin thành công";
+else (Không)
+  :Hiển thị lỗi yêu cầu nhập lại;
+  stop
+endif
+
+|Nhà tuyển dụng (Employer)|
+:Truy cập tab "Tìm ứng viên";
+
+|Hệ thống (System)|
+:Lọc các Job có jobType = 'candidate_seeking';
+:Hiển thị danh sách Quick Post của ứng viên;
+
+|Nhà tuyển dụng (Employer)|
+:Xem thông tin Quick Post;
+:Nhấn nút "Liên hệ" hoặc "Xem Profile";
+
+|Hệ thống (System)|
+:Mở thông tin chi tiết Ứng viên hoặc gửi Email liên hệ;
+
+stop
+
+@enduml

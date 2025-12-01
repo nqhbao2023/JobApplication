@@ -1,0 +1,33 @@
+@startuml
+skinparam SwimlaneBorderColor black
+skinparam pageBorderColor black
+skinparam Shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam style strictuml
+
+title Sơ đồ hoạt động: Lưu việc làm (Save Job)
+
+|Ứng viên (Candidate)|
+start
+:Xem chi tiết việc làm;
+:Nhấn biểu tượng "Trái tim" (Lưu);
+
+|Hệ thống (System)|
+:Kiểm tra trạng thái hiện tại;
+if (Đang lưu?) then (Có)
+  :Xóa khỏi danh sách đã lưu;
+  :Cập nhật biểu tượng -> Trống;
+else (Không)
+  :Thêm vào danh sách đã lưu;
+  :Cập nhật biểu tượng -> Đầy;
+endif
+
+:Lưu thay đổi vào Database;
+
+|Ứng viên (Candidate)|
+:Nhìn thấy trạng thái mới của nút Lưu;
+
+stop
+
+@enduml

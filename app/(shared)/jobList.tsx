@@ -149,9 +149,19 @@ const AllJobs = () => {
             }
 
             // Process job type using lookup map
+            // ✅ Support both jobTypes (manual jobs) and job_type_id (crawled jobs from viecoi)
             let typeData = undefined;
             let typeId = "";
-            if (jobData.jobTypes) {
+            
+            // First check job_type_id (viecoi crawled jobs format)
+            if (jobData.job_type_id) {
+              typeId = jobData.job_type_id;
+              if (typesMap.has(typeId)) {
+                typeData = typesMap.get(typeId);
+              }
+            }
+            // Then check jobTypes (manual job posts format)
+            else if (jobData.jobTypes) {
               const tId = typeof jobData.jobTypes === "string"
                 ? jobData.jobTypes
                 : jobData.jobTypes.id || jobData.jobTypes.$id || jobData.jobTypes.jobTypeId || "";
@@ -259,9 +269,11 @@ const AllJobs = () => {
     }
 
     // 2. Filter by type using stored typeId
+    // ✅ Support both jobTypes (manual) and job_type_id (viecoi crawled)
     if (activeType !== "all") {
       result = result.filter((job) => {
         const jobTypeId = (job as any).jobTypeId || 
+                         (job as any).job_type_id ||
                          (job.jobTypes?.$id) || 
                          (job.jobTypes?.id) ||
                          (typeof job.jobTypes === "string" ? job.jobTypes : "");

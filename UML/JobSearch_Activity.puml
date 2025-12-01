@@ -1,0 +1,40 @@
+@startuml JobSearch_Activity
+' Cấu hình giao diện bảng (Table look)
+skinparam SwimlaneBorderColor black
+skinparam SwimlaneTitleBackgroundColor white
+skinparam SwimlaneTitleFontColor black
+skinparam ActivityBackgroundColor white
+skinparam ActivityBorderColor black
+skinparam ArrowColor black
+skinparam Shadowing false
+skinparam pageBorderColor black
+skinparam pageMargin 10
+
+title Sơ đồ Hoạt động Tìm kiếm Việc làm
+
+|Người dùng|
+start
+:Nhập từ khóa & Chọn địa điểm;
+:Nhấn "Tìm kiếm";
+
+|Ứng dụng Mobile|
+:Gửi yêu cầu tìm kiếm;
+
+if (Dịch vụ tìm kiếm?) then (Algolia (Nhanh))
+  |Algolia Service|
+  :Tìm kiếm & Trả về kết quả;
+else (Firestore (Fallback))
+  |Firestore|
+  :Lấy danh sách việc làm;
+  |Ứng dụng Mobile|
+  :Lọc kết quả theo từ khóa;
+endif
+
+|Ứng dụng Mobile|
+:Hiển thị danh sách kết quả;
+
+|Người dùng|
+:Xem danh sách việc làm;
+stop
+
+@enduml

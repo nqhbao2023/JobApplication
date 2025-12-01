@@ -18,13 +18,35 @@ if (!admin.apps.length) {
   const serviceAccountPath = path.join(__dirname, '../../../serviceAccountKey.json');
   
   if (fs.existsSync(serviceAccountPath)) {
+    // Local development: use serviceAccountKey.json
     const serviceAccount = require(serviceAccountPath);
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
-    console.log('✅ Firebase Admin initialized');
+    console.log('✅ Firebase Admin initialized with service account file');
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // GitHub Actions: use FIREBASE_SERVICE_ACCOUNT env variable (JSON string)
+    try {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      console.log('✅ Firebase Admin initialized with FIREBASE_SERVICE_ACCOUNT env');
+    } catch (e) {
+      throw new Error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT env variable');
+    }
+  } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+    // GitHub Actions alternative: separate env variables
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      }),
+    });
+    console.log('✅ Firebase Admin initialized with individual env variables');
   } else {
-    throw new Error('❌ serviceAccountKey.json not found!');
+    throw new Error('❌ Firebase credentials not found! Either place serviceAccountKey.json in server/ or set FIREBASE_SERVICE_ACCOUNT env variable.');
   }
 }
 

@@ -29,10 +29,32 @@ jobs:
           cd server
           npm ci
       
-      - name: Run crawler
+      - name: Verify Firebase credentials
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ] && [ -z "$FIREBASE_PROJECT_ID" ]; then
+            echo "❌ Error: Missing Firebase credentials!"
+            echo "Please add FIREBASE_SERVICE_ACCOUNT or (FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY) to GitHub Secrets"
+            exit 1
+          fi
+          echo "✅ Firebase credentials found"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      
+      - name: Run crawler (fetch + normalize only)
         run: |
           cd server
-          npm run crawl:viecoi-full
+          npm run crawl:viecoi-jobs
+          npm run normalize:viecoi
+        env:
+          # No Firebase needed for crawling stage
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_URL: ${{ secrets.AI_API_URL }}
+      
+      - name: Upsert jobs to Firestore
+        run: |
+          cd server
+          npm run upsert:viecoi-jobs
         env:
           # Firebase credentials (stored in GitHub Secrets)
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -44,10 +66,20 @@ jobs:
           ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
           ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
           ALGOLIA_INDEX_NAME: ${{ secrets.ALGOLIA_INDEX_NAME }}
-          
-          # AI API (optional, for auto-categorization)
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          AI_API_URL: ${{ secrets.AI_API_URL }}
+      
+      - name: Sync to Algolia
+        if: success()
+        run: |
+          cd server
+          npm run sync:viecoi-algolia
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
+          ALGOLIA_API_KEY: ${{ secrets.ALGOLIA_API_KEY }}
+          ALGOLIA_INDEX_NAME: ${{ secrets.ALGOLIA_INDEX_NAME }}
       
       - name: Notify on success
         if: success()
@@ -59,28 +91,3 @@ jobs:
         run: |
           echo "❌ Crawler failed at $(date)"
           exit 1
-
-  # Optional: Send notification to Discord/Slack
-  notify:
-    name: Send Notification
-    needs: crawl-jobs
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: Send Discord notification (optional)
-        if: env.DISCORD_WEBHOOK_URL != ''
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          if [ "${{ needs.crawl-jobs.result }}" == "success" ]; then
-            MESSAGE="✅ Auto-crawler completed successfully!"
-            COLOR="3066993"
-          else
-            MESSAGE="❌ Auto-crawler failed!"
-            COLOR="15158332"
-          fi
-          
-          curl -H "Content-Type: application/json" \
-            -d "{\"embeds\": [{\"title\": \"Job4S Auto Crawler\", \"description\": \"$MESSAGE\", \"color\": $COLOR}]}" \
-            $DISCORD_WEBHOOK_URL

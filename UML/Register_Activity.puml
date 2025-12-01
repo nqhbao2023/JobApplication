@@ -1,0 +1,51 @@
+@startuml Register_Activity
+' Cấu hình giao diện bảng (Table look)
+skinparam SwimlaneBorderColor black
+skinparam SwimlaneTitleBackgroundColor white
+skinparam SwimlaneTitleFontColor black
+skinparam ActivityBackgroundColor white
+skinparam ActivityBorderColor black
+skinparam ArrowColor black
+skinparam Shadowing false
+skinparam pageBorderColor black
+skinparam pageMargin 10
+
+title Sơ đồ Hoạt động Tạo Tài Khoản
+
+|Người dùng|
+start
+:Mở màn hình Đăng ký;
+:Chọn vai trò (Ứng viên/Nhà tuyển dụng);
+:Nhập thông tin (Tên, SĐT, Email, Mật khẩu);
+:Nhấn "Tạo tài khoản";
+
+|Ứng dụng Mobile|
+:Gửi yêu cầu gửi OTP;
+
+|Backend API|
+:Kiểm tra Email đã tồn tại chưa;
+:Tạo mã OTP 6 số;
+:Gửi OTP qua Email;
+
+|Người dùng|
+:Nhận Email chứa mã OTP;
+:Nhập mã OTP vào ứng dụng;
+
+|Ứng dụng Mobile|
+:Gửi yêu cầu xác thực OTP;
+
+|Backend API|
+:Xác thực mã OTP;
+:Tạo tài khoản trên Firebase Auth;
+:Lưu thông tin User vào Database;
+:Trả về Token & Profile;
+
+|Ứng dụng Mobile|
+:Lưu phiên làm việc;
+:Điều hướng đến Trang chủ;
+
+|Người dùng|
+:Hoàn tất đăng ký;
+stop
+
+@enduml

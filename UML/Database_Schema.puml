@@ -1,0 +1,108 @@
+@startuml
+skinparam linetype ortho
+skinparam handwritten false
+skinparam shadow false
+skinparam defaultFontName Arial
+skinparam classBackgroundColor White
+skinparam classBorderColor Black
+skinparam classArrowColor Black
+
+title Sơ đồ Quan hệ CSDL (Firestore Schema)
+
+package "Collections" {
+    class "users" as users {
+        *uid : string <<PK>>
+        --
+        email : string
+        displayName : string
+        photoURL : string
+        role : string
+        studentProfile : map
+        companyProfile : map
+        createdAt : timestamp
+    }
+
+    class "jobs" as jobs {
+        *id : string <<PK>>
+        --
+        title : string
+        description : string
+        salary : map
+        jobType : string
+        source : string
+        status : string
+        --
+        posterId : string <<FK>>
+        companyId : string <<FK>>
+        categoryId : string <<FK>>
+        createdAt : timestamp
+    }
+
+    class "applications" as applications {
+        *id : string <<PK>>
+        --
+        cvUrl : string
+        coverLetter : string
+        status : string
+        appliedAt : timestamp
+        --
+        jobId : string <<FK>>
+        candidateId : string <<FK>>
+    }
+
+    class "companies" as companies {
+        *id : string <<PK>>
+        --
+        name : string
+        logo : string
+        description : string
+        address : string
+        website : string
+        --
+        ownerId : string <<FK>>
+    }
+
+    class "job_categories" as categories {
+        *id : string <<PK>>
+        --
+        name : string
+        icon : string
+        description : string
+    }
+
+    class "saved_jobs" as saved_jobs {
+        *id : string <<PK>>
+        --
+        savedAt : timestamp
+        --
+        userId : string <<FK>>
+        jobId : string <<FK>>
+    }
+
+    class "user_cvs" as user_cvs {
+        *id : string <<PK>>
+        --
+        name : string
+        fileUrl : string
+        isDefault : boolean
+        updatedAt : timestamp
+        --
+        userId : string <<FK>>
+    }
+}
+
+' Relationships
+users "1" -- "0..*" jobs : "posts >"
+users "1" -- "0..*" applications : "applies >"
+users "1" -- "0..*" saved_jobs : "saves >"
+users "1" -- "0..*" user_cvs : "owns >"
+users "1" -- "0..1" companies : "owns >"
+
+jobs "1" -- "0..*" applications : "has >"
+jobs "1" -- "0..*" saved_jobs : "is saved in >"
+
+companies "1" -- "0..*" jobs : "offers >"
+
+categories "1" -- "0..*" jobs : "categorizes >"
+
+@enduml

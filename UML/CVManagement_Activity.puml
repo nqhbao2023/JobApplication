@@ -1,0 +1,53 @@
+@startuml
+skinparam SwimlaneBorderColor black
+skinparam pageBorderColor black
+skinparam Shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam style strictuml
+
+title Sơ đồ hoạt động: Quản lý CV
+
+|Ứng viên (Candidate)|
+start
+:Vào mục Quản lý CV;
+
+|Hệ thống (System)|
+:Hiển thị danh sách CV;
+
+|Ứng viên (Candidate)|
+if (Nhu cầu?) then (Thêm CV mới)
+  if (Phương thức?) then (Dùng Template)
+    :Chọn "Tạo từ Template";
+    |Hệ thống (System)|
+    :Tạo bản nháp từ Profile;
+    |Ứng viên (Candidate)|
+    :Sửa nội dung và Lưu;
+  else (Upload File)
+    :Chọn "Tải lên CV";
+    :Chọn file (PDF/Word);
+    |Hệ thống (System)|
+    :Upload và Lưu file;
+  endif
+  
+else (CV đã có)
+  if (Thao tác?) then (Chỉnh sửa)
+    :Chọn CV cần sửa;
+    :Cập nhật thông tin;
+    |Hệ thống (System)|
+    :Lưu thay đổi;
+  else (Xóa)
+    :Chọn CV cần xóa;
+    :Xác nhận xóa;
+    |Hệ thống (System)|
+    :Xóa khỏi hệ thống;
+  endif
+endif
+
+|Hệ thống (System)|
+:Cập nhật danh sách hiển thị;
+:Thông báo hoàn tất;
+
+stop
+
+@enduml

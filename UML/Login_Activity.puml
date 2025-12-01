@@ -1,0 +1,47 @@
+@startuml Login_Activity
+' Cấu hình giao diện bảng (Table look)
+skinparam SwimlaneBorderColor black
+skinparam SwimlaneTitleBackgroundColor white
+skinparam SwimlaneTitleFontColor black
+skinparam ActivityBackgroundColor white
+skinparam ActivityBorderColor black
+skinparam ArrowColor black
+skinparam Shadowing false
+
+' Đóng khung toàn bộ sơ đồ để tạo thành bảng hoàn chỉnh
+skinparam pageBorderColor black
+skinparam pageMargin 10
+
+title Sơ đồ Hoạt động Đăng nhập
+
+|Người dùng|
+start
+:Mở màn hình Đăng nhập;
+:Nhập Email & Mật khẩu;
+:Nhấn "Đăng nhập";
+
+|Ứng dụng Mobile|
+:Gửi yêu cầu đăng nhập;
+
+|Backend API|
+:Xác thực với Firebase;
+:Lấy thông tin User từ Database;
+:Trả về Token & Profile;
+
+|Ứng dụng Mobile|
+:Lưu phiên làm việc;
+:Kiểm tra Vai trò (Role);
+
+if (Vai trò là gì?) then (Ứng viên)
+  :Vào Trang chủ Tìm việc;
+elseif (Nhà tuyển dụng)
+  :Vào Dashboard Tuyển dụng;
+elseif (Admin)
+  :Vào Dashboard Admin;
+else
+  :Vào Trang chủ;
+endif
+
+stop
+
+@enduml

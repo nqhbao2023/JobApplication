@@ -1,0 +1,43 @@
+@startuml
+skinparam SwimlaneBorderColor black
+skinparam pageBorderColor black
+skinparam Shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam style strictuml
+
+title Sơ đồ hoạt động: Admin Duyệt Tin Tuyển Dụng
+
+|Admin|
+start
+:Truy cập danh sách "Tin chờ duyệt";
+
+|Hệ thống (System)|
+:Truy vấn các Job có trạng thái "Pending";
+:Hiển thị danh sách tin tuyển dụng;
+
+|Admin|
+:Chọn một tin để xem chi tiết;
+:Kiểm tra nội dung (Tiêu đề, Mô tả, Lương...);
+
+if (Quyết định?) then (Duyệt tin)
+  :Nhấn nút "Approve";
+  |Hệ thống (System)|
+  :Cập nhật trạng thái Job -> "Active";
+  :Index dữ liệu sang Algolia (để tìm kiếm);
+  :Gửi thông báo cho Employer: "Tin của bạn đã được duyệt";
+  
+else (Từ chối)
+  :Nhập lý do từ chối;
+  :Nhấn nút "Reject";
+  |Hệ thống (System)|
+  :Cập nhật trạng thái Job -> "Rejected";
+  :Gửi thông báo cho Employer kèm lý do;
+endif
+
+|Hệ thống (System)|
+:Cập nhật lại danh sách chờ duyệt;
+
+stop
+
+@enduml

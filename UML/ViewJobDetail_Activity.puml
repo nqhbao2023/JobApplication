@@ -1,0 +1,42 @@
+@startuml ViewJobDetail_Activity
+' Cấu hình giao diện bảng (Table look)
+skinparam SwimlaneBorderColor black
+skinparam SwimlaneTitleBackgroundColor white
+skinparam SwimlaneTitleFontColor black
+skinparam ActivityBackgroundColor white
+skinparam ActivityBorderColor black
+skinparam ArrowColor black
+skinparam Shadowing false
+skinparam pageBorderColor black
+skinparam pageMargin 10
+
+title Sơ đồ Hoạt động Xem Chi tiết Việc làm
+
+|Người dùng|
+start
+:Chọn một việc làm từ danh sách;
+
+|Ứng dụng Mobile|
+:Gửi yêu cầu lấy thông tin chi tiết;
+:Kiểm tra trạng thái (Đã lưu/Đã ứng tuyển);
+
+|Backend API|
+:Lấy thông tin việc làm từ Database;
+:Tăng lượt xem (View Count);
+:Trả về dữ liệu chi tiết;
+
+|Ứng dụng Mobile|
+:Hiển thị thông tin (Tiêu đề, Lương, Mô tả...);
+:Kiểm tra Vai trò người dùng;
+
+if (Vai trò?) then (Ứng viên)
+  :Hiển thị nút "Ứng tuyển" & "Lưu";
+else (Nhà tuyển dụng (Chủ sở hữu))
+  :Hiển thị nút "Chỉnh sửa" & "Xóa";
+endif
+
+|Người dùng|
+:Xem chi tiết việc làm;
+stop
+
+@enduml

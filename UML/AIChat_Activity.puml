@@ -1,0 +1,43 @@
+@startuml
+skinparam SwimlaneBorderColor black
+skinparam pageBorderColor black
+skinparam Shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam style strictuml
+
+title Sơ đồ hoạt động: Chat với AI 
+
+|Người dùng (User)|
+start
+:Mở màn hình AI Assistant;
+
+|Hệ thống (System)|
+:Hiển thị lịch sử chat (nếu có);
+:Hiển thị các câu hỏi gợi ý;
+
+|Người dùng (User)|
+if (Chọn cách hỏi?) then (Nhập câu hỏi)
+  :Nhập nội dung câu hỏi;
+  :Nhấn Gửi;
+else (Chọn gợi ý)
+  :Chọn một câu hỏi gợi ý;
+endif
+
+|Hệ thống (System)|
+:Hiển thị tin nhắn của User;
+:Gửi prompt đến AI Service;
+:Gọi API Google Gemini;
+
+|AI Service (Gemini)|
+:Xử lý câu hỏi;
+:Trả về câu trả lời;
+
+|Hệ thống (System)|
+:Nhận phản hồi từ AI;
+:Hiển thị câu trả lời lên màn hình;
+:Lưu lịch sử chat;
+
+stop
+
+@enduml

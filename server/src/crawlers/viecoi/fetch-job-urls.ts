@@ -13,26 +13,63 @@ interface JobURL {
   lastmod?: string;
 }
 
+// Random User-Agents để tránh bị block
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+];
+
+function getRandomUserAgent(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
- * Hàm lấy và phân tích dữ liệu XML từ sitemap
+ * Hàm lấy và phân tích dữ liệu XML từ sitemap với retry
  */
-async function fetchXML(url: string): Promise<any> {
+async function fetchXML(url: string, retries = 3): Promise<any> {
   console.log(`🌐 Fetching: ${url}`);
   
-  const response = await axios.get(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/xml, text/xml, */*',
-      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Referer': 'https://viecoi.vn/',
-      'Connection': 'keep-alive',
-    },
-    timeout: 30000,
-  });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      // Random delay 1-3 giây để tránh rate limit
+      const delay = 1000 + Math.random() * 2000;
+      await sleep(delay);
+      
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': getRandomUserAgent(),
+          'Accept': 'application/xml, text/xml, text/html, */*',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Referer': 'https://www.google.com/',
+          'Connection': 'keep-alive',
+          'Cache-Control': 'no-cache',
+        },
+        timeout: 30000,
+        maxRedirects: 5,
+      });
 
-  const parser = new xml2js.Parser();
-  return await parser.parseStringPromise(response.data);
+      const parser = new xml2js.Parser();
+      return await parser.parseStringPromise(response.data);
+    } catch (error: any) {
+      console.warn(`⚠️  Attempt ${attempt}/${retries} failed:`, error.message);
+      
+      if (attempt < retries) {
+        const backoff = attempt * 3000 + Math.random() * 2000;
+        console.log(`   Retrying in ${Math.round(backoff/1000)}s...`);
+        await sleep(backoff);
+      } else {
+        throw error;
+      }
+    }
+  }
 }
 
 /**

@@ -13,6 +13,18 @@ import * as path from 'path';
 const OUTPUT_DIR = path.join(__dirname, '../../../data');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'viecoi-jobs-raw.json');
 
+// Random User-Agents để tránh bị block
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+];
+
+function getRandomUserAgent(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
 export interface JobData {
   url: string;
   title: string;
@@ -41,14 +53,16 @@ export async function crawlJobPage(url: string): Promise<JobData | null> {
   try {
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': getRandomUserAgent(),
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
         'Accept-Encoding': 'gzip, deflate, br',
-        'Referer': 'https://viecoi.vn/',
+        'Referer': 'https://www.google.com/',
         'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache',
       },
       timeout: 15000,
+      maxRedirects: 5,
     });
 
     const $ = cheerio.load(response.data);

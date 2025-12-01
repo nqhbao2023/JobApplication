@@ -47,7 +47,8 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.10",
-    "puppeteer": "^21.6.1"
+    "puppeteer": "^21.6.1",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/compression": "^1.7.5",

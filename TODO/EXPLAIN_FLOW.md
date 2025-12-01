@@ -1,5 +1,33 @@
 # 🔄 Giải Thích Flow Crawl Job từ Viecoi.vn
 
+## ⚠️ Lưu Ý Quan Trọng
+
+**Viecoi.vn block GitHub Actions IPs!** 
+
+Website viecoi.vn sử dụng bot protection và block requests từ datacenter IPs (bao gồm GitHub Actions). Do đó:
+
+- ❌ **Không thể** chạy crawler tự động trên GitHub Actions
+- ✅ **Có thể** chạy crawler từ máy local (IP residential)
+
+### Chạy Crawler Từ Máy Local
+
+```powershell
+# Cách 1: Dùng script đơn giản
+.\crawl-local.ps1
+
+# Cách 2: Với số lượng tùy chỉnh
+.\crawl-local.ps1 -Limit 100
+
+# Cách 3: Chạy từng bước thủ công
+cd server
+npm run crawl:viecoi-jobs -- --limit 50
+npm run normalize:viecoi
+npm run upsert:viecoi-jobs
+npm run sync:viecoi-algolia
+```
+
+---
+
 ## 📋 Tổng Quan
 
 Hệ thống tự động crawl (thu thập) tin tuyển dụng từ website **viecoi.vn**, chuẩn hóa dữ liệu, lưu vào **Firebase Firestore**, và đồng bộ lên **Algolia** để tìm kiếm nhanh.

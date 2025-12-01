@@ -1,11 +1,12 @@
 name: Auto Crawler - Viecoi.vn Jobs
 
 on:
-  schedule:
-    # Run every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
-    - cron: '0 */6 * * *'
+  # ⚠️ DISABLED: viecoi.vn blocks GitHub Actions IPs (403 Forbidden)
+  # Chạy crawler thủ công từ máy local thay vì dùng GitHub Actions
+  # schedule:
+  #   - cron: '0 */6 * * *'
   
-  # Allow manual trigger from GitHub Actions tab
+  # Vẫn cho phép trigger thủ công để test
   workflow_dispatch:
 
 jobs:

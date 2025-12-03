@@ -77,14 +77,6 @@ export default function EmployerHome() {
   const scrollY = useSharedValue(0);
   const hasTriggeredHaptic = useSharedValue(false);
 
-  useEffect(() => {
-    const logToken = async () => {
-      const token = await auth.currentUser?.getIdToken();
-      console.log(" FIREBASE TOKEN : ", token);
-    };
-    logToken();
-  }, []);
-
   // 🔔 Fetch unread notifications count
   useEffect(() => {
     const fetchUnreadNotifications = async () => {

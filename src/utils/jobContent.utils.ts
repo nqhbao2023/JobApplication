@@ -167,12 +167,21 @@ export const getJobSections = (job: any): ParsedJobSections => {
   }
 
   // Job internal - construct từ các field riêng
+  const requirementsList = Array.isArray(job.requirements) 
+    ? job.requirements.map((r: string) => `• ${r}`)
+    : (job.requirements ? [job.requirements] : []);
+
+  // ✅ Add skills to requirements if available
+  if (job.skills && Array.isArray(job.skills) && job.skills.length > 0) {
+    requirementsList.unshift(`**Kỹ năng yêu cầu:**\n${job.skills.map((s: string) => `• ${s}`).join('\n')}`);
+  } else if (job.skills_required) {
+    requirementsList.unshift(`**Kỹ năng yêu cầu:**\n${job.skills_required}`);
+  }
+
   return {
     overview: job.description || '',
     responsibilities: job.responsibilities || '',
-    requirements: Array.isArray(job.requirements) 
-      ? job.requirements.map((r: string) => `• ${r}`).join('\n')
-      : (job.requirements || ''),
+    requirements: requirementsList.join('\n\n'),
     benefits: Array.isArray(job.benefits) 
       ? job.benefits.map((b: string) => `• ${b}`).join('\n')
       : (job.benefits || ''),

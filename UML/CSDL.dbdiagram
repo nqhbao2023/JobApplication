@@ -7,68 +7,74 @@
     {
       "name": "users",
       "schemaName": "public",
-      "x": 466.853515625,
-      "y": 12
+      "x": 0,
+      "y": 0
     },
     {
       "name": "jobs",
       "schemaName": "public",
-      "x": 965.626953125,
-      "y": 53
+      "x": 256,
+      "y": 0
     },
     {
       "name": "applications",
       "schemaName": "public",
-      "x": 1287.303841239072,
-      "y": -212.15455402607998
-    },
-    {
-      "name": "companies",
-      "schemaName": "public",
-      "x": 117.30750860285639,
-      "y": 37.57468066069379
-    },
-    {
-      "name": "job_categories",
-      "schemaName": "public",
-      "x": 351.9928134892219,
-      "y": 519.0051927046927
-    },
-    {
-      "name": "job_types",
-      "schemaName": "public",
-      "x": 117.30750860285639,
-      "y": 793.0051927046927
-    },
-    {
-      "name": "saved_jobs",
-      "schemaName": "public",
-      "x": 1215.0929781971136,
-      "y": 433.6625402615098
+      "x": 520,
+      "y": 0
     },
     {
       "name": "applied_jobs",
       "schemaName": "public",
-      "x": 360.0902234466064,
-      "y": 793.0051927046927
+      "x": 776,
+      "y": 0
+    },
+    {
+      "name": "companies",
+      "schemaName": "public",
+      "x": 0,
+      "y": 368
+    },
+    {
+      "name": "job_categories",
+      "schemaName": "public",
+      "x": 256,
+      "y": 784
+    },
+    {
+      "name": "job_types",
+      "schemaName": "public",
+      "x": 520,
+      "y": 368
     },
     {
       "name": "cvs",
       "schemaName": "public",
-      "x": 601.3495007903564,
-      "y": 793.0051927046927
+      "x": 776,
+      "y": 336
+    },
+    {
+      "name": "saved_jobs",
+      "schemaName": "public",
+      "x": 14.077210460772108,
+      "y": 744.8468244084683
     },
     {
       "name": "chats",
       "schemaName": "public",
-      "x": 848.8612195403564,
-      "y": 793.0051927046927
+      "x": 256,
+      "y": 1032
+    },
+    {
+      "name": "chat_messages",
+      "schemaName": "public",
+      "x": 520,
+      "y": 704.4383561643835
     },
     {
       "name": "notifications",
       "schemaName": "public",
-      "x": 117.30750860285639,
-      "y": 939.0051927046927
+      "x": 697.7932752179327,
+      "y": 930.8493150684932
     }
   ],
   "tableGroupCollapseStates": [],
@@ -76,37 +82,247 @@
   "referencePaths": [
     {
       "firstFieldNames": [
-        "posterId"
+        "id"
       ],
-      "firstTableName": "jobs",
+      "firstTableName": "companies",
       "firstSchemaName": "public",
-      "firstRelation": "*",
+      "firstRelation": "1",
       "secondFieldNames": [
-        "uid"
+        "companyId"
       ],
-      "secondTableName": "users",
+      "secondTableName": "jobs",
       "secondSchemaName": "public",
-      "secondRelation": "1",
+      "secondRelation": "*",
       "checkPoints": []
     },
     {
       "firstFieldNames": [
-        "companyId"
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "employerId"
+      ],
+      "secondTableName": "jobs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "posterId"
+      ],
+      "secondTableName": "jobs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
       ],
       "firstTableName": "jobs",
       "firstSchemaName": "public",
-      "firstRelation": "*",
+      "firstRelation": "1",
       "secondFieldNames": [
+        "jobId"
+      ],
+      "secondTableName": "applications",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "candidateId"
+      ],
+      "secondTableName": "applications",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "employerId"
+      ],
+      "secondTableName": "applications",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "userId"
+      ],
+      "secondTableName": "applied_jobs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
         "id"
+      ],
+      "firstTableName": "jobs",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "jobId"
+      ],
+      "secondTableName": "applied_jobs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "ownerId"
       ],
       "secondTableName": "companies",
       "secondSchemaName": "public",
-      "secondRelation": "1",
+      "secondRelation": "*",
       "checkPoints": []
     },
     {
       "firstFieldNames": [
-        "categoryId"
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "userId"
+      ],
+      "secondTableName": "cvs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "userId"
+      ],
+      "secondTableName": "saved_jobs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "jobs",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "jobId"
+      ],
+      "secondTableName": "saved_jobs",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "chats",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "chatId"
+      ],
+      "secondTableName": "chat_messages",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "senderId"
+      ],
+      "secondTableName": "chat_messages",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "uid"
+      ],
+      "firstTableName": "users",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "userId"
+      ],
+      "secondTableName": "notifications",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "jobs",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "jobId"
+      ],
+      "secondTableName": "notifications",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "category"
       ],
       "firstTableName": "jobs",
       "firstSchemaName": "public",
@@ -115,201 +331,6 @@
         "id"
       ],
       "secondTableName": "job_categories",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "jobId"
-      ],
-      "firstTableName": "applications",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "id"
-      ],
-      "secondTableName": "jobs",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "candidateId"
-      ],
-      "firstTableName": "applications",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "employerId"
-      ],
-      "firstTableName": "applications",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "ownerId"
-      ],
-      "firstTableName": "companies",
-      "firstSchemaName": "public",
-      "firstRelation": "1",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "userId"
-      ],
-      "firstTableName": "saved_jobs",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "jobId"
-      ],
-      "firstTableName": "saved_jobs",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "id"
-      ],
-      "secondTableName": "jobs",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "userId"
-      ],
-      "firstTableName": "applied_jobs",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "jobId"
-      ],
-      "firstTableName": "applied_jobs",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "id"
-      ],
-      "secondTableName": "jobs",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "userId"
-      ],
-      "firstTableName": "cvs",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "senderId"
-      ],
-      "firstTableName": "chats",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "receiverId"
-      ],
-      "firstTableName": "chats",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "jobId"
-      ],
-      "firstTableName": "chats",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "id"
-      ],
-      "secondTableName": "jobs",
-      "secondSchemaName": "public",
-      "secondRelation": "1",
-      "checkPoints": []
-    },
-    {
-      "firstFieldNames": [
-        "userId"
-      ],
-      "firstTableName": "notifications",
-      "firstSchemaName": "public",
-      "firstRelation": "*",
-      "secondFieldNames": [
-        "uid"
-      ],
-      "secondTableName": "users",
       "secondSchemaName": "public",
       "secondRelation": "1",
       "checkPoints": []

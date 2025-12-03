@@ -186,7 +186,7 @@ export default function MyJobs() {
           <Text style={styles.headerSubtitle}>{jobs.length} công việc đang đăng</Text>
         </View>
         <TouchableOpacity 
-          onPress={() => router.push('/(shared)/addJob' as any)}
+          onPress={() => router.push('/(employer)/addJob' as any)}
           style={styles.addButton}
         >
           <Ionicons name="add" size={24} color="#fff" />

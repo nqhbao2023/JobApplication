@@ -6,6 +6,10 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithCredential,
+  fetchSignInMethodsForEmail,
+  linkWithCredential,
+  EmailAuthProvider,
+  getAdditionalUserInfo,
 } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '@/config/firebase';
@@ -13,6 +17,8 @@ import { AppRole } from '@/types';
 import { mapAuthError } from '@/utils/validation/auth';
 import { useRole } from './RoleContext';
 import { authApiService } from '@/services/authApi.service';
+
+type AuthProvider = 'password' | 'google.com' | 'facebook.com';
 
 type AuthContextType = {
   loading: boolean;
@@ -28,6 +34,8 @@ type AuthContextType = {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  getLinkedProviders: () => AuthProvider[];
+  linkEmailPassword: (email: string, password: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -231,6 +239,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   /**
    * Sign In with Google
+   * Handles multiple scenarios:
+   * 1. New Google user → Create new account
+   * 2. Existing email/password user → Firebase auto-merges if same email
+   * 3. Email exists with different provider → Handle gracefully
    */
   const signInWithGoogle = useCallback(
     async (idToken: string) => {
@@ -242,45 +254,143 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const credential = GoogleAuthProvider.credential(idToken);
         
         // Step 2: Sign in with Firebase
+        // Firebase sẽ tự động merge nếu email đã tồn tại với password provider
         const userCredential = await signInWithCredential(auth, credential);
+        const user = userCredential.user;
+        
+        // Step 3: Check providers linked to this account
+        const providers = user.providerData.map(p => p.providerId);
+        console.log('🔐 Linked providers:', providers);
+        
+        // Step 4: Check if this is a new Google user or existing user
+        const additionalInfo = getAdditionalUserInfo(userCredential);
+        const isNewUser = additionalInfo?.isNewUser ?? false;
 
-        // Step 3: Verify with backend
+        // Step 5: Sync with backend
         try {
           const roleData = await authApiService.getCurrentRole();
 
-          if (!roleData.role) {
-            // Người dùng mới - sync với backend
+          if (!roleData.role || isNewUser) {
+            // New user or user not in backend yet - sync with backend
             await authApiService.syncUser({
-              uid: userCredential.user.uid,
-              email: userCredential.user.email!,
-              name: userCredential.user.displayName || 'User',
-              phone: '',
-              role: 'candidate', // Mặc định là candidate
+              uid: user.uid,
+              email: user.email!,
+              name: user.displayName || 'User',
+              phone: user.phoneNumber || '',
+              photoURL: user.photoURL || undefined,
+              role: 'candidate', // Default role
             });
             await AsyncStorage.setItem('userRole', 'candidate');
+            console.log('✅ New Google user synced with backend');
           } else {
+            // Existing user - just save role
             await AsyncStorage.setItem('userRole', roleData.role);
+            console.log('✅ Existing user logged in via Google');
           }
 
           await refreshRole();
         } catch (apiError: any) {
+          // Network error - still allow login
+          if (apiError?.code === 'NETWORK_ERROR' || apiError?.code === 'ERR_NETWORK' || !apiError?.response) {
+            console.warn('⚠️ Backend sync skipped (network issue), proceeding with login');
+            await AsyncStorage.setItem('userRole', 'candidate');
+            await refreshRole();
+            return;
+          }
+          
           console.error('❌ Backend verification failed:', apiError);
 
-          // Rollback authentication
+          // Rollback authentication for critical errors
           await firebaseSignOut(auth);
           await AsyncStorage.removeItem('userRole');
 
           throw new Error('Không thể đồng bộ dữ liệu. Vui lòng thử lại.');
         }
       } catch (err: any) {
-        const errorMessage = err?.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.';
+        const errorCode = err?.code || '';
+        let errorMessage = '';
+        
+        // Handle specific Firebase errors
+        if (errorCode === 'auth/account-exists-with-different-credential') {
+          // Email đã tồn tại với phương thức khác (password)
+          errorMessage = 'Email này đã được đăng ký bằng mật khẩu. Vui lòng đăng nhập bằng email/mật khẩu.';
+        } else if (errorCode === 'auth/popup-closed-by-user' || errorCode === 'auth/cancelled-popup-request') {
+          errorMessage = 'Đăng nhập bị hủy.';
+        } else if (errorCode === 'auth/network-request-failed') {
+          errorMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra internet.';
+        } else if (err?.message) {
+          errorMessage = err.message;
+        } else {
+          errorMessage = 'Đăng nhập Google thất bại. Vui lòng thử lại.';
+        }
+        
         setError(errorMessage);
-        console.error('❌ Google sign in error:', errorMessage);
+        console.error('❌ Google sign in error:', errorCode || errorMessage);
       } finally {
         setLoading(false);
       }
     },
     [refreshRole]
+  );
+
+  /**
+   * Get linked auth providers for current user
+   */
+  const getLinkedProviders = useCallback((): AuthProvider[] => {
+    const user = auth.currentUser;
+    if (!user) return [];
+    
+    return user.providerData.map(p => p.providerId as AuthProvider);
+  }, []);
+
+  /**
+   * Link email/password to existing account (e.g., Google user wants to add password)
+   */
+  const linkEmailPassword = useCallback(
+    async (email: string, password: string) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error('Bạn cần đăng nhập trước.');
+        }
+
+        // Check if already has password provider
+        const hasPassword = user.providerData.some(p => p.providerId === 'password');
+        if (hasPassword) {
+          throw new Error('Tài khoản đã có mật khẩu.');
+        }
+
+        // Create email/password credential and link
+        const credential = EmailAuthProvider.credential(email, password);
+        await linkWithCredential(user, credential);
+        
+        console.log('✅ Email/password linked successfully');
+      } catch (err: any) {
+        const errorCode = err?.code || '';
+        let errorMessage = '';
+        
+        if (errorCode === 'auth/provider-already-linked') {
+          errorMessage = 'Tài khoản đã được liên kết với email/mật khẩu.';
+        } else if (errorCode === 'auth/email-already-in-use') {
+          errorMessage = 'Email này đã được sử dụng bởi tài khoản khác.';
+        } else if (errorCode === 'auth/weak-password') {
+          errorMessage = 'Mật khẩu quá yếu. Vui lòng chọn mật khẩu mạnh hơn.';
+        } else if (err?.message) {
+          errorMessage = err.message;
+        } else {
+          errorMessage = 'Không thể liên kết tài khoản. Vui lòng thử lại.';
+        }
+        
+        setError(errorMessage);
+        console.error('❌ Link email/password error:', errorCode || errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
   );
 
   /**
@@ -311,6 +421,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signUp,
         signOut,
         clearError,
+        getLinkedProviders,
+        linkEmailPassword,
       }}
     >
       {children}

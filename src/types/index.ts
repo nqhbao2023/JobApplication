@@ -145,6 +145,12 @@ export interface Job {
   cvUrl?: string; // Link CV của candidate (Google Drive, Dropbox, etc.)
   expectedSalary?: string; // Mức lương mong muốn (text format)
   availableSchedule?: string[]; // Thời gian có thể làm việc (multiple select)
+
+  // ✅ NEW: Employer Job Fields (Added for Edit Job)
+  category?: string;
+  experience?: string;
+  deadline?: string;
+  image?: string;
 }
 
 // Enhanced Company type

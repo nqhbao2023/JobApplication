@@ -277,7 +277,7 @@ export class ApplicationService {
           const jobTitle = jobDoc.exists ? jobDoc.data()?.title || 'Công việc' : 'Công việc';
 
           const notificationTitle = status === 'accepted' 
-            ? '🎉 Hồ sơ được chấp nhận!' 
+            ? 'Congratulation! Hồ sơ được chấp nhận!' 
             : '📋 Cập nhật hồ sơ ứng tuyển';
           
           const notificationMessage = status === 'accepted'

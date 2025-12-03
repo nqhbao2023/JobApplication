@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
+import { Platform } from "react-native";
 import { DrawerMenuButton } from "@/components/candidate/DrawerMenu";
 
 export default function CandidateLayout() {
@@ -22,15 +23,24 @@ export default function CandidateLayout() {
           fontWeight: '700',
           color: '#1a1a1a',
         },
-        tabBarActiveTintColor: "#007AFF",
-        tabBarInactiveTintColor: "#777",
+        tabBarActiveTintColor: "#2563EB",
+        tabBarInactiveTintColor: "#64748B",
         tabBarStyle: {
-          backgroundColor: "#fff",
-          borderTopColor: "#eee",
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
-          elevation: 3,
+          backgroundColor: "#ffffff",
+          borderTopWidth: 0,
+          height: Platform.OS === 'ios' ? 96 : 86,
+          paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+          paddingTop: 12,
+          elevation: 15,
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: -5,
+          },
+          shadowOpacity: 0.1,
+          shadowRadius: 10,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
         },
         tabBarLabelStyle: {
           fontSize: 12,

@@ -28,6 +28,16 @@ type Job = {
   ownerName?: string;
   ownerEmail?: string;
   created_at?: string;
+  // ✅ NEW: Fields for job type identification
+  jobType?: 'employer_seeking' | 'candidate_seeking';
+  employerId?: string;
+  posterId?: string;
+  contactInfo?: {
+    phone?: string;
+    email?: string;
+    zalo?: string;
+    facebook?: string;
+  };
 };
 
 type JobCardProps = {
@@ -40,9 +50,31 @@ const getStatusBadgeVariant = (status?: string) => {
   switch (status) {
     case 'active': return 'success';
     case 'pending': return 'warning';
+    case 'inactive': return 'warning';
     case 'closed': return 'gray';
     default: return 'primary';
   }
+};
+
+// ✅ NEW: Get source badge info based on job properties
+const getSourceBadgeInfo = (job: Job): { label: string; variant: 'primary' | 'success' | 'warning' | 'danger' | 'gray' } => {
+  // Quick Post: source = 'quick-post' OR jobType = 'candidate_seeking'
+  if (job.source === 'quick-post' || job.jobType === 'candidate_seeking') {
+    return { label: '📝 Ứng viên tìm việc', variant: 'warning' };
+  }
+  // Crawled: source = 'viecoi'
+  if (job.source === 'viecoi') {
+    return { label: '🌐 Viecoi', variant: 'primary' };
+  }
+  // Employer Jobs: source = 'internal' OR has employerId
+  if (job.source === 'internal' || job.employerId) {
+    return { label: '🏢 Employer', variant: 'success' };
+  }
+  // Default based on other indicators
+  if (job.ownerName && job.ownerName !== 'N/A') {
+    return { label: '🏢 Employer', variant: 'success' };
+  }
+  return { label: '📡 Unknown', variant: 'gray' };
 };
 
 const formatSalary = (job: Job): string => {
@@ -81,6 +113,8 @@ const formatSalary = (job: Job): string => {
 };
 
 export const JobCard = ({ job, onEdit, onDelete }: JobCardProps) => {
+  const sourceBadge = getSourceBadgeInfo(job);
+  
   return (
     <Card>
       <View style={styles.container}>
@@ -96,6 +130,13 @@ export const JobCard = ({ job, onEdit, onDelete }: JobCardProps) => {
             />
           </View>
 
+          {/* ✅ NEW: Source Badge - Always show */}
+          <View style={styles.sourceRow}>
+            <Badge label={sourceBadge.label} variant={sourceBadge.variant} />
+            {job.job_type_id && <Badge label={job.job_type_id} variant="gray" />}
+            {job.category && <Badge label={job.category} variant="gray" />}
+          </View>
+
           {/* Company Name - hiển thị cho job crawl */}
           {job.company_name && (
             <View style={styles.companyRow}>
@@ -106,21 +147,22 @@ export const JobCard = ({ job, onEdit, onDelete }: JobCardProps) => {
             </View>
           )}
 
-          {/* Source Badge */}
-          {job.source && (
-            <View style={styles.sourceRow}>
-              <Badge label={`📡 ${job.source}`} variant="primary" />
-              {job.job_type_id && <Badge label={job.job_type_id} variant="gray" />}
-              {job.category && <Badge label={job.category} variant="warning" />}
-            </View>
-          )}
-
-          {/* Owner info - chỉ hiển thị cho job thường */}
-          {!job.source && job.ownerName && (
+          {/* Owner info - hiển thị cho employer job hoặc quick post */}
+          {job.ownerName && job.ownerName !== 'N/A' && (
             <View style={styles.owner}>
               <Ionicons name="person-circle-outline" size={16} color="#64748b" />
               <Text style={styles.ownerText} numberOfLines={1}>
                 {job.ownerName} • {job.ownerEmail}
+              </Text>
+            </View>
+          )}
+
+          {/* Contact Info - hiển thị cho quick post */}
+          {job.contactInfo && (job.contactInfo.phone || job.contactInfo.email) && (
+            <View style={styles.contactRow}>
+              <Ionicons name="call-outline" size={14} color="#10b981" />
+              <Text style={styles.contactText} numberOfLines={1}>
+                {job.contactInfo.phone || job.contactInfo.email || job.contactInfo.zalo}
               </Text>
             </View>
           )}
@@ -233,5 +275,20 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 8,
     flexWrap: 'wrap',
+  },
+  // ✅ NEW: Contact row for quick posts
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    backgroundColor: '#ecfdf5',
+    padding: 6,
+    borderRadius: 8,
+  },
+  contactText: {
+    fontSize: 13,
+    color: '#059669',
+    flex: 1,
   },
 });

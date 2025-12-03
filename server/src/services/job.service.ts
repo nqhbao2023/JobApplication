@@ -239,6 +239,26 @@ export class JobService {
     }
   }
 
+  /**
+   * Get job by ID safely - returns null instead of throwing error if not found
+   * Useful for cases where job might have been deleted but still referenced
+   */
+  async getJobByIdSafe(jobId: string): Promise<Job | null> {
+    try {
+      const doc = await db.collection(JOBS_COLLECTION).doc(jobId).get();
+
+      if (!doc.exists) {
+        console.warn(`⚠️ Job ${jobId} not found (may have been deleted)`);
+        return null;
+      }
+
+      return mapDocToJob(doc);
+    } catch (error: any) {
+      console.error('❌ JobService.getJobByIdSafe error:', error);
+      return null;
+    }
+  }
+
   async createJob(jobData: Omit<Job, 'id' | 'createdAt' | 'updatedAt'>): Promise<Job> {
     try {
       const now = new Date();

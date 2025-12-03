@@ -91,7 +91,7 @@ export default function AdminLayout() {
     >
       <Stack.Screen name="index" options={{ title: "Admin Dashboard" }} />
       <Stack.Screen name="users" options={{ title: "Quản lý Users" }} />
-      <Stack.Screen name="jobs" options={{ title: "Quản lý Jobs" }} />
+      <Stack.Screen name="jobs" options={{ title: "Quản lý Jobs (Tất cả nguồn)" }} />
       <Stack.Screen name="companies" options={{ title: "Quản lý Companies" }} />
       <Stack.Screen name="analytics" options={{ title: "Thống kê" }} />
       <Stack.Screen name="job-types" options={{ title: "Job Types" }} />
@@ -99,7 +99,7 @@ export default function AdminLayout() {
       <Stack.Screen name="user-detail" options={{ title: "Chi tiết User" }} />
       <Stack.Screen name="job-detail" options={{ title: "Chỉnh sửa Job" }} />
       <Stack.Screen name="job-create" options={{ title: "Tạo Job Mới" }} />
-      <Stack.Screen name="quick-posts-pending" options={{ title: "Quick Posts Chờ duyệt" }} />
+      <Stack.Screen name="quick-posts-pending" options={{ title: "Duyệt Quick Posts" }} />
     </Stack>
   );
 }

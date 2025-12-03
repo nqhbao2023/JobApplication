@@ -1,111 +1,249 @@
-# CHƯƠNG 3: THIẾT KẾ CƠ SỞ DỮ LIỆU
+# MÔ TẢ CƠ SỞ DỮ LIỆU - ỨNG DỤNG JOB4S
 
-## 3.1. Sơ đồ quan hệ cơ sở dữ liệu (Firestore Schema)
+## Tổng quan
 
-Dự án sử dụng **Google Firebase Firestore** làm cơ sở dữ liệu chính. Đây là hệ quản trị cơ sở dữ liệu NoSQL dạng Document-oriented. Dưới đây là sơ đồ thể hiện cấu trúc các Collections (Bộ sưu tập) và mối quan hệ tham chiếu giữa chúng.
-
-*(Chèn hình ảnh được export từ file `UML/Database_Schema.puml` tại đây)*
+Hệ thống sử dụng **Firebase Firestore** (NoSQL Database) với 12 collections chính.
 
 ---
 
-## 3.2. Mô tả chi tiết các bảng (Collections)
+## Bảng 3.1: Mô tả bảng người dùng (users)
 
-Dưới đây là mô tả chi tiết cấu trúc dữ liệu của các Collections chính trong hệ thống.
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | uid | String | Mã người dùng (Firebase Auth UID) |
+| 2 | email | String | Email đăng nhập |
+| 3 | name | String | Tên hiển thị |
+| 4 | phone | String | Số điện thoại |
+| 5 | role | String | Vai trò: "candidate", "employer", "admin" |
+| 6 | photoURL | String | URL ảnh đại diện |
+| 7 | studentProfile | Map | Thông tin hồ sơ sinh viên (object lồng) |
+| 8 | createdAt | Timestamp | Ngày tạo tài khoản |
+| 9 | updatedAt | Timestamp | Ngày cập nhật gần nhất |
 
-### Bảng 3.1: Mô tả bảng người dùng (users)
-Lưu trữ thông tin tài khoản của tất cả các vai trò (Candidate, Employer, Admin).
+---
 
-| STT | Tên Trường | Kiểu dữ liệu | Mô tả |
-|:---:|:---|:---|:---|
-| 1 | uid | String | Mã định danh người dùng (Primary Key - từ Firebase Auth) |
-| 2 | email | String | Địa chỉ email đăng nhập |
-| 3 | displayName | String | Tên hiển thị đầy đủ |
-| 4 | photoURL | String | Đường dẫn ảnh đại diện (Avatar) |
-| 5 | role | String | Vai trò: 'candidate', 'employer', 'admin' |
-| 6 | phoneNumber | String | Số điện thoại liên hệ |
-| 7 | studentProfile | Map | Thông tin hồ sơ sinh viên (nếu là candidate) |
-| 8 | companyProfile | Map | Thông tin công ty (nếu là employer) |
-| 9 | createdAt | Timestamp | Thời gian tạo tài khoản |
-| 10 | updatedAt | Timestamp | Thời gian cập nhật gần nhất |
+## Bảng 3.2: Mô tả bảng công việc (jobs)
 
-### Bảng 3.2: Mô tả bảng tin tuyển dụng (jobs)
-Lưu trữ thông tin các công việc, bao gồm cả tin do Employer đăng, tin Crawl từ Viecoi, và tin tìm việc của Candidate (Quick Post).
-
-| STT | Tên Trường | Kiểu dữ liệu | Mô tả |
-|:---:|:---|:---|:---|
-| 1 | id | String | Mã tin tuyển dụng (Auto-generated ID) |
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã công việc (Document ID) |
 | 2 | title | String | Tiêu đề công việc |
-| 3 | description | String | Mô tả chi tiết công việc (HTML/Text) |
-| 4 | salary | Map | Cấu trúc lương ({min, max, currency, type}) |
-| 5 | jobType | String | Loại tin: 'employer_seeking' (tìm ứng viên) hoặc 'candidate_seeking' (tìm việc) |
-| 6 | source | String | Nguồn tin: 'internal', 'viecoi', 'quick-post' |
-| 7 | status | String | Trạng thái: 'pending', 'active', 'rejected', 'closed' |
-| 8 | posterId | String | Mã người đăng (Ref: users.uid) |
-| 9 | companyId | String | Mã công ty (Ref: companies.id) - Nếu có |
-| 10 | categoryId | String | Mã danh mục nghề nghiệp (Ref: job_categories.id) |
-| 11 | location | String | Địa điểm làm việc |
-| 12 | skills | Array | Danh sách kỹ năng yêu cầu |
-| 13 | createdAt | Timestamp | Ngày đăng tin |
+| 3 | description | String | Mô tả chi tiết công việc |
+| 4 | location | String | Địa điểm làm việc |
+| 5 | source | String | Nguồn tin: "internal", "viecoi", "quick-post" |
+| 6 | jobType | String | Loại: "employer_seeking", "candidate_seeking" |
+| 7 | status | String | Trạng thái: "active", "inactive", "pending", "closed" |
+| 8 | companyId | String | Mã công ty (tham chiếu companies.id) |
+| 9 | employerId | String | Mã nhà tuyển dụng (tham chiếu users.uid) |
+| 10 | posterId | String | Mã người đăng (tham chiếu users.uid) |
+| 11 | category | String | Danh mục công việc |
+| 12 | salary_text | String | Mức lương hiển thị (text) |
+| 13 | salary_min | Number | Lương tối thiểu |
+| 14 | salary_max | Number | Lương tối đa |
+| 15 | requirements | Array | Danh sách yêu cầu công việc |
+| 16 | benefits | Array | Danh sách quyền lợi |
+| 17 | contactInfo | Map | Thông tin liên hệ: {phone, email, zalo} |
+| 18 | viewCount | Number | Số lượt xem |
+| 19 | applicantCount | Number | Số lượng ứng viên |
+| 20 | isVerified | Boolean | Trạng thái đã duyệt |
+| 21 | createdAt | Timestamp | Ngày tạo |
+| 22 | updatedAt | Timestamp | Ngày cập nhật |
 
-### Bảng 3.3: Mô tả bảng đơn ứng tuyển (applications)
-Lưu trữ thông tin ứng tuyển của sinh viên vào các công việc Internal.
+---
 
-| STT | Tên Trường | Kiểu dữ liệu | Mô tả |
-|:---:|:---|:---|:---|
-| 1 | id | String | Mã đơn ứng tuyển |
-| 2 | jobId | String | Mã công việc ứng tuyển (Ref: jobs.id) |
-| 3 | candidateId | String | Mã ứng viên (Ref: users.uid) |
-| 4 | employerId | String | Mã nhà tuyển dụng nhận đơn (Ref: users.uid) |
-| 5 | cvUrl | String | Đường dẫn file CV đính kèm |
-| 6 | coverLetter | String | Thư giới thiệu bản thân |
-| 7 | status | String | Trạng thái: 'pending', 'accepted', 'rejected' |
-| 8 | appliedAt | Timestamp | Thời gian nộp đơn |
-| 9 | reviewedAt | Timestamp | Thời gian nhà tuyển dụng xem đơn |
+## Bảng 3.3: Mô tả bảng đơn ứng tuyển (applications)
 
-### Bảng 3.4: Mô tả bảng công ty (companies)
-Lưu trữ thông tin chi tiết về các công ty/doanh nghiệp.
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã đơn ứng tuyển (Document ID) |
+| 2 | jobId | String | Mã công việc (tham chiếu jobs.id) |
+| 3 | candidateId | String | Mã ứng viên (tham chiếu users.uid) |
+| 4 | employerId | String | Mã nhà tuyển dụng (tham chiếu users.uid) |
+| 5 | cvUrl | String | URL file CV |
+| 6 | coverLetter | String | Thư xin việc |
+| 7 | status | String | Trạng thái: "pending", "accepted", "rejected" |
+| 8 | appliedAt | Timestamp | Ngày nộp đơn |
+| 9 | updatedAt | Timestamp | Ngày cập nhật |
 
-| STT | Tên Trường | Kiểu dữ liệu | Mô tả |
-|:---:|:---|:---|:---|
-| 1 | id | String | Mã công ty |
-| 2 | name | String | Tên công ty |
-| 3 | logo | String | Logo công ty |
-| 4 | description | String | Giới thiệu về công ty |
-| 5 | address | String | Địa chỉ trụ sở |
-| 6 | website | String | Website công ty |
-| 7 | ownerId | String | Mã tài khoản quản lý công ty (Ref: users.uid) |
-| 8 | isVerified | Boolean | Trạng thái xác thực công ty |
+---
 
-### Bảng 3.5: Mô tả bảng danh mục (job_categories)
-Danh mục nghề nghiệp để phân loại công việc.
+## Bảng 3.4: Mô tả bảng theo dõi ứng tuyển (applied_jobs)
 
-| STT | Tên Trường | Kiểu dữ liệu | Mô tả |
-|:---:|:---|:---|:---|
-| 1 | id | String | Mã danh mục |
-| 2 | name | String | Tên danh mục (VD: IT, Marketing, Sales) |
-| 3 | icon | String | Icon hiển thị trên App |
-| 4 | description | String | Mô tả danh mục |
-| 5 | active | Boolean | Trạng thái hoạt động |
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã bản ghi (Document ID) |
+| 2 | userId | String | Mã ứng viên (tham chiếu users.uid) |
+| 3 | jobId | String | Mã công việc (tham chiếu jobs.id) |
+| 4 | employerId | String | Mã nhà tuyển dụng |
+| 5 | jobInfo | Map | Thông tin công việc: {title, company, salary} |
+| 6 | userInfo | Map | Thông tin ứng viên: {name, email, photoURL} |
+| 7 | cv_url | String | URL file CV |
+| 8 | cv_path | String | Đường dẫn lưu trữ CV |
+| 9 | cv_uploaded | Boolean | Trạng thái đã upload CV |
+| 10 | status | String | Trạng thái ứng tuyển |
+| 11 | applied_at | Timestamp | Ngày ứng tuyển |
+| 12 | updated_at | Timestamp | Ngày cập nhật |
 
-### Bảng 3.6: Mô tả bảng công việc đã lưu (saved_jobs)
-Lưu trữ danh sách các công việc mà ứng viên đã đánh dấu quan tâm.
+---
 
-| STT | Tên Trường | Kiểu dữ liệu | Mô tả |
-|:---:|:---|:---|:---|
-| 1 | id | String | Mã bản ghi |
-| 2 | userId | String | Mã người dùng (Ref: users.uid) |
-| 3 | jobId | String | Mã công việc (Ref: jobs.id) |
-| 4 | savedAt | Timestamp | Thời gian lưu |
+## Bảng 3.5: Mô tả bảng công ty (companies)
 
-### Bảng 3.7: Mô tả bảng CV người dùng (user_cvs)
-Quản lý các CV mà người dùng đã tạo hoặc tải lên hệ thống.
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã công ty (Document ID) |
+| 2 | corp_name | String | Tên công ty |
+| 3 | corp_description | String | Mô tả công ty |
+| 4 | city | String | Thành phố |
+| 5 | nation | String | Quốc gia |
+| 6 | image | String | URL logo công ty |
+| 7 | color | String | Màu thương hiệu (hex) |
+| 8 | ownerId | String | Mã chủ sở hữu (tham chiếu users.uid) |
+| 9 | created_at | Timestamp | Ngày tạo |
+| 10 | updated_at | Timestamp | Ngày cập nhật |
 
-| STT | Tên Trường | Kiểu dữ liệu | Mô tả |
-|:---:|:---|:---|:---|
-| 1 | id | String | Mã CV |
-| 2 | userId | String | Mã người sở hữu (Ref: users.uid) |
-| 3 | name | String | Tên gợi nhớ của CV (VD: CV IT, CV Part-time) |
-| 4 | fileUrl | String | Đường dẫn file PDF (nếu upload) |
-| 5 | data | Map | Dữ liệu CV (nếu tạo trên App: học vấn, kinh nghiệm...) |
-| 6 | isDefault | Boolean | Đánh dấu là CV mặc định để ứng tuyển nhanh |
-| 7 | updatedAt | Timestamp | Thời gian cập nhật cuối cùng |
+---
+
+## Bảng 3.6: Mô tả bảng danh mục công việc (job_categories)
+
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã danh mục (Document ID) |
+| 2 | category_name | String | Tên danh mục |
+| 3 | icon_name | String | Tên icon hiển thị |
+| 4 | color | String | Màu sắc (hex) |
+| 5 | description | String | Mô tả danh mục |
+| 6 | created_at | String | Ngày tạo |
+
+---
+
+## Bảng 3.7: Mô tả bảng loại hình công việc (job_types)
+
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã loại hình (Document ID) |
+| 2 | type_name | String | Tên loại hình (Full-time, Part-time,...) |
+| 3 | slug | String | Đường dẫn thân thiện URL |
+| 4 | icon | String | Icon/emoji hiển thị |
+| 5 | color | String | Màu sắc (hex) |
+| 6 | description | String | Mô tả loại hình |
+| 7 | isSystem | Boolean | Loại hình hệ thống |
+| 8 | created_at | Timestamp | Ngày tạo |
+| 9 | updated_at | Timestamp | Ngày cập nhật |
+
+---
+
+## Bảng 3.8: Mô tả bảng CV/Hồ sơ (cvs)
+
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã CV (Document ID) |
+| 2 | userId | String | Mã người dùng (tham chiếu users.uid) |
+| 3 | type | String | Loại CV: "template", "uploaded" |
+| 4 | pdfUrl | String | URL file PDF |
+| 5 | personalInfo | Map | Thông tin cá nhân: {fullName, email, phone, address, avatar} |
+| 6 | objective | String | Mục tiêu nghề nghiệp |
+| 7 | education | Array | Danh sách học vấn |
+| 8 | skills | Array | Danh sách kỹ năng |
+| 9 | experience | Array | Danh sách kinh nghiệm làm việc |
+| 10 | projects | Array | Danh sách dự án |
+| 11 | activities | Array | Danh sách hoạt động |
+| 12 | certifications | Array | Danh sách chứng chỉ |
+| 13 | languages | Array | Danh sách ngôn ngữ |
+| 14 | isDefault | Boolean | CV mặc định |
+| 15 | templateId | String | Mã mẫu CV |
+| 16 | createdAt | String | Ngày tạo |
+| 17 | updatedAt | String | Ngày cập nhật |
+
+---
+
+## Bảng 3.9: Mô tả bảng công việc đã lưu (saved_jobs)
+
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã bản ghi (Document ID) |
+| 2 | userId | String | Mã người dùng (tham chiếu users.uid) |
+| 3 | jobId | String | Mã công việc (tham chiếu jobs.id) |
+| 4 | savedAt | Timestamp | Thời điểm lưu |
+| 5 | created_at | String | Ngày tạo |
+
+---
+
+## Bảng 3.10: Mô tả bảng phòng chat (chats)
+
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã phòng chat (format: uid1_uid2) |
+| 2 | participants | Array | Danh sách 2 user ID tham gia |
+| 3 | participantsInfo | Map | Thông tin người tham gia: {userId: {displayName, photoURL, role}} |
+| 4 | lastMessage | String | Tin nhắn cuối cùng |
+| 5 | messages | Map | Thông tin tin nhắn: {lastMessage} |
+| 6 | updatedAt | Timestamp | Thời điểm cập nhật |
+
+---
+
+## Bảng 3.11: Mô tả bảng tin nhắn (chat_messages)
+
+*Subcollection của chats: chats/{chatId}/messages*
+
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã tin nhắn (Document ID) |
+| 2 | chatId | String | Mã phòng chat (tham chiếu chats.id) |
+| 3 | senderId | String | Mã người gửi (tham chiếu users.uid) |
+| 4 | text | String | Nội dung tin nhắn |
+| 5 | senderRole | String | Vai trò người gửi: "Recruiter", "Candidate" |
+| 6 | createdAt | Timestamp | Thời điểm gửi |
+
+---
+
+## Bảng 3.12: Mô tả bảng thông báo (notifications)
+
+| STT | Tên Trường | Kiểu | Mô tả |
+|-----|------------|------|-------|
+| 1 | id | String | Mã thông báo (Document ID) |
+| 2 | userId | String | Mã người nhận (tham chiếu users.uid) |
+| 3 | title | String | Tiêu đề thông báo |
+| 4 | message | String | Nội dung thông báo |
+| 5 | type | String | Loại: "application", "job", "system" |
+| 6 | read | Boolean | Trạng thái đã đọc |
+| 7 | status | String | Trạng thái liên quan |
+| 8 | jobId | String | Mã công việc liên quan (tham chiếu jobs.id) |
+| 9 | applicationId | String | Mã đơn ứng tuyển liên quan |
+| 10 | created_at | Timestamp | Ngày tạo |
+
+---
+
+## Sơ đồ quan hệ giữa các bảng
+
+```
+users (1) ──────< (N) jobs           [employerId, posterId]
+users (1) ──────< (N) applications   [candidateId, employerId]
+users (1) ──────< (N) applied_jobs   [userId]
+users (1) ──────< (N) companies      [ownerId]
+users (1) ──────< (N) cvs            [userId]
+users (1) ──────< (N) saved_jobs     [userId]
+users (1) ──────< (N) chat_messages  [senderId]
+users (1) ──────< (N) notifications  [userId]
+
+jobs (1) ───────< (N) applications   [jobId]
+jobs (1) ───────< (N) applied_jobs   [jobId]
+jobs (1) ───────< (N) saved_jobs     [jobId]
+jobs (1) ───────< (N) notifications  [jobId]
+
+companies (1) ──< (N) jobs           [companyId]
+
+job_categories (1) < (N) jobs        [category]
+
+chats (1) ──────< (N) chat_messages  [chatId]
+```
+
+---
+
+## Ghi chú
+
+- **String**: Chuỗi ký tự
+- **Number**: Số (integer hoặc float)
+- **Boolean**: Giá trị true/false
+- **Timestamp**: Thời gian (Firebase Timestamp)
+- **Array**: Mảng dữ liệu
+- **Map**: Object lồng (nested object)

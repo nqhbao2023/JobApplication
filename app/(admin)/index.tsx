@@ -35,14 +35,14 @@ const AdminDashboard = () => {
       collectionKey: 'users' 
     },
     { 
-      title: 'Jobs', 
+      title: 'Quản lý Jobs', 
       icon: 'briefcase-outline', 
       route: '/(admin)/jobs', 
       color: '#10b981',
       collectionKey: 'jobs'
     },
     { 
-      title: 'Quick Posts', 
+      title: 'Duyệt Quick Posts', 
       icon: 'flash-outline', 
       route: '/(admin)/quick-posts-pending', 
       color: '#f97316' 

@@ -199,7 +199,14 @@ const JobDescription = () => {
     <View style={styles.container}>
       {/* Fixed Header - Luôn hiển thị ở top */}
       <View style={styles.fixedHeader}>
-        <TouchableOpacity style={styles.buttons} onPress={() => smartBack()}>
+        <TouchableOpacity 
+          style={styles.buttons} 
+          onPress={() => {
+            // ✅ Luôn dùng back() để giữ navigation stack đúng cách
+            // Không dùng replace() vì sẽ mất history và reload trang
+            router.back();
+          }}
+        >
           <Ionicons name="arrow-back" size={24} />
         </TouchableOpacity>
         <TouchableOpacity

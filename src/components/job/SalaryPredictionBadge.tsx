@@ -457,7 +457,7 @@ export const SalaryPredictionBadge: React.FC<SalaryPredictionBadgeProps> = ({
 
               {/* Note */}
               <Text style={styles.note}>
-                💡 Dựa trên dữ liệu thị trường và phân tích AI
+                Dựa trên dữ liệu thị trường và phân tích AI
               </Text>
             </View>
           ) : (

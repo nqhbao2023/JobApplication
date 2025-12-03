@@ -154,6 +154,19 @@ export default function AppliedJob() {
     return () => clearInterval(interval);
   }, [fetchApplications]);
 
+  // Handle delete application for deleted jobs
+  const handleDeleteApplication = useCallback(async (applicationId: string) => {
+    try {
+      await applicationApiService.withdrawApplication(applicationId);
+      // Remove from local state immediately
+      setApplications(prev => prev.filter(app => app.$id !== applicationId));
+      Alert.alert('Thành công', 'Đã xóa hồ sơ ứng tuyển');
+    } catch (error: any) {
+      console.error('Delete application error:', error);
+      Alert.alert('Lỗi', 'Không thể xóa hồ sơ. Vui lòng thử lại.');
+    }
+  }, []);
+
   if (loading && applications.length === 0) {
     return (
       <View style={styles.center}>
@@ -167,7 +180,13 @@ export default function AppliedJob() {
       <FlatList
         data={applications}
         keyExtractor={(it) => it.$id || it.jobId}
-        renderItem={({ item }) => <JobRow item={item} onPress={router} />}
+        renderItem={({ item }) => (
+          <JobRow 
+            item={item} 
+            onPress={router} 
+            onDeleteApplication={handleDeleteApplication}
+          />
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -206,7 +225,10 @@ const getStatusLabel = (status?: string) => {
   }
 };
 
-const JobRow = React.memo(({ item, onPress }: { item: any; onPress: any }) => {
+const JobRow = React.memo(({ item, onPress, onDeleteApplication }: { item: any; onPress: any; onDeleteApplication?: (id: string) => void }) => {
+  const isDeleted = item._deleted === true;
+  const isError = item._error === true;
+  
   const appliedDate = item.applied_at
     ? typeof item.applied_at === 'string'
       ? new Date(item.applied_at)
@@ -215,47 +237,80 @@ const JobRow = React.memo(({ item, onPress }: { item: any; onPress: any }) => {
       : new Date(item.applied_at)
     : null;
 
+  // Validate date
+  const isValidDate = appliedDate && !isNaN(appliedDate.getTime());
+
+  const handlePress = () => {
+    if (isDeleted) {
+      Alert.alert(
+        'Việc làm không còn tồn tại',
+        'Công việc này đã bị nhà tuyển dụng xóa. Bạn có muốn xóa hồ sơ ứng tuyển này không?',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { 
+            text: 'Xóa hồ sơ', 
+            style: 'destructive',
+            onPress: () => onDeleteApplication?.(item.$id)
+          },
+        ]
+      );
+      return;
+    }
+    
+    onPress.navigate({
+      pathname: '/(shared)/jobDescription',
+      params: { 
+        jobId: item.jobId, 
+        fromApplied: 'true',
+        applicationStatus: item.status,
+        applicationId: item.$id,
+      },
+    });
+  };
+
   return (
     <TouchableOpacity
-      style={styles.row}
-      onPress={() =>
-        onPress.navigate({
-          pathname: '/(shared)/jobDescription',
-          params: { 
-            jobId: item.jobId, 
-            fromApplied: 'true',
-            applicationStatus: item.status, // ✅ Truyền status để disable withdraw
-            applicationId: item.$id, // ✅ Truyền application ID
-          },
-        })
-      }
+      style={[styles.row, isDeleted && styles.deletedRow]}
+      onPress={handlePress}
     >
-      <Image
-        source={{
-          uri: item.jobInfo?.image ?? 'https://placehold.co/60x60?text=Job',
-        }}
-        style={styles.logo}
-      />
+      {isDeleted ? (
+        <View style={styles.deletedIcon}>
+          <Ionicons name="trash-outline" size={28} color="#999" />
+        </View>
+      ) : (
+        <Image
+          source={{
+            uri: item.jobInfo?.image ?? 'https://placehold.co/60x60?text=Job',
+          }}
+          style={styles.logo}
+        />
+      )}
 
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, isDeleted && styles.deletedText]} numberOfLines={1}>
           {item.jobInfo?.title ?? 'Không rõ tiêu đề'}
         </Text>
-        <Text style={styles.company} numberOfLines={1}>
+        <Text style={[styles.company, isDeleted && styles.deletedText]} numberOfLines={1}>
           {item.jobInfo?.company ?? 'Ẩn danh'}
         </Text>
-        <Text style={styles.location} numberOfLines={1}>
-          {item.jobInfo?.location ?? 'Không rõ địa điểm'}
+        {!isDeleted && (
+          <Text style={styles.location} numberOfLines={1}>
+            {item.jobInfo?.location ?? 'Không rõ địa điểm'}
+          </Text>
+        )}
+
+        <Text style={[styles.status, { color: isDeleted ? '#999' : statusColor(item.status) }]}>
+          {isDeleted ? '🗑️ Việc làm đã bị xóa' : getStatusLabel(item.status)}
         </Text>
 
-        <Text style={[styles.status, { color: statusColor(item.status) }]}>
-          {getStatusLabel(item.status)}
-        </Text>
-
-        {appliedDate && (
+        {isValidDate && (
           <Text style={styles.date}>
             Ứng tuyển: {appliedDate.toLocaleDateString('vi-VN')}
           </Text>
+        )}
+        
+        {isDeleted && (
+          <Text style={styles.deleteHint}>Nhấn để xóa hồ sơ này</Text>
         )}
       </View>
     </TouchableOpacity>
@@ -287,6 +342,31 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 1 },
+  },
+  deletedRow: {
+    backgroundColor: '#f5f5f5',
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    opacity: 0.8,
+  },
+  deletedIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#eee',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deletedText: {
+    color: '#999',
+    textDecorationLine: 'line-through',
+  },
+  deleteHint: {
+    fontSize: 11,
+    color: '#FF6B6B',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   logo: { width: 60, height: 60, borderRadius: 8 },
   title: { fontSize: 16, fontWeight: '700', color: '#111827' },

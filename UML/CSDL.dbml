@@ -1,153 +1,180 @@
-// Database Schema for JobApplication Project
-// Based on Firestore NoSQL Structure (11 Collections)
+// ========================================
+// Database Schema - Job4S Application
+// Firestore NoSQL - 12 Collections
+// ========================================
 
 Table users {
-  uid varchar [pk, note: "Firebase Auth UID"]
-  email varchar
-  displayName varchar
-  photoURL varchar
-  role varchar [note: "'candidate', 'employer', 'admin'"]
-  phoneNumber varchar
-  studentProfile json [note: "Nested object for candidate info"]
-  companyProfile json [note: "Nested object for employer info"]
+  uid string [pk, note: "Firebase Auth UID"]
+  email string
+  name string
+  phone string
+  role string [note: "candidate | employer | admin"]
+  photoURL string
+  studentProfile map [note: "Thông tin sinh viên"]
   createdAt timestamp
   updatedAt timestamp
 }
 
 Table jobs {
-  id varchar [pk, note: "Auto-generated ID"]
-  title varchar
-  description text [note: "HTML content"]
-  salary json [note: "{min, max, currency, type}"]
-  jobType varchar [note: "'employer_seeking' or 'candidate_seeking'"]
-  source varchar [note: "'internal', 'viecoi', 'quick-post'"]
-  status varchar [note: "'pending', 'active', 'rejected', 'closed'"]
-  posterId varchar [note: "Ref to users.uid"]
-  companyId varchar [note: "Ref to companies.id (optional)"]
-  categoryId varchar [note: "Ref to job_categories.id"]
-  location varchar
-  skills json [note: "Array of strings"]
-  requirements json [note: "Array of strings"]
-  benefits json [note: "Array of strings"]
-  viewCount integer
-  applicantCount integer
-  createdAt timestamp
-}
-
-Table applications {
-  id varchar [pk]
-  jobId varchar
-  candidateId varchar
-  employerId varchar
-  cvUrl varchar
-  coverLetter text
-  status varchar [note: "'pending', 'accepted', 'rejected'"]
-  appliedAt timestamp
-  reviewedAt timestamp
-}
-
-Table companies {
-  id varchar [pk]
-  name varchar [note: "corp_name"]
-  logo varchar [note: "image"]
-  description text [note: "corp_description"]
-  address varchar [note: "city/nation"]
-  website varchar
-  ownerId varchar [note: "Ref to users.uid"]
+  id string [pk]
+  title string
+  description string
+  location string
+  
+  // Phân loại job
+  source string [note: "internal | viecoi | quick-post"]
+  jobType string [note: "employer_seeking | candidate_seeking"]
+  status string [note: "active | inactive | pending | closed"]
+  
+  // Liên kết
+  companyId string [ref: > companies.id]
+  employerId string [ref: > users.uid]
+  posterId string [ref: > users.uid]
+  category string
+  
+  // Lương
+  salary_text string
+  salary_min number
+  salary_max number
+  
+  // Thông tin thêm
+  requirements array
+  benefits array
+  contactInfo map [note: "{phone, email, zalo}"]
+  
+  // Thống kê
+  viewCount number
+  applicantCount number
   isVerified boolean
-}
-
-Table job_categories {
-  id varchar [pk]
-  name varchar [note: "category_name"]
-  icon varchar [note: "icon_name"]
-  color varchar
-  description varchar
-  active boolean
-}
-
-Table job_types {
-  id varchar [pk]
-  type_name varchar
-}
-
-Table saved_jobs {
-  id varchar [pk]
-  userId varchar
-  jobId varchar
-  savedAt timestamp
-}
-
-Table applied_jobs {
-  id varchar [pk]
-  userId varchar
-  jobId varchar
-  appliedAt timestamp
-}
-
-Table cvs {
-  id varchar [pk]
-  userId varchar
-  type varchar [note: "'template' or 'uploaded'"]
-  pdfUrl varchar
-  fileUrl varchar
-  fileName varchar
-  personalInfo json
-  education json
-  skills json
-  experience json
-  projects json
-  activities json
-  certifications json
-  languages json
-  references json
-  templateId varchar
-  isDefault boolean
+  
   createdAt timestamp
   updatedAt timestamp
 }
 
+Table applications {
+  id string [pk]
+  jobId string [ref: > jobs.id]
+  candidateId string [ref: > users.uid]
+  employerId string [ref: > users.uid]
+  cvUrl string
+  coverLetter string
+  status string [note: "pending | accepted | rejected"]
+  appliedAt timestamp
+  updatedAt timestamp
+}
+
+Table applied_jobs {
+  id string [pk]
+  userId string [ref: > users.uid]
+  jobId string [ref: > jobs.id]
+  employerId string
+  jobInfo map [note: "{title, company, salary}"]
+  userInfo map [note: "{name, email, photoURL}"]
+  cv_url string
+  cv_path string
+  cv_uploaded boolean
+  status string
+  applied_at timestamp
+  updated_at timestamp
+}
+
+Table companies {
+  id string [pk]
+  corp_name string
+  corp_description string
+  city string
+  nation string
+  image string
+  color string
+  ownerId string [ref: > users.uid]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table job_categories {
+  id string [pk]
+  category_name string
+  icon_name string
+  color string
+  description string
+  created_at string
+}
+
+Table job_types {
+  id string [pk]
+  type_name string
+  slug string
+  icon string
+  color string
+  description string
+  isSystem boolean
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table cvs {
+  id string [pk]
+  userId string [ref: > users.uid]
+  type string [note: "template | uploaded"]
+  pdfUrl string
+  personalInfo map [note: "{fullName, email, phone, address, avatar}"]
+  objective string
+  education array
+  skills array
+  experience array
+  projects array
+  activities array
+  certifications array
+  languages array
+  isDefault boolean
+  templateId string
+  createdAt string
+  updatedAt string
+}
+
+Table saved_jobs {
+  id string [pk]
+  userId string [ref: > users.uid]
+  jobId string [ref: > jobs.id]
+  savedAt timestamp
+  created_at string
+}
+
 Table chats {
-  id varchar [pk]
-  senderId varchar
-  receiverId varchar
-  text text
-  jobId varchar
+  id string [pk, note: "uid1_uid2"]
+  participants array [note: "Array of 2 user IDs"]
+  participantsInfo map [note: "{userId: {displayName, photoURL, role}}"]
+  lastMessage string
+  messages map [note: "{lastMessage}"]
+  updatedAt timestamp
+}
+
+// Subcollection: chats/{id}/messages
+Table chat_messages {
+  id string [pk]
+  chatId string [ref: > chats.id]
+  senderId string [ref: > users.uid]
+  text string
+  senderRole string [note: "Recruiter | Candidate"]
   createdAt timestamp
 }
 
 Table notifications {
-  id varchar [pk]
-  userId varchar
-  title varchar
-  message text
+  id string [pk]
+  userId string [ref: > users.uid]
+  title string
+  message string
+  type string [note: "application | job | system"]
   read boolean
-  type varchar
-  createdAt timestamp
+  status string
+  jobId string [ref: > jobs.id]
+  applicationId string
+  created_at timestamp
 }
 
-// Relationships (Logical References for NoSQL)
+// ========================================
+// RELATIONSHIPS
+// ========================================
 
-Ref: jobs.posterId > users.uid
-Ref: jobs.companyId > companies.id
-Ref: jobs.categoryId > job_categories.id
-
-Ref: applications.jobId > jobs.id
-Ref: applications.candidateId > users.uid
-Ref: applications.employerId > users.uid
-
-Ref: companies.ownerId - users.uid // One-to-One (usually)
-
-Ref: saved_jobs.userId > users.uid
-Ref: saved_jobs.jobId > jobs.id
-
-Ref: applied_jobs.userId > users.uid
-Ref: applied_jobs.jobId > jobs.id
-
-Ref: cvs.userId > users.uid
-
-Ref: chats.senderId > users.uid
-Ref: chats.receiverId > users.uid
-Ref: chats.jobId > jobs.id
-
-Ref: notifications.userId > users.uid
+// Jobs -> Categories
+Ref: jobs.category > job_categories.id

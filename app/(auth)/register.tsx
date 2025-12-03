@@ -73,7 +73,7 @@ export default function RegisterScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeIn.duration(600)} style={styles.header}>
-          <Text style={styles.title}>Tạo tài khoản ✨</Text>
+          <Text style={styles.title}>Tạo tài khoản</Text>
           <Text style={styles.subtitle}>Tham gia cộng đồng và mở khóa hàng ngàn cơ hội việc làm</Text>
         </Animated.View>
 

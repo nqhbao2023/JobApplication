@@ -1,20 +1,31 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Platform } from "react-native";
 
 export default function EmployerLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#007AFF",
-        tabBarInactiveTintColor: "#777",
+        tabBarActiveTintColor: "#2563EB",
+        tabBarInactiveTintColor: "#64748B",
         tabBarStyle: {
-          backgroundColor: "#fff",
-          borderTopColor: "#eee",
-          height: 65,
-          paddingBottom: 6,
-          paddingTop: 4,
+          backgroundColor: "#ffffff",
+          borderTopWidth: 0,
+          height: Platform.OS === 'ios' ? 96 : 86,
+          paddingBottom: Platform.OS === 'ios' ? 32 : 24,
+          paddingTop: 12,
+          elevation: 15,
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: -5,
+          },
+          shadowOpacity: 0.1,
+          shadowRadius: 10,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
         },
         tabBarLabelStyle: {
           fontSize: 12,

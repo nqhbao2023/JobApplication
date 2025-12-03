@@ -9,9 +9,9 @@ import { Platform } from 'react-native';
  * Standard bottom tab bar heights across platforms
  */
 export const TAB_BAR_HEIGHT = Platform.select({
-  ios: 83, // iOS có thêm safe area
-  android: 56,
-  default: 56,
+  ios: 96, // iOS có thêm safe area
+  android: 86,
+  default: 86,
 });
 
 /**

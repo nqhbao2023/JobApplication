@@ -40,7 +40,7 @@ export default function AIAssistant() {
     {
       id: '1',
       role: 'ai',
-      text: 'Xin chào! Tôi là trợ lý AI của Job4S. Bạn cần giúp gì về tìm việc, viết CV, hoặc phỏng vấn? 😊',
+      text: 'Xin chào! Tôi là trợ lý AI của Job4S. Bạn cần giúp gì về tìm việc, viết CV, hoặc phỏng vấn?',
       timestamp: new Date(),
     },
   ]);

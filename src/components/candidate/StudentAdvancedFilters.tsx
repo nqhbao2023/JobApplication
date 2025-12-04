@@ -34,6 +34,7 @@ export interface StudentFilterState {
   
   // Location
   maxDistance: number; // km
+  preferredLocations?: string[]; // ✅ NEW: e.g., ['Hồ Chí Minh', 'Bình Dương']
   
   // Salary
   minHourlyRate: number; // VNĐ/giờ

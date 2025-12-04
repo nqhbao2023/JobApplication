@@ -269,16 +269,41 @@ const AllJobs = () => {
       });
     }
 
-    // 2. Filter by type using stored typeId
-    // ✅ Support both jobTypes (manual) and job_type_id (viecoi crawled)
+    // 2. Filter by type - ✅ FIX: Support multiple matching methods
+    // - Match by typeId (for employer jobs with references)
+    // - Match by type_name (for both employer & viecoi jobs)
+    // - Match by job_type_id string slug (for viecoi crawled jobs)
     if (activeType !== "all") {
+      // Find the active type's name for text matching
+      const activeTypeName = types.find(t => t.$id === activeType)?.type_name?.toLowerCase() || '';
+      
       result = result.filter((job) => {
+        // Method 1: Direct ID match
         const jobTypeId = (job as any).jobTypeId || 
-                         (job as any).job_type_id ||
                          (job.jobTypes?.$id) || 
                          (job.jobTypes?.id) ||
                          (typeof job.jobTypes === "string" ? job.jobTypes : "");
-        return jobTypeId === activeType;
+        if (jobTypeId === activeType) return true;
+        
+        // Method 2: Match viecoi job_type_id with type_name (e.g., 'internship' matches 'Internship')
+        const vieoiTypeId = (job as any).job_type_id?.toLowerCase() || '';
+        if (vieoiTypeId && activeTypeName) {
+          // Normalize for comparison: 'part-time' vs 'Part-time', 'internship' vs 'Internship'
+          if (vieoiTypeId === activeTypeName ||
+              vieoiTypeId.replace(/-/g, ' ') === activeTypeName.replace(/-/g, ' ') ||
+              vieoiTypeId.includes(activeTypeName) ||
+              activeTypeName.includes(vieoiTypeId)) {
+            return true;
+          }
+        }
+        
+        // Method 3: Match type_name directly
+        const jobTypeName = (job.jobTypes?.type_name || '').toLowerCase();
+        if (jobTypeName && activeTypeName && jobTypeName === activeTypeName) {
+          return true;
+        }
+        
+        return false;
       });
     }
 
@@ -303,7 +328,7 @@ const AllJobs = () => {
     }
 
     return result;
-  }, [jobs, activeCategory, activeType, sortBy]);
+  }, [jobs, activeCategory, activeType, sortBy, types]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

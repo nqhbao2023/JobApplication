@@ -55,6 +55,7 @@ export interface StudentProfile {
     address?: string; // e.g., "Đại học Thủ Dầu Một"
   };
   maxDistance?: number; // km, default: 5
+  preferredLocations?: string[]; // ✅ NEW: e.g., ['Hồ Chí Minh', 'Bình Dương', 'Đồng Nai']
   
   // Salary preferences
   desiredSalary?: {

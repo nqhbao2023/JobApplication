@@ -52,13 +52,52 @@ export const QUICK_FILTER_CONFIG: Record<QuickFilter, { label: string; icon: str
   nearby: { label: 'Gần bạn', icon: 'location-outline' },
 };
 
+/**
+ * ✅ FIX: Enhanced filter that checks ALL possible job type fields
+ * - job.type (direct field)
+ * - job.job_type_id (viecoi crawled jobs: 'internship', 'part-time', etc.)
+ * - job.jobTypes?.type_name (employer jobs: reference to job_types collection)
+ * - job.title & job.description (fallback keyword search)
+ */
 export const filterJobsByType = (jobs: Job[], filter: QuickFilter): Job[] => {
   if (filter === 'all') return jobs;
   return jobs.filter(job => {
     const type = job.type?.toLowerCase() || '';
-    if (filter === 'intern') return type.includes('intern') || type.includes('thực tập');
-    if (filter === 'part-time') return type.includes('part') || type.includes('bán thời gian');
-    if (filter === 'remote') return type.includes('remote') || type.includes('từ xa');
+    const title = job.title?.toLowerCase() || '';
+    const description = job.description?.toLowerCase() || '';
+    const location = job.location?.toLowerCase() || '';
+    
+    // ✅ Get job type from multiple sources
+    const jobTypeId = (job as any).job_type_id?.toLowerCase() || '';
+    const jobTypeName = (job as any).jobTypes?.type_name?.toLowerCase() || '';
+    const jobTypeRef = typeof (job as any).jobTypes === 'string' ? (job as any).jobTypes.toLowerCase() : '';
+    
+    const allTypeText = `${type} ${jobTypeId} ${jobTypeName} ${jobTypeRef}`;
+    
+    if (filter === 'intern') {
+      return allTypeText.includes('intern') || 
+             allTypeText.includes('thực tập') ||
+             allTypeText.includes('internship') ||
+             title.includes('thực tập') ||
+             title.includes('intern');
+    }
+    if (filter === 'part-time') {
+      return allTypeText.includes('part') || 
+             allTypeText.includes('bán thời gian') ||
+             allTypeText.includes('part-time') ||
+             allTypeText.includes('parttime') ||
+             title.includes('part-time') ||
+             title.includes('bán thời gian');
+    }
+    if (filter === 'remote') {
+      return allTypeText.includes('remote') || 
+             allTypeText.includes('từ xa') ||
+             location.includes('remote') ||
+             location.includes('từ xa') ||
+             title.includes('remote') ||
+             title.includes('từ xa') ||
+             title.includes('tại nhà');
+    }
     return true;
   });
 };

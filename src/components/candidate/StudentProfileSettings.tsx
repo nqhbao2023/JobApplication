@@ -37,6 +37,20 @@ const WEEKDAYS = [
 
 const JOB_TYPES = ['part-time', 'full-time', 'internship', 'freelance', 'remote'];
 
+// ✅ NEW: Popular locations in Vietnam for job seekers
+const POPULAR_LOCATIONS = [
+  'Hồ Chí Minh',
+  'Hà Nội',
+  'Bình Dương',
+  'Đồng Nai',
+  'Đà Nẵng',
+  'Cần Thơ',
+  'Hải Phòng',
+  'Long An',
+  'Bà Rịa - Vũng Tàu',
+  'Thủ Dầu Một',
+];
+
 const StudentProfileSettings: React.FC<Props> = ({ visible, onClose, currentProfile, onSave }) => {
   const [profile, setProfile] = useState<StudentProfile>({
     availableDays: currentProfile?.availableDays || [],
@@ -48,6 +62,7 @@ const StudentProfileSettings: React.FC<Props> = ({ visible, onClose, currentProf
       weekend: false,
     },
     maxDistance: currentProfile?.maxDistance || 10,
+    preferredLocations: currentProfile?.preferredLocations || [], // ✅ NEW
     desiredSalary: currentProfile?.desiredSalary || {
       hourly: 25000,
     },
@@ -72,6 +87,7 @@ const StudentProfileSettings: React.FC<Props> = ({ visible, onClose, currentProf
           weekend: false,
         },
         maxDistance: currentProfile.maxDistance || 10,
+        preferredLocations: currentProfile.preferredLocations || [], // ✅ NEW
         desiredSalary: currentProfile.desiredSalary || { hourly: 25000 },
         skills: currentProfile.skills || [],
         preferredJobTypes: currentProfile.preferredJobTypes || [],
@@ -106,6 +122,16 @@ const StudentProfileSettings: React.FC<Props> = ({ visible, onClose, currentProf
       setProfile({ ...profile, preferredJobTypes: types.filter(t => t !== type) });
     } else {
       setProfile({ ...profile, preferredJobTypes: [...types, type] });
+    }
+  };
+
+  // ✅ NEW: Toggle preferred location
+  const toggleLocation = (location: string) => {
+    const locations = profile.preferredLocations || [];
+    if (locations.includes(location)) {
+      setProfile({ ...profile, preferredLocations: locations.filter(l => l !== location) });
+    } else {
+      setProfile({ ...profile, preferredLocations: [...locations, location] });
     }
   };
 
@@ -159,6 +185,7 @@ const StudentProfileSettings: React.FC<Props> = ({ visible, onClose, currentProf
     if ((p.availableDays?.length || 0) > 0) completed++;
     if (Object.values(p.availableTimeSlots || {}).some(v => v)) completed++;
     if (p.maxDistance) completed++;
+    if ((p.preferredLocations?.length || 0) > 0) completed++; // ✅ NEW
     if (p.desiredSalary?.hourly) completed++;
     if ((p.skills?.length || 0) > 0) completed++;
     if ((p.preferredJobTypes?.length || 0) > 0) completed++;
@@ -232,6 +259,38 @@ const StudentProfileSettings: React.FC<Props> = ({ visible, onClose, currentProf
                     ]}
                   >
                     {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* ✅ NEW: Preferred Locations */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Khu vực làm việc mong muốn</Text>
+            <Text style={styles.sectionHint}>Chọn các tỉnh/thành phố bạn muốn làm việc</Text>
+            <View style={styles.locationGrid}>
+              {POPULAR_LOCATIONS.map((location) => (
+                <TouchableOpacity
+                  key={location}
+                  style={[
+                    styles.locationChip,
+                    profile.preferredLocations?.includes(location) && styles.locationChipActive,
+                  ]}
+                  onPress={() => toggleLocation(location)}
+                >
+                  <Ionicons
+                    name={profile.preferredLocations?.includes(location) ? 'checkmark-circle' : 'location-outline'}
+                    size={16}
+                    color={profile.preferredLocations?.includes(location) ? '#fff' : '#666'}
+                  />
+                  <Text
+                    style={[
+                      styles.locationChipText,
+                      profile.preferredLocations?.includes(location) && styles.locationChipTextActive,
+                    ]}
+                  >
+                    {location}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -553,6 +612,40 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   jobTypeChipTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // ✅ NEW: Location styles
+  sectionHint: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 12,
+  },
+  locationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  locationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  locationChipActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  locationChipText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  locationChipTextActive: {
     color: '#fff',
     fontWeight: '600',
   },

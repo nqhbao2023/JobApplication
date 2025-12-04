@@ -57,9 +57,11 @@ const CandidateHome = () => {
     onRefresh,
     handleFilterChange,
     resetUnreadCount,
+    filteredJobs: quickFilteredJobs, // Jobs đã lọc theo QuickFilter (all/intern/part-time/remote/nearby)
   } = useCandidateHome();
   
-  // Student filters for advanced filtering
+  // ✅ FIX: Student filters nhận TOÀN BỘ jobs đã qua QuickFilter, không chỉ forYouJobs (10 jobs)
+  // Điều này đảm bảo khi bật "Lọc theo hồ sơ", nó sẽ lọc TẤT CẢ jobs
   const {
     filters: studentFilters,
     filteredJobs,
@@ -69,7 +71,7 @@ const CandidateHome = () => {
     matchedJobsCount,
     totalJobsCount,
   } = useStudentFilters(
-    forYouJobs,
+    quickFilteredJobs, // ✅ Truyền toàn bộ jobs đã qua quick filter
     data?.user?.studentProfile
   );
 
@@ -315,22 +317,47 @@ const CandidateHome = () => {
             title={profileFilterActive ? `Việc phù hợp (${matchedJobsCount})` : "Dành cho bạn"} 
             onPressShowAll={() => router.push('/(shared)/jobList')} 
           />
-          {filteredJobs.length > 0 ? (
-            filteredJobs.map((item, idx) => (
-              <View key={item.$id} style={{ marginBottom: 0 }}>
-                <JobCard 
-                  item={item} 
-                  company={getJobCompany(item)}
-                  matchScore={item.matchScore}
-                  isHighMatch={item.isHighMatch}
-                />
-              </View>
-            ))
+          {/* ✅ FIX: Hiển thị đúng jobs dựa trên trạng thái filter
+              - profileFilterActive = true: hiển thị jobs từ useStudentFilters (đã filter theo profile)
+              - profileFilterActive = false: hiển thị forYouJobs (AI recommended, top 10) */}
+          {profileFilterActive ? (
+            // Khi bật filter theo hồ sơ: hiển thị jobs đã filter
+            filteredJobs.length > 0 ? (
+              filteredJobs.slice(0, 10).map((item, idx) => (
+                <View key={item.$id} style={{ marginBottom: 0 }}>
+                  <JobCard 
+                    item={item} 
+                    company={getJobCompany(item)}
+                    matchScore={item.matchScore}
+                    isHighMatch={item.isHighMatch}
+                  />
+                </View>
+              ))
+            ) : (
+              <EmptyState 
+                message="Không có công việc phù hợp với hồ sơ của bạn. Hãy thử tắt bộ lọc hoặc cập nhật hồ sơ." 
+                icon="briefcase-outline" 
+              />
+            )
           ) : (
-            <EmptyState 
-              message={profileFilterActive ? "Không có công việc phù hợp với hồ sơ của bạn. Hãy thử tắt bộ lọc hoặc cập nhật hồ sơ." : "Chưa có việc làm phù hợp"} 
-              icon="briefcase-outline" 
-            />
+            // Khi tắt filter: hiển thị AI recommended jobs
+            forYouJobs.length > 0 ? (
+              forYouJobs.map((item, idx) => (
+                <View key={item.$id} style={{ marginBottom: 0 }}>
+                  <JobCard 
+                    item={item} 
+                    company={getJobCompany(item)}
+                    matchScore={item.matchScore}
+                    isHighMatch={item.isHighMatch}
+                  />
+                </View>
+              ))
+            ) : (
+              <EmptyState 
+                message="Chưa có việc làm phù hợp" 
+                icon="briefcase-outline" 
+              />
+            )
           )}
 
           <SectionHeader title="Danh mục nổi bật" onPressShowAll={() => router.push('/categoriesList')} />

@@ -126,7 +126,9 @@ export const useCandidateHome = () => {
 
   const load_data_job = useCallback(async () => {
     try {
-      const response = await jobApiService.getAllJobs({ limit: 30 });
+      // ✅ FIX: Tăng limit để load nhiều jobs hơn cho việc filter chính xác
+      // Trước đây chỉ load 30 jobs → filter không đủ dữ liệu
+      const response = await jobApiService.getAllJobs({ limit: 100 });
       const normalizedJobs = response.jobs.map(normalizeJob);
       const sortedJobs = sortJobsByDate(normalizedJobs);
       if (__DEV__) console.log('[Tải công việc] Đã tải', response.jobs.length, 'công việc');
@@ -351,21 +353,49 @@ export const useCandidateHome = () => {
     // ✅ STEP 2: Apply quick filter
     if (selectedFilter === 'all') return baseFiltered;
     return baseFiltered.filter(job => {
+      // ✅ FIX: Check ALL possible job type fields for comprehensive filtering
       const type = job.type?.toLowerCase() || '';
       const location = job.location?.toLowerCase() || '';
       const title = job.title?.toLowerCase() || '';
       const description = job.description?.toLowerCase() || '';
       
+      // ✅ Get job type from multiple sources (employer jobs vs viecoi crawled jobs)
+      const jobTypeId = (job as any).job_type_id?.toLowerCase() || ''; // viecoi format: 'internship', 'part-time'
+      const jobTypeName = (job as any).jobTypes?.type_name?.toLowerCase() || ''; // employer format: reference to job_types collection
+      const jobTypeRef = typeof (job as any).jobTypes === 'string' ? (job as any).jobTypes.toLowerCase() : '';
+      
+      // Combine all type-related text for comprehensive search
+      const allTypeText = `${type} ${jobTypeId} ${jobTypeName} ${jobTypeRef}`;
+      const allSearchText = `${allTypeText} ${title} ${description}`.toLowerCase();
+      
       if (selectedFilter === 'intern') {
-        return type.includes('intern') || type.includes('thực tập');
+        // Check type fields + title/description for intern keywords
+        return allTypeText.includes('intern') || 
+               allTypeText.includes('thực tập') ||
+               allTypeText.includes('internship') ||
+               title.includes('thực tập') ||
+               title.includes('intern');
       }
       if (selectedFilter === 'part-time') {
-        return type.includes('part') || type.includes('bán thời gian');
+        // Check type fields + title/description for part-time keywords
+        return allTypeText.includes('part') || 
+               allTypeText.includes('bán thời gian') ||
+               allTypeText.includes('part-time') ||
+               allTypeText.includes('parttime') ||
+               title.includes('part-time') ||
+               title.includes('bán thời gian');
       }
       if (selectedFilter === 'remote') {
-        return type.includes('remote') || type.includes('từ xa') || 
-               location.includes('remote') || location.includes('từ xa') ||
-               title.includes('tại nhà') || description.includes('work from home');
+        return allTypeText.includes('remote') || 
+               allTypeText.includes('từ xa') ||
+               location.includes('remote') || 
+               location.includes('từ xa') ||
+               title.includes('remote') ||
+               title.includes('từ xa') ||
+               title.includes('tại nhà') ||
+               title.includes('work from home') ||
+               description.includes('work from home') ||
+               description.includes('làm việc từ xa');
       }
       if (selectedFilter === 'nearby') {
         // Nearby keywords for Bình Dương area (TDMU students)
@@ -373,7 +403,7 @@ export const useCandidateHome = () => {
           'thủ dầu một', 'tdm', 'bình dương', 'dĩ an', 'thuận an',
           'tân uyên', 'bàu bàng', 'bến cát', 'phú giáo', 'dầu tiếng'
         ];
-        const locationText = location + ' ' + title + ' ' + description;
+        const locationText = (location + ' ' + title + ' ' + description).toLowerCase();
         return nearbyKeywords.some(keyword => locationText.includes(keyword));
       }
       return true;

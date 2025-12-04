@@ -19,7 +19,6 @@ import { ActivityIndicator } from "react-native-paper";
 import { useRole } from "@/contexts/RoleContext";
 import { useJobDescription } from "@/hooks/useJobDescription";
 import { useJobStatus } from "@/hooks/useJobStatus";
-import { smartBack } from "@/utils/navigation";
 import JobApplySection from "@/components/JobApplySection";
 import * as Haptics from "expo-haptics";
 import { formatSalary } from "@/utils/salary.utils";
@@ -39,10 +38,36 @@ const JobDescription = () => {
     id?: string;
     applicationStatus?: string;
     applicationId?: string;
+    from?: string; // ✅ Track where user came from
   }>();
   const jobId = (params.jobId || params.id || "") as string;
   const paramsApplicationStatus = params.applicationStatus as string | undefined;
+  const fromScreen = params.from as string | undefined; // ✅ Lưu thông tin trang trước
   const { role: userRole } = useRole();
+
+  // ✅ Smart back handler - sử dụng thông tin from hoặc fallback theo role
+  const handleGoBack = React.useCallback(() => {
+    // Thử dùng router.back() trước
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    
+    // Nếu có thông tin from, quay về đó
+    if (fromScreen) {
+      router.replace(fromScreen as any);
+      return;
+    }
+    
+    // Fallback: quay về trang chính dựa theo role
+    if (userRole === 'employer') {
+      router.replace('/(employer)/myJobs');
+    } else if (userRole === 'candidate') {
+      router.replace('/(candidate)');
+    } else {
+      router.replace('/');
+    }
+  }, [userRole, fromScreen]);
 
   const {
     jobData,
@@ -178,7 +203,7 @@ const JobDescription = () => {
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={64} color="#FF6B6B" />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => smartBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
           <Text style={styles.backButtonText}>Quay lại</Text>
         </TouchableOpacity>
       </View>
@@ -201,11 +226,7 @@ const JobDescription = () => {
       <View style={styles.fixedHeader}>
         <TouchableOpacity 
           style={styles.buttons} 
-          onPress={() => {
-            // ✅ Luôn dùng back() để giữ navigation stack đúng cách
-            // Không dùng replace() vì sẽ mất history và reload trang
-            router.back();
-          }}
+          onPress={handleGoBack}
         >
           <Ionicons name="arrow-back" size={24} />
         </TouchableOpacity>

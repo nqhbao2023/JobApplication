@@ -1,0 +1,32 @@
+﻿@startuml Login_Sequence
+title Sơ đồ tuần tự: Đăng nhập
+hide footbox
+
+actor "Người dùng" as User
+participant "Giao diện\n(View)" as View
+participant "Hệ thống xử lý\n(Controller/API)" as System
+database "Cơ sở dữ liệu\n(Database)" as DB
+
+User -> View: 1. Nhập Email và Mật khẩu
+User -> View: 2. Nhấn nút "Đăng nhập"
+activate View
+
+View -> System: 3. Gửi thông tin đăng nhập
+activate System
+
+System -> DB: 4. Kiểm tra tài khoản & mật khẩu
+activate DB
+DB --> System: 5. Kết quả xác thực (Hợp lệ/Không hợp lệ)
+deactivate DB
+
+alt Đăng nhập thành công
+    System --> View: 6. Trả về Token & Thông tin người dùng
+    View -> User: 7. Chuyển hướng vào Trang chủ
+else Đăng nhập thất bại
+    System --> View: 6. Báo lỗi (Sai tài khoản/mật khẩu)
+    deactivate System
+    View -> User: 7. Hiển thị thông báo lỗi
+    deactivate View
+end
+
+@enduml

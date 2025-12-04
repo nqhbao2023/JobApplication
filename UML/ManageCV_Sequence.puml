@@ -1,0 +1,34 @@
+﻿@startuml ManageCV_Sequence
+title Sơ đồ tuần tự: Ứng viên quản lý CV
+hide footbox
+
+actor "Ứng viên" as Candidate
+participant "Quản lý CV\n(View)" as View
+participant "Hệ thống xử lý\n(Controller/API)" as System
+participant "Lưu trữ File\n(Storage)" as Storage
+database "Cơ sở dữ liệu\n(Database)" as DB
+
+Candidate -> View: 1. Chọn "Tải lên CV"
+Candidate -> View: 2. Chọn file từ thiết bị
+activate View
+
+View -> Storage: 3. Upload file (PDF/Doc)
+activate Storage
+Storage --> View: 4. Trả về đường dẫn (URL) file
+deactivate Storage
+
+View -> System: 5. Gửi thông tin CV (Tên, URL)
+activate System
+
+System -> DB: 6. Lưu thông tin CV vào hồ sơ User
+activate DB
+DB --> System: 7. Lưu thành công
+deactivate DB
+
+System --> View: 8. Thông báo tải lên thành công
+deactivate System
+
+View -> Candidate: 9. Hiển thị CV trong danh sách
+deactivate View
+
+@enduml

@@ -167,7 +167,7 @@ export default function CompanyDescription() {
                 onPress={() =>
                   router.push({
                     pathname: "/(shared)/jobDescription",
-                    params: { jobId: item.$id },
+                    params: { jobId: item.$id, from: '/(shared)/companyDescription' },
                   })
                 }
               >

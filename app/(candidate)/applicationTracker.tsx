@@ -429,7 +429,8 @@ const ApplicationTracker = () => {
                   params: { 
                     jobId: app.jobId,
                     applicationStatus: app.status,
-                    applicationId: app.id 
+                    applicationId: app.id,
+                    from: '/(candidate)/applicationTracker'
                   }
                 });
               }}
@@ -528,7 +529,7 @@ const ApplicationTracker = () => {
               onPress={() => {
                 if (!job._deleted && !job._error) {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.jobId } });
+                  router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.jobId, from: '/(candidate)/applicationTracker' } });
                 }
               }}
             >

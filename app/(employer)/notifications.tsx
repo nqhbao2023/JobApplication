@@ -203,7 +203,7 @@ const EmployerNotifications = () => {
       } else if (item.jobId) {
         router.push({
           pathname: '/(shared)/jobDescription',
-          params: { jobId: item.jobId },
+          params: { jobId: item.jobId, from: '/(employer)/notifications' },
         });
       }
     },

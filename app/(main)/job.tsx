@@ -82,7 +82,7 @@ const Job = () => {
     return (
       <TouchableOpacity
         style={styles.jobItem}
-        onPress={() => router.push(`/jobDescription?jobId=${item.$id}`)}
+        onPress={() => router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.$id, from: '/(main)/job' } })}
       >
         <Image source={{ uri: jobImage }} style={styles.jobImage} />
         <View style={styles.jobInfo}>

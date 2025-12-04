@@ -347,9 +347,12 @@ export default function EditJob() {
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => {
-            // ✅ Luôn dùng back() để giữ navigation stack đúng cách
-            // Không dùng replace() vì sẽ mất history và reload trang
-            router.back();
+            // ✅ Thử back trước, nếu không được thì về myJobs
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(employer)/myJobs');
+            }
           }} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#1f2937" />
           </TouchableOpacity>

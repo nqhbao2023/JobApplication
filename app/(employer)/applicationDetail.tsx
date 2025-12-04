@@ -335,7 +335,7 @@ export default function ApplicationDetail() {
             onPress={() =>
               router.push({
                 pathname: "/(shared)/jobDescription",
-                params: { jobId: application.job.id },
+                params: { jobId: application.job.id, from: '/(employer)/applicationDetail' },
               })
             }
           >

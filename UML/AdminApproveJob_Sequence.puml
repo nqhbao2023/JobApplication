@@ -1,0 +1,38 @@
+﻿@startuml AdminApproveJob_Sequence
+title Sơ đồ tuần tự: Admin duyệt tin tuyển dụng
+hide footbox
+
+actor "Admin" as Admin
+participant "Trang quản lý tin\n(View)" as View
+participant "Hệ thống xử lý\n(Controller/API)" as System
+database "Cơ sở dữ liệu\n(Database)" as DB
+
+Admin -> View: 1. Xem danh sách tin chờ duyệt
+activate View
+View -> System: 2. Lấy danh sách tin "Pending"
+activate System
+System -> DB: 3. Truy vấn tin chưa duyệt
+activate DB
+DB --> System: 4. Trả về danh sách
+deactivate DB
+System --> View: 5. Hiển thị danh sách
+deactivate System
+
+Admin -> View: 6. Chọn tin & Nhấn "Duyệt tin"
+View -> System: 7. Gửi yêu cầu cập nhật trạng thái (Active)
+activate System
+
+System -> DB: 8. Cập nhật trạng thái tin
+activate DB
+DB --> System: 9. Cập nhật thành công
+deactivate DB
+
+System -> System: 10. Gửi thông báo cho Nhà tuyển dụng
+
+System --> View: 11. Thông báo duyệt thành công
+deactivate System
+
+View -> Admin: 12. Cập nhật giao diện
+deactivate View
+
+@enduml

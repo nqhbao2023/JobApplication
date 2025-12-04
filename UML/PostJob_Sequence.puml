@@ -1,0 +1,30 @@
+﻿@startuml PostJob_Sequence
+title Sơ đồ tuần tự: Đăng tin tuyển dụng
+hide footbox
+
+actor "Nhà tuyển dụng" as Employer
+participant "Giao diện Đăng tin\n(View)" as View
+participant "Hệ thống xử lý\n(Controller/API)" as System
+database "Cơ sở dữ liệu\n(Database)" as DB
+
+Employer -> View: 1. Nhập thông tin công việc\n(Tiêu đề, Lương, Mô tả...)
+Employer -> View: 2. Nhấn "Đăng tin"
+activate View
+
+View -> System: 3. Gửi dữ liệu công việc
+activate System
+
+System -> System: 4. Kiểm tra dữ liệu hợp lệ
+
+System -> DB: 5. Lưu thông tin công việc mới
+activate DB
+DB --> System: 6. Xác nhận đã lưu (Job ID)
+deactivate DB
+
+System --> View: 7. Thông báo đăng tin thành công
+deactivate System
+
+View -> Employer: 8. Hiển thị tin đã đăng
+deactivate View
+
+@enduml

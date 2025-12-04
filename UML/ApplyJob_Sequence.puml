@@ -1,0 +1,36 @@
+﻿@startuml ApplyJob_Sequence
+title Sơ đồ tuần tự: Ứng tuyển công việc
+hide footbox
+
+actor "Ứng viên" as Candidate
+participant "Chi tiết việc làm\n(View)" as View
+participant "Hệ thống xử lý\n(Controller/API)" as System
+database "Cơ sở dữ liệu\n(Database)" as DB
+
+Candidate -> View: 1. Xem thông tin việc làm
+Candidate -> View: 2. Nhấn nút "Ứng tuyển ngay"
+activate View
+
+View -> View: 3. Hiển thị form (CV, Thư giới thiệu)
+Candidate -> View: 4. Nhập thông tin & Gửi hồ sơ
+
+View -> System: 5. Gửi yêu cầu ứng tuyển
+activate System
+
+System -> DB: 6. Kiểm tra đã ứng tuyển chưa?
+activate DB
+DB --> System: 7. Chưa ứng tuyển
+deactivate DB
+
+System -> DB: 8. Lưu hồ sơ ứng tuyển
+activate DB
+DB --> System: 9. Lưu thành công
+deactivate DB
+
+System --> View: 10. Thông báo ứng tuyển thành công
+deactivate System
+
+View -> Candidate: 11. Hiển thị trạng thái "Đã ứng tuyển"
+deactivate View
+
+@enduml

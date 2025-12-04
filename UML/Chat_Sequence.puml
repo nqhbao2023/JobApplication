@@ -1,0 +1,30 @@
+﻿@startuml Chat_Sequence
+title Sơ đồ tuần tự: Nhắn tin (Chat)
+hide footbox
+
+actor "Người gửi" as Sender
+participant "Màn hình Chat\n(View)" as View
+participant "Hệ thống Chat\n(Realtime Service)" as System
+database "Cơ sở dữ liệu\n(Database)" as DB
+actor "Người nhận" as Receiver
+
+Sender -> View: 1. Nhập nội dung & Nhấn Gửi
+activate View
+
+View -> System: 2. Gửi tin nhắn
+activate System
+
+System -> DB: 3. Lưu tin nhắn mới
+activate DB
+DB --> System: 4. Lưu thành công
+deactivate DB
+
+par Xử lý song song
+    System --> View: 5. Hiển thị tin nhắn (cho người gửi)
+    System -> Receiver: 6. Đẩy thông báo/Tin nhắn mới (Realtime)
+end
+
+deactivate System
+deactivate View
+
+@enduml

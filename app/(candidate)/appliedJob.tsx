@@ -264,6 +264,7 @@ const JobRow = React.memo(({ item, onPress, onDeleteApplication }: { item: any; 
         fromApplied: 'true',
         applicationStatus: item.status,
         applicationId: item.$id,
+        from: '/(candidate)/appliedJob',
       },
     });
   };

@@ -162,7 +162,7 @@ const Notifications = () => {
         markAsRead(item.$id);
       }
       if (item.jobId) {
-        router.push({ pathname: '/jobDescription', params: { jobId: item.jobId } });
+        router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.jobId, from: '/(shared)/Notifications' } });
       }
     },
     [markAsRead]

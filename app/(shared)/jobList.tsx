@@ -457,7 +457,7 @@ const AllJobs = () => {
                   <TouchableOpacity
                     style={styles.jobCard}
                     activeOpacity={0.7}
-                    onPress={() => router.push({ pathname: "/(shared)/jobDescription", params: { jobId: job.$id } })}
+                    onPress={() => router.push({ pathname: "/(shared)/jobDescription", params: { jobId: job.$id, from: '/(shared)/jobList' } })}
                   >
                     {/* Job Image with fallback */}
                     {(job as any).displayImage ? (

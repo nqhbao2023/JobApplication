@@ -1,0 +1,33 @@
+﻿@startuml JobSearch_Sequence
+title Sơ đồ tuần tự: Tìm kiếm việc làm
+hide footbox
+
+actor "Người dùng" as User
+participant "Giao diện Tìm kiếm\n(View)" as View
+participant "Bộ máy tìm kiếm\n(Search Engine)" as Engine
+database "Cơ sở dữ liệu\n(Database)" as DB
+
+User -> View: 1. Nhập từ khóa (Vị trí, Kỹ năng...)
+User -> View: 2. Chọn bộ lọc (Địa điểm, Mức lương...)
+User -> View: 3. Nhấn "Tìm kiếm"
+activate View
+
+View -> Engine: 4. Gửi yêu cầu tìm kiếm
+activate Engine
+
+alt Có sử dụng Search Engine (Algolia)
+    Engine -> Engine: 5. Tìm kiếm & Lọc kết quả nhanh
+else Không sử dụng Search Engine
+    Engine -> DB: 5. Truy vấn trực tiếp (Fallback)
+    activate DB
+    DB --> Engine: 6. Trả về danh sách kết quả
+    deactivate DB
+end
+
+Engine --> View: 7. Trả về danh sách việc làm
+deactivate Engine
+
+View -> User: 8. Hiển thị danh sách kết quả
+deactivate View
+
+@enduml

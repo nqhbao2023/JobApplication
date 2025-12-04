@@ -171,7 +171,7 @@ export default function Applications() {
             // Candidate: Xem chi tiết job
             router.push({
               pathname: "/(shared)/jobDescription",
-              params: { jobId: item.jobId },
+              params: { jobId: item.jobId, from: '/(employer)/applications' },
             });
           }
         }}

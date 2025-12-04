@@ -198,7 +198,7 @@ const SavedJobsScreen = () => {
           onPress={() => {
             if (!isUnavailable) {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push(`/jobDescription?jobId=${item.$id}`);
+              router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.$id, from: '/(candidate)/savedJobs' } });
             }
           }}
         >

@@ -114,7 +114,13 @@ export default function MyJobs() {
     return (
       <TouchableOpacity 
         style={styles.card} 
-        onPress={() => router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.id || item.$id } })}
+        onPress={() => router.push({ 
+          pathname: '/(shared)/jobDescription', 
+          params: { 
+            jobId: item.id || item.$id,
+            from: '/(employer)/myJobs' // ✅ Track where user came from
+          } 
+        })}
         activeOpacity={0.7}
       >
         <View style={styles.cardContent}>

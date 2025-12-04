@@ -1,0 +1,44 @@
+﻿@startuml Register_Sequence
+title Sơ đồ tuần tự: Đăng ký tài khoản
+hide footbox
+
+actor "Người dùng" as User
+participant "Giao diện\n(View)" as View
+participant "Hệ thống OTP\n(OTP Service)" as OTP
+participant "Hệ thống xử lý\n(Controller/API)" as System
+database "Cơ sở dữ liệu\n(Database)" as DB
+
+User -> View: 1. Nhập thông tin (Tên, Email, SĐT)
+User -> View: 2. Nhấn "Đăng ký"
+activate View
+
+View -> System: 3. Yêu cầu gửi mã xác thực (OTP)
+activate System
+System -> OTP: 4. Tạo và gửi mã OTP qua Email
+activate OTP
+OTP --> System: 5. Đã gửi thành công
+deactivate OTP
+System --> View: 6. Yêu cầu nhập mã OTP
+deactivate System
+
+User -> View: 7. Nhập mã OTP từ Email
+View -> System: 8. Gửi mã OTP để xác thực
+activate System
+
+System -> OTP: 9. Kiểm tra mã OTP
+activate OTP
+OTP --> System: 10. Mã hợp lệ
+deactivate OTP
+
+System -> DB: 11. Tạo tài khoản mới
+activate DB
+DB --> System: 12. Lưu thành công
+deactivate DB
+
+System --> View: 13. Đăng ký thành công
+deactivate System
+
+View -> User: 14. Chuyển hướng vào ứng dụng
+deactivate View
+
+@enduml

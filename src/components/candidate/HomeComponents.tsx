@@ -208,7 +208,7 @@ export const JobCard = memo(({
         router.push({ pathname: '/(shared)/candidateProfile', params: { jobId: item.$id } });
       } else {
         // Tin tuyển dụng của employer → hiển thị job description
-        router.push({ pathname: '/jobDescription', params: { jobId: item.$id } });
+        router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.$id, from: '/(candidate)' } });
       }
     }}
   >

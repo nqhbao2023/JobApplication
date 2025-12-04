@@ -1,0 +1,33 @@
+﻿@startuml ReviewApplication_Sequence
+title Sơ đồ tuần tự: Nhà tuyển dụng duyệt hồ sơ
+hide footbox
+
+actor "Nhà tuyển dụng" as Employer
+participant "Chi tiết hồ sơ\n(View)" as View
+participant "Hệ thống xử lý\n(Controller/API)" as System
+database "Cơ sở dữ liệu\n(Database)" as DB
+actor "Ứng viên" as Candidate
+
+Employer -> View: 1. Xem chi tiết hồ sơ ứng tuyển
+Employer -> View: 2. Nhấn "Chấp nhận" hoặc "Từ chối"
+activate View
+
+View -> System: 3. Cập nhật trạng thái hồ sơ
+activate System
+
+System -> DB: 4. Lưu trạng thái mới
+activate DB
+DB --> System: 5. Lưu thành công
+deactivate DB
+
+System -> System: 6. Tạo thông báo cho Ứng viên
+
+par Thông báo
+    System --> View: 7. Cập nhật giao diện thành công
+    System -> Candidate: 8. Gửi thông báo kết quả
+end
+
+deactivate System
+deactivate View
+
+@enduml

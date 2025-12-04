@@ -217,11 +217,16 @@ export const useJobDescription = (jobId: string) => {
 
         if (app) {
           const submitted = !!app.cvUrl;
+          const status = app.status || null;
+          
+          // ✅ FIXED: Nếu đã withdrawn hoặc rejected, coi như chưa apply (cho phép reapply)
+          const canReapply = status === 'withdrawn' || status === 'rejected';
+          
           setApplyDocId(app.id || null);
-          setIsApplied(submitted);
-          setHasDraft(!submitted);
-          // ✅ NEW: Lưu trạng thái thực tế từ API
-          setApplicationStatus(app.status || null);
+          // ✅ isApplied chỉ true nếu đã submit CV VÀ không phải status cho phép reapply
+          setIsApplied(submitted && !canReapply);
+          setHasDraft(!submitted && !canReapply);
+          setApplicationStatus(status);
         } else {
           setApplyDocId(null);
           setIsApplied(false);
@@ -286,8 +291,11 @@ export const useJobDescription = (jobId: string) => {
       return;
     }
 
-    // ✅ Ngăn người dùng nộp lại nếu đã nộp CV
-    if (isApplied) {
+    // ✅ Cho phép ứng tuyển lại nếu bị rejected hoặc đã withdrawn
+    const canReapply = applicationStatus === 'rejected' || applicationStatus === 'withdrawn';
+    
+    // ✅ Ngăn người dùng nộp lại nếu đã nộp CV (trừ khi được phép reapply)
+    if (isApplied && !canReapply) {
       Alert.alert(
         'Đã nộp CV',
         'Bạn đã nộp CV cho công việc này rồi. Vui lòng kiểm tra tại mục "Đơn ứng tuyển" để xem trạng thái.',
@@ -301,7 +309,8 @@ export const useJobDescription = (jobId: string) => {
     try {
       setApplyLoading(true);
 
-      if (hasDraft && applyDocId) {
+      // ✅ Nếu đang reapply, không dùng draft cũ
+      if (hasDraft && applyDocId && !canReapply) {
         router.navigate(
           `/submit?jobId=${jobId}&userId=${userId}&applyDocId=${applyDocId}` as any
         );
@@ -379,7 +388,7 @@ export const useJobDescription = (jobId: string) => {
         setApplyLoading(false);
       }
     }
-  }, [userId, jobId, jobData, hasDraft, applyDocId, isApplied, checkApplyStatus]);
+  }, [userId, jobId, jobData, hasDraft, applyDocId, isApplied, applicationStatus, checkApplyStatus]);
 
   /**
    * Cancel application
@@ -398,13 +407,17 @@ export const useJobDescription = (jobId: string) => {
 
       if (!mountedRef.current) return;
 
+      // ✅ FIXED: Reset all states properly after withdrawal
       setIsApplied(false);
       setHasDraft(false);
       setApplyDocId(null);
-      Alert.alert('✅ Thành công', 'Đã hủy ứng tuyển.');
+      setApplicationStatus('withdrawn'); // ✅ Set to 'withdrawn' to enable reapply button
+      
+      Alert.alert('✅ Thành công', 'Đã hủy ứng tuyển. Bạn có thể ứng tuyển lại nếu muốn.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      setTimeout(() => checkApplyStatus(true), 300);
+      // ✅ Refresh status sau một khoảng ngắn
+      setTimeout(() => checkApplyStatus(true), 500);
     } catch (e: any) {
       console.error('❌ Cancel failed:', e);
       Alert.alert('Lỗi', 'Không thể hủy ứng tuyển. Vui lòng thử lại.');

@@ -124,7 +124,32 @@ export default function Submit() {
   const getCvUrlForSubmission = async (): Promise<string | null> => {
     // Case 1: Using CV from library
     if (cvSource === 'library' && selectedCV) {
-      return selectedCV.pdfUrl || selectedCV.fileUrl || null;
+      console.log('📄 CV from library:', {
+        id: selectedCV.id,
+        type: selectedCV.type,
+        pdfUrl: selectedCV.pdfUrl,
+        fileUrl: selectedCV.fileUrl,
+        fileName: selectedCV.fileName,
+      });
+      
+      // Check if CV has a valid URL
+      const cvUrl = selectedCV.pdfUrl || selectedCV.fileUrl;
+      
+      if (!cvUrl) {
+        // CV từ template chưa được export sang PDF
+        if (selectedCV.type === 'template' || !selectedCV.type) {
+          Alert.alert(
+            "CV chưa có file PDF",
+            "CV này được tạo từ mẫu nhưng chưa được xuất sang PDF.\n\n" +
+            "Hãy vào mục 'CV của tôi' → chọn CV này → nhấn 'Xuất PDF' trước khi nộp.\n\n" +
+            "Hoặc chọn CV đã tải lên (file PDF/DOC).",
+            [{ text: "Đã hiểu" }]
+          );
+          return null;
+        }
+      }
+      
+      return cvUrl;
     }
     
     // Case 2: Direct file upload
@@ -188,7 +213,12 @@ export default function Submit() {
       const url = await getCvUrlForSubmission();
       
       if (!url) {
-        throw new Error("Không thể lấy URL của CV");
+        // Alert đã được hiển thị trong getCvUrlForSubmission nếu CV từ template chưa có PDF
+        // Không throw error để tránh hiển thị Alert trùng
+        setIsUploading(false);
+        setProgress(0);
+        isSubmittingRef.current = false;
+        return;
       }
 
       // 🔎 Lấy dữ liệu user + job

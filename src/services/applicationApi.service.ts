@@ -6,7 +6,7 @@ export interface Application {
   jobId: string;
   candidateId: string;
   employerId: string;
-  status: 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'withdrawn';
+  status: 'draft' | 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'withdrawn';
   cvUrl?: string;
   coverLetter?: string;
   appliedAt: Date | string | number;

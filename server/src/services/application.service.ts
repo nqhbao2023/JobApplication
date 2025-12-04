@@ -20,8 +20,14 @@ export class ApplicationService {
       if (!existingQuery.empty) {
         const existingApp = existingQuery.docs[0].data() as Application;
         const hasSubmittedCV = !!existingApp.cvUrl;
+        const status = existingApp.status;
         
-        if (hasSubmittedCV) {
+        // ✅ Cho phép ứng tuyển lại nếu đã bị từ chối hoặc đã rút hồ sơ
+        if (status === 'rejected' || status === 'withdrawn') {
+          // Xóa application cũ và tạo mới
+          await db.collection(APPLICATIONS_COLLECTION).doc(existingQuery.docs[0].id).delete();
+          // Continue to create new application below
+        } else if (hasSubmittedCV) {
           throw new AppError('Bạn đã nộp CV cho công việc này rồi. Vui lòng kiểm tra tại mục "Đơn ứng tuyển".', 400);
         } else {
           // Có draft nhưng chưa submit CV - trả về draft để user có thể tiếp tục
@@ -35,60 +41,15 @@ export class ApplicationService {
       const newApplication: Application = {
         ...applicationData,
         id: appRef.id,
-        status: 'pending',
+        status: 'draft', // ✅ Start as draft, becomes 'pending' after CV upload
         appliedAt: now,
         updatedAt: now,
       };
 
       await appRef.set(newApplication);
 
-      const jobRef = db.collection('jobs').doc(applicationData.jobId);
-      const jobDoc = await jobRef.get();
-      const currentApplicantCount = jobDoc.data()?.applicantCount || 0;
-      await jobRef.update({
-        applicantCount: currentApplicantCount + 1,
-      });
-
-      // ✅ Send email notification to employer
-      try {
-        const jobData = jobDoc.data();
-        const candidateDoc = await db.collection('users').doc(applicationData.candidateId).get();
-        const employerDoc = await db.collection('users').doc(applicationData.employerId).get();
-        
-        const candidateData = candidateDoc.data();
-        const employerData = employerDoc.data();
-        
-        if (employerData?.email && jobData?.title) {
-          await emailService.sendJobApplicationNotification(
-            employerData.email,
-            jobData.title,
-            candidateData?.fullName || candidateData?.displayName || candidateData?.email || 'Ứng viên',
-            candidateData?.email || '',
-            candidateData?.phoneNumber || candidateData?.phone,
-            applicationData.cvUrl
-          );
-          console.log(`📧 Email notification sent to employer: ${employerData.email}`);
-        }
-
-        // ✅ Tạo in-app notification cho employer
-        const candidateName = candidateData?.fullName || candidateData?.displayName || candidateData?.email || 'Ứng viên';
-        const notificationRef = db.collection('notifications').doc();
-        await notificationRef.set({
-          userId: applicationData.employerId,
-          title: '👤 Ứng viên mới ứng tuyển!',
-          message: `${candidateName} vừa ứng tuyển vào vị trí "${jobData?.title || 'Công việc'}". Nhấn để xem hồ sơ.`,
-          type: 'application',
-          jobId: applicationData.jobId,
-          applicationId: appRef.id,
-          candidateId: applicationData.candidateId,
-          read: false,
-          created_at: new Date(),
-        });
-        console.log(`📬 In-app notification created for employer: ${applicationData.employerId}`);
-      } catch (emailError) {
-        console.error('⚠️  Failed to send email notification (non-critical):', emailError);
-        // Don't throw error - application was created successfully
-      }
+      // ✅ NOTE: applicantCount và notifications sẽ được gửi khi CV được upload (trong updateApplication)
+      // Không gửi notification/tăng count khi tạo draft
 
       return newApplication;
     } catch (error: any) {
@@ -139,8 +100,11 @@ export class ApplicationService {
         ...doc.data(),
       })) as Application[];
 
+      // ✅ Filter out draft applications (employer should only see submitted applications)
+      const submittedApplications = applications.filter(app => app.status !== 'draft');
+
       // Sort by appliedAt descending
-      applications.sort((a, b) => {
+      submittedApplications.sort((a, b) => {
         const aDate = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
         const bDate = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
         return bDate - aDate;
@@ -148,7 +112,7 @@ export class ApplicationService {
 
       // ✅ Enrich applications with candidate data
       const enrichedApplications = await Promise.all(
-        applications.map(async (app) => {
+        submittedApplications.map(async (app) => {
           if (app.candidateId) {
             try {
               const candidateDoc = await db.collection('users').doc(app.candidateId).get();
@@ -194,14 +158,17 @@ export class ApplicationService {
         ...doc.data(),
       })) as Application[];
 
+      // ✅ Filter out draft applications (only show submitted applications)
+      const submittedApplications = applications.filter(app => app.status !== 'draft');
+
       // Sort by appliedAt descending
-      applications.sort((a, b) => {
+      submittedApplications.sort((a, b) => {
         const aDate = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
         const bDate = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
         return bDate - aDate;
       });
 
-      return applications;
+      return submittedApplications;
     } catch (error: any) {
       console.error('Error fetching job applications:', error);
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
@@ -229,6 +196,9 @@ export class ApplicationService {
         updatedAt: new Date(),
       };
 
+      // ✅ Check if this is the first CV submission (draft -> pending)
+      const isFirstSubmission = data.status === 'draft' && updates.cvUrl !== undefined;
+
       if (updates.cvUrl !== undefined) {
         updatePayload.cvUrl = updates.cvUrl;
         updatePayload.status = 'pending';
@@ -243,6 +213,59 @@ export class ApplicationService {
       }
 
       await appRef.update(updatePayload);
+
+      // ✅ Send notifications only when CV is first submitted (draft -> pending)
+      if (isFirstSubmission) {
+        try {
+          // Update applicant count
+          const jobRef = db.collection('jobs').doc(data.jobId);
+          const jobDoc = await jobRef.get();
+          const currentApplicantCount = jobDoc.data()?.applicantCount || 0;
+          await jobRef.update({
+            applicantCount: currentApplicantCount + 1,
+          });
+
+          // Send email notification to employer
+          const jobData = jobDoc.data();
+          const candidateDoc = await db.collection('users').doc(candidateId).get();
+          const employerDoc = await db.collection('users').doc(data.employerId).get();
+          
+          const candidateData = candidateDoc.data();
+          const employerData = employerDoc.data();
+          
+          if (employerData?.email && jobData?.title) {
+            await emailService.sendJobApplicationNotification(
+              employerData.email,
+              jobData.title,
+              candidateData?.fullName || candidateData?.displayName || candidateData?.email || 'Ứng viên',
+              candidateData?.email || '',
+              candidateData?.phoneNumber || candidateData?.phone,
+              updates.cvUrl
+            );
+            console.log(`📧 Email notification sent to employer: ${employerData.email}`);
+          }
+
+          // Create in-app notification for employer
+          const candidateName = candidateData?.fullName || candidateData?.displayName || candidateData?.email || 'Ứng viên';
+          const notificationRef = db.collection('notifications').doc();
+          await notificationRef.set({
+            userId: data.employerId,
+            title: '👤 Ứng viên mới ứng tuyển!',
+            message: `${candidateName} vừa ứng tuyển vào vị trí "${jobData?.title || 'Công việc'}". Nhấn để xem hồ sơ.`,
+            type: 'application',
+            jobId: data.jobId,
+            applicationId: applicationId,
+            candidateId: candidateId,
+            read: false,
+            created_at: new Date(),
+          });
+          console.log(`📬 In-app notification created for employer: ${data.employerId}`);
+        } catch (notificationError) {
+          console.error('⚠️ Failed to send notifications (non-critical):', notificationError);
+          // Don't throw error - application was updated successfully
+        }
+      }
+
       const updatedDoc = await appRef.get();
       return { id: updatedDoc.id, ...updatedDoc.data() } as Application;
     } catch (error: any) {

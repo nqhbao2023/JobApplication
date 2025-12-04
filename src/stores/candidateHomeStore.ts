@@ -36,6 +36,7 @@ type CandidateHomeStore = {
   setUnreadCount: (value: number) => void;
   setLastFetchedAt: (value: number | null) => void;
   setHydrated: (value: boolean) => void;
+  invalidateCache: () => void; // ✅ NEW: Force refresh on next load
   reset: () => void;
 };
 
@@ -61,6 +62,7 @@ export const useCandidateHomeStore = create<CandidateHomeStore>()(
       setUnreadCount: (value) => set({ unreadCount: value }),
       setLastFetchedAt: (value) => set({ lastFetchedAt: value }),
       setHydrated: (value) => set({ hydrated: value }),
+      invalidateCache: () => set({ lastFetchedAt: null }), // ✅ NEW: Clear cache timestamp to force reload
       reset: () => set({ ...initialState, hydrated: true, loading: false }),
     }),
     {

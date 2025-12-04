@@ -313,9 +313,16 @@ const CandidateHome = () => {
             limit={5}
           />
 
+          {/* ✅ IMPROVED: Show proper count format and "View more" button */}
           <SectionHeader 
-            title={profileFilterActive ? `Việc phù hợp (${matchedJobsCount})` : "Dành cho bạn"} 
-            onPressShowAll={() => router.push('/(shared)/jobList')} 
+            title={profileFilterActive 
+              ? `Việc phù hợp (${Math.min(filteredJobs.length, 10)}/${matchedJobsCount})` 
+              : "Dành cho bạn"
+            } 
+            onPressShowAll={() => router.push({
+              pathname: '/(shared)/jobList',
+              params: profileFilterActive ? { filterActive: 'true' } : {}
+            })} 
           />
           {/* ✅ FIX: Hiển thị đúng jobs dựa trên trạng thái filter
               - profileFilterActive = true: hiển thị jobs từ useStudentFilters (đã filter theo profile)
@@ -323,16 +330,36 @@ const CandidateHome = () => {
           {profileFilterActive ? (
             // Khi bật filter theo hồ sơ: hiển thị jobs đã filter
             filteredJobs.length > 0 ? (
-              filteredJobs.slice(0, 10).map((item, idx) => (
-                <View key={item.$id} style={{ marginBottom: 0 }}>
-                  <JobCard 
-                    item={item} 
-                    company={getJobCompany(item)}
-                    matchScore={item.matchScore}
-                    isHighMatch={item.isHighMatch}
-                  />
-                </View>
-              ))
+              <>
+                {filteredJobs.slice(0, 10).map((item, idx) => (
+                  <View key={item.$id} style={{ marginBottom: 0 }}>
+                    <JobCard 
+                      item={item} 
+                      company={getJobCompany(item)}
+                      matchScore={item.matchScore}
+                      isHighMatch={item.isHighMatch}
+                    />
+                  </View>
+                ))}
+                {/* ✅ NEW: Show "View more" button if more jobs available */}
+                {matchedJobsCount > 10 && (
+                  <TouchableOpacity
+                    style={styles.viewMoreButton}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push({
+                        pathname: '/(shared)/jobList',
+                        params: { filterActive: 'true' }
+                      });
+                    }}
+                  >
+                    <Text style={styles.viewMoreText}>
+                      Xem thêm {matchedJobsCount - 10} việc phù hợp
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color="#4A80F0" />
+                  </TouchableOpacity>
+                )}
+              </>
             ) : (
               <EmptyState 
                 message="Không có công việc phù hợp với hồ sơ của bạn. Hãy thử tắt bộ lọc hoặc cập nhật hồ sơ." 
@@ -542,6 +569,24 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
   },
   horizontalList: { paddingRight: 20 },
+  // ✅ NEW: View More Button styles
+  viewMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    backgroundColor: '#EEF4FF',
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  viewMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4A80F0',
+  },
   floatingAIButton: {
     position: 'absolute',
     bottom: 80,

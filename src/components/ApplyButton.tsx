@@ -167,28 +167,41 @@ const ApplyButton: React.FC<ApplyButtonProps> = ({
         const getButtonLabel = () => {
           if (applyLoading) return 'Đang xử lý...';
           if (applicationStatus === 'accepted') return '✅ Đã được chấp nhận';
-          if (applicationStatus === 'rejected') return '❌ Đã bị từ chối';
+          if (applicationStatus === 'rejected') return '🔄 Ứng tuyển lại'; // ✅ Cho phép ứng tuyển lại
           if (applicationStatus === 'reviewing') return '👀 Đang xem xét';
-          if (applicationStatus === 'withdrawn') return '🔙 Đã rút hồ sơ';
+          if (applicationStatus === 'withdrawn') return '🔄 Ứng tuyển lại'; // ✅ Cho phép ứng tuyển lại
+          if (applicationStatus === 'draft') return '📝 Tiếp tục nộp CV';
           if (isApplied || applicationStatus === 'pending') return '⏳ Đang chờ duyệt';
           return 'Gửi CV ứng tuyển';
         };
 
         const getButtonIcon = (): keyof typeof Ionicons.glyphMap => {
           if (applicationStatus === 'accepted') return 'checkmark-circle';
-          if (applicationStatus === 'rejected') return 'close-circle';
+          if (applicationStatus === 'rejected') return 'refresh'; // ✅ Icon ứng tuyển lại
           if (applicationStatus === 'reviewing') return 'eye';
+          if (applicationStatus === 'withdrawn') return 'refresh'; // ✅ Icon ứng tuyển lại
+          if (applicationStatus === 'draft') return 'document-text-outline';
           if (isApplied || applicationStatus === 'pending') return 'time';
           return 'send-outline';
         };
 
         const getButtonStyle = () => {
           if (applicationStatus === 'accepted') return styles.acceptedButton;
-          if (applicationStatus === 'rejected') return styles.rejectedButton;
+          if (applicationStatus === 'rejected') return styles.reapplyButton; // ✅ Style ứng tuyển lại
+          if (applicationStatus === 'withdrawn') return styles.reapplyButton; // ✅ Style ứng tuyển lại
+          if (applicationStatus === 'draft') return styles.featuredButton;
           return styles.featuredButton;
         };
 
-        const isDisabled = isApplied || applyLoading || !!applicationStatus;
+        // ✅ FIXED: Logic cho phép ứng tuyển lại
+        const canReapply = applicationStatus === 'rejected' || applicationStatus === 'withdrawn';
+        const isDraft = applicationStatus === 'draft';
+        const isPendingOrReviewing = applicationStatus === 'pending' || applicationStatus === 'reviewing';
+        const isAccepted = applicationStatus === 'accepted';
+        
+        // ✅ Chỉ disabled khi: đang loading, hoặc đang pending/reviewing, hoặc đã accepted
+        // KHÔNG disabled khi: canReapply (rejected/withdrawn) hoặc draft
+        const isDisabled = applyLoading || isPendingOrReviewing || isAccepted;
 
         return (
           <TouchableOpacity
@@ -252,6 +265,10 @@ const styles = StyleSheet.create({
   },
   rejectedButton: {
     backgroundColor: '#FF3B30',
+  },
+  // ✅ NEW: Reapply button style (for rejected/withdrawn)
+  reapplyButton: {
+    backgroundColor: '#6366F1', // Indigo - fresh start color
   },
   disabledButton: {
     opacity: 0.8,

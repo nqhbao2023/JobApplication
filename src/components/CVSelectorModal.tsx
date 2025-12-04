@@ -164,6 +164,25 @@ export default function CVSelectorModal({
     const selectedCV = cvs.find(cv => cv.id === selectedCvId);
     if (!selectedCV) return;
 
+    // ✅ Check if template CV doesn't have PDF URL
+    const isTemplateCV = selectedCV.type !== 'uploaded';
+    const hasPdfUrl = selectedCV.pdfUrl || selectedCV.fileUrl;
+    
+    if (isTemplateCV && !hasPdfUrl) {
+      Alert.alert(
+        'CV chưa có file PDF',
+        'CV từ template này chưa được xuất thành file PDF.\n\nĐể nộp CV này, bạn cần:\n1. Vào phần "CV của tôi"\n2. Chọn CV này\n3. Nhấn nút "Xuất PDF" để tạo file',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { 
+            text: 'Chọn CV khác', 
+            onPress: () => setSelectedCvId(null)
+          }
+        ]
+      );
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     onSelect({
@@ -196,6 +215,8 @@ export default function CVSelectorModal({
   const renderCVItem = ({ item }: { item: CVData }) => {
     const isSelected = selectedCvId === item.id;
     const isUploaded = item.type === 'uploaded';
+    // ✅ Check if template CV has PDF URL
+    const isTemplateWithoutPdf = !isUploaded && !item.pdfUrl && !item.fileUrl;
 
     return (
       <TouchableOpacity
@@ -237,9 +258,16 @@ export default function CVSelectorModal({
             {isUploaded ? '📄 CV tải lên' : '✨ CV từ template'}
           </Text>
           
-          <Text style={styles.cvDate}>
-            Cập nhật: {formatDate(item.updatedAt)}
-          </Text>
+          {/* ✅ Warning if template without PDF */}
+          {isTemplateWithoutPdf ? (
+            <Text style={styles.cvWarning}>
+              ⚠️ Chưa xuất PDF - Cần xuất trước khi nộp
+            </Text>
+          ) : (
+            <Text style={styles.cvDate}>
+              Cập nhật: {formatDate(item.updatedAt)}
+            </Text>
+          )}
         </View>
 
         {/* Selection indicator */}
@@ -509,6 +537,11 @@ const styles = StyleSheet.create({
   cvDate: {
     fontSize: 12,
     color: '#94a3b8',
+  },
+  cvWarning: {
+    fontSize: 12,
+    color: '#f59e0b',
+    fontWeight: '500',
   },
   radioButton: {
     width: 26,

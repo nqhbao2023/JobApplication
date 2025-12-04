@@ -16,6 +16,7 @@ import { handleApiError } from '@/utils/errorHandler';
 import { calculateJobMatchScore, JobWithScore } from '@/services/jobMatching.service';
 import * as Location from 'expo-location';
 import { useCandidateHomeStore, CANDIDATE_HOME_CACHE_TTL } from '@/stores/candidateHomeStore';
+import { eventBus, EVENTS } from '@/utils/eventBus';
 
 export type QuickFilter = 'all' | 'intern' | 'part-time' | 'remote' | 'nearby';
 
@@ -46,6 +47,7 @@ export const useCandidateHome = () => {
     setError: setStoreError,
     setUnreadCount: setStoreUnread,
     setLastFetchedAt,
+    invalidateCache, // ✅ NEW: Get invalidateCache from store
   } = useCandidateHomeStore();
 
   // Load current location for distance-based matching (candidate-only)
@@ -191,7 +193,8 @@ export const useCandidateHome = () => {
   }, [userId, dataUser?.role]);
 
   const loadAllData = useCallback(async (force = false) => {
-    if (isLoadingRef.current) return;
+    // ✅ FIX: Allow force reload even if already loading (for profile updates)
+    if (isLoadingRef.current && !force) return;
     
     // ✅ Check cache - skip nếu data còn fresh
     const lastLoad = lastFetchedAt ?? 0;
@@ -252,6 +255,23 @@ export const useCandidateHome = () => {
     if (!userId || isLoadingRef.current) return;
     loadAllData();
   }, [userId]);
+
+  // ✅ Listen for profile updates to refresh data immediately
+  useEffect(() => {
+    const unsubscribe = eventBus.on(EVENTS.PROFILE_UPDATED, (data) => {
+      if (__DEV__) {
+        console.log('[CandidateHome] Profile updated, invalidating cache and forcing refresh...');
+      }
+      // ✅ FIX: Invalidate cache FIRST to ensure loadAllData doesn't skip due to TTL
+      invalidateCache();
+      // Small delay to ensure state is updated before loading
+      setTimeout(() => {
+        loadAllData(true);
+      }, 50);
+    });
+
+    return () => unsubscribe();
+  }, [loadAllData, invalidateCache]);
 
   useFocusEffect(
     useCallback(() => {

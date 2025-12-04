@@ -96,7 +96,8 @@ const JobDescription = () => {
 
   const canWithdraw = React.useMemo(() => {
     if (applicationStatus) {
-      return applicationStatus === 'pending';
+      // ✅ Cho phép rút hồ sơ nếu đang là draft hoặc pending
+      return applicationStatus === 'pending' || applicationStatus === 'draft';
     }
     return true;
   }, [applicationStatus]);
@@ -109,6 +110,7 @@ const JobDescription = () => {
       case 'reviewing': return '👀 Đang xem xét';
       case 'withdrawn': return '🔙 Đã rút hồ sơ';
       case 'pending': return '⏳ Đang chờ duyệt';
+      case 'draft': return '📝 Chưa nộp CV'; // ✅ NEW: Draft status
       default: return null;
     }
   }, [applicationStatus]);
@@ -118,6 +120,44 @@ const JobDescription = () => {
     await refresh();
     setRefreshing(false);
   };
+
+  /**
+   * ✅ Handle Chat with Employer
+   * Navigate to chat screen with employer when application is accepted
+   */
+  const handleChatWithEmployer = React.useCallback(() => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      Alert.alert('Lỗi', 'Vui lòng đăng nhập để nhắn tin');
+      return;
+    }
+
+    const job = jobData as Job;
+    const employerId = job?.employerId || job?.ownerId;
+    
+    if (!employerId) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin nhà tuyển dụng');
+      return;
+    }
+
+    // Get employer/company name for display
+    const employerName = companyData?.corp_name || 
+      job?.company_name || 
+      (typeof job?.company === 'object' ? job?.company?.corp_name : '') ||
+      'Nhà tuyển dụng';
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    router.push({
+      pathname: "/(shared)/chat",
+      params: {
+        partnerId: employerId,
+        partnerName: employerName,
+        role: "Candidate",
+        jobId: jobId, // Optional: để context về job nào
+      },
+    });
+  }, [jobData, companyData, jobId]);
 
   /**
    * Handle Quick-Post Application
@@ -212,7 +252,21 @@ const JobDescription = () => {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.buttons}
-          onPress={() => router.push("/")}
+          onPress={async () => {
+            try {
+              const { Share } = await import('react-native');
+              const job = jobData as Job;
+              const jobTitle = job?.title || 'Công việc';
+              const companyName = companyData?.corp_name || job?.company_name || 'Công ty';
+              
+              await Share.share({
+                title: jobTitle,
+                message: `🔥 ${jobTitle}\n🏢 ${companyName}\n📍 ${job?.location || 'Chưa cập nhật'}\n\nXem chi tiết tại ứng dụng JobApplication!`,
+              });
+            } catch (error) {
+              // User cancelled or share failed - ignore
+            }
+          }}
         >
           <Ionicons name="share-social" size={24} />
         </TouchableOpacity>
@@ -481,6 +535,8 @@ const JobDescription = () => {
             job={jobData as Job}
             onApplyFeatured={handleApply}
             onApplyQuickPost={handleQuickPostApply}
+            onCancel={handleCancel}
+            onChat={handleChatWithEmployer}
             isSaved={isSaved}
             saveLoading={saveLoading}
             onToggleSave={toggleSave}

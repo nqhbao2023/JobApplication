@@ -10,6 +10,8 @@ interface JobApplySectionProps {
   job: Job;
   onApplyFeatured?: () => void;
   onApplyQuickPost?: () => void; // NEW: For quick-post CV submission
+  onCancel?: () => void; // ✅ NEW: Hủy ứng tuyển
+  onChat?: () => void; // ✅ NEW: Nhắn tin với employer
   isSaved?: boolean;
   saveLoading?: boolean;
   onToggleSave?: () => void;
@@ -22,6 +24,8 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({
   job, 
   onApplyFeatured,
   onApplyQuickPost,
+  onCancel,
+  onChat,
   isSaved = false,
   saveLoading = false,
   onToggleSave,
@@ -70,6 +74,7 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({
 
       {/* Button Row - Compact */}
       <View style={styles.buttonRow}>
+        {/* ✅ Main Apply/Status Button */}
         <ApplyButton
           jobSource={jobSource}
           sourceUrl={job.external_url || job.sourceUrl}
@@ -82,6 +87,45 @@ const JobApplySection: React.FC<JobApplySectionProps> = ({
           applyLoading={applyLoading}
           applicationStatus={applicationStatus}
         />
+
+        {/* ✅ NEW: Chat button - hiển thị khi được chấp nhận */}
+        {applicationStatus === 'accepted' && onChat && (
+          <TouchableOpacity
+            style={styles.chatBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onChat();
+            }}
+          >
+            <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {/* ✅ NEW: Cancel/Withdraw button - hiển thị khi đang pending hoặc draft */}
+        {(applicationStatus === 'pending' || applicationStatus === 'draft') && onCancel && (
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              Alert.alert(
+                'Hủy ứng tuyển?',
+                applicationStatus === 'draft' 
+                  ? 'Bạn chưa hoàn thành nộp CV. Bạn có muốn hủy không?'
+                  : 'Bạn có chắc muốn rút hồ sơ ứng tuyển?',
+                [
+                  { text: 'Không', style: 'cancel' },
+                  { 
+                    text: 'Hủy ứng tuyển', 
+                    style: 'destructive',
+                    onPress: onCancel 
+                  },
+                ]
+              );
+            }}
+          >
+            <Ionicons name="close-circle" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
         
         {onToggleSave && (
           <TouchableOpacity
@@ -146,6 +190,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  // ✅ NEW: Chat button style
+  chatBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#10B981', // Green for chat
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // ✅ NEW: Cancel button style
+  cancelBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#EF4444', // Red for cancel
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

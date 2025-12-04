@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { authApiService } from '@/services/authApi.service';
 import { StudentProfile } from '@/types';
 import Slider from '@react-native-community/slider';
+import { eventBus, EVENTS } from '@/utils/eventBus';
 
 interface Props {
   visible: boolean;
@@ -155,19 +156,27 @@ const StudentProfileSettings: React.FC<Props> = ({ visible, onClose, currentProf
     try {
       setLoading(true);
       
+      const updatedProfile = {
+        ...profile,
+        updatedAt: new Date().toISOString(),
+        completionRate: calculateCompletionRate(profile),
+      };
+      
       // Update profile via API
       await authApiService.updateProfile({
-        studentProfile: {
-          ...profile,
-          updatedAt: new Date().toISOString(),
-          completionRate: calculateCompletionRate(profile),
-        },
+        studentProfile: updatedProfile,
+      });
+
+      // ✅ Emit event để các component khác biết profile đã update
+      eventBus.emit(EVENTS.PROFILE_UPDATED, { 
+        profile: updatedProfile,
+        timestamp: Date.now() 
       });
 
       Alert.alert('Thành công', 'Thông tin tìm việc đã được cập nhật!');
       
       if (onSave) {
-        onSave(profile);
+        onSave(updatedProfile);
       }
       
       onClose();

@@ -40,17 +40,19 @@ export const useSafeBack = (options?: UseSafeBackOptions) => {
     const canBack = router.canGoBack();
     console.log('[useSafeBack] canGoBack:', canBack, '| from param:', fromParam, '| role:', userRole);
     
-    // ✅ Ưu tiên 1: Sử dụng `from` param nếu có (đảm bảo navigate đúng source)
-    if (fromParam) {
-      console.log('[useSafeBack] Using from param:', fromParam);
-      router.replace(fromParam as any);
-      return;
-    }
-    
-    // ✅ Ưu tiên 2: Sử dụng router.back() nếu có history
+    // ✅ Ưu tiên 1: LUÔN dùng router.back() nếu có history
+    // Đây là cách navigation tự nhiên nhất, animation sẽ đúng hướng
     if (canBack) {
       console.log('[useSafeBack] Using router.back()');
       router.back();
+      return;
+    }
+    
+    // ✅ Ưu tiên 2: Sử dụng `from` param nếu có (chỉ khi không thể back())
+    // Trường hợp này xảy ra khi navigate cross-tab hoặc deep link
+    if (fromParam) {
+      console.log('[useSafeBack] Using from param (no back history):', fromParam);
+      router.replace(fromParam as any);
       return;
     }
 

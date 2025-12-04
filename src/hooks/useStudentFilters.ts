@@ -2,6 +2,7 @@
  * Hook for managing student advanced filters
  * 
  * NEW: Auto-apply filters from studentProfile when toggle is ON
+ * IMPROVED: React to profile.updatedAt changes for immediate refresh
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -9,6 +10,7 @@ import { StudentFilterState } from '@/components/candidate/StudentAdvancedFilter
 import { Job, StudentProfile } from '@/types';
 import { rankJobsByMatch, JobWithScore } from '@/services/jobMatching.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { eventBus, EVENTS } from '@/utils/eventBus';
 
 const FILTERS_STORAGE_KEY = '@student_filters';
 const PROFILE_FILTER_ACTIVE_KEY = '@profile_filter_active';
@@ -32,13 +34,32 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
   const [profileFilterActive, setProfileFilterActive] = useState(false);
   const [filteredJobs, setFilteredJobs] = useState<JobWithScore[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // ✅ Track profile version for forcing re-calculation
+  const profileUpdatedAt = studentProfile?.updatedAt;
 
   // Load saved state from AsyncStorage
   useEffect(() => {
     loadSavedState();
   }, []);
 
+  // ✅ Listen for profile update events to re-apply filters immediately
+  useEffect(() => {
+    const unsubscribe = eventBus.on(EVENTS.PROFILE_UPDATED, (data) => {
+      if (__DEV__) {
+        console.log('[StudentFilters] Profile updated event received, re-applying filters...');
+      }
+      // If filter is active, re-apply with new profile data
+      if (profileFilterActive && data?.profile) {
+        applyProfileToFiltersWithData(data.profile);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [profileFilterActive]);
+
   // Auto-apply profile data when profileFilterActive changes or profile updates
+  // ✅ IMPROVED: Use profileUpdatedAt to detect changes
   useEffect(() => {
     if (profileFilterActive && studentProfile) {
       applyProfileToFilters();
@@ -46,12 +67,12 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
       // Reset to default when turned off
       setFilters(prev => ({ ...prev, isActive: false }));
     }
-  }, [profileFilterActive, studentProfile]);
+  }, [profileFilterActive, studentProfile, profileUpdatedAt]);
 
   // Apply filters when jobs or filters change
   useEffect(() => {
     applyFilters();
-  }, [jobs, filters, studentProfile]);
+  }, [jobs, filters, studentProfile, profileUpdatedAt]);
 
   const loadSavedState = async () => {
     try {
@@ -111,6 +132,36 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
     saveFilters(newFilters);
   }, [studentProfile]);
 
+  // ✅ NEW: Apply filters with explicit profile data (for event handler)
+  const applyProfileToFiltersWithData = useCallback((profile: StudentProfile) => {
+    if (!profile) return;
+
+    const newFilters: StudentFilterState = {
+      availableDays: profile.availableDays || [],
+      timeSlots: {
+        morning: profile.availableTimeSlots?.morning || false,
+        afternoon: profile.availableTimeSlots?.afternoon || false,
+        evening: profile.availableTimeSlots?.evening || false,
+        weekend: profile.availableTimeSlots?.weekend || false,
+      },
+      maxDistance: profile.maxDistance || 50,
+      preferredLocations: profile.preferredLocations || [],
+      minHourlyRate: profile.desiredSalary?.hourly || 0,
+      isActive: true,
+    };
+
+    setFilters(newFilters);
+    saveFilters(newFilters);
+    
+    if (__DEV__) {
+      console.log('[StudentFilters] Applied new profile data:', {
+        days: newFilters.availableDays,
+        locations: newFilters.preferredLocations,
+        salary: newFilters.minHourlyRate,
+      });
+    }
+  }, []);
+
   const handleFiltersChange = useCallback((newFilters: StudentFilterState) => {
     setFilters(newFilters);
     saveFilters(newFilters);
@@ -122,11 +173,26 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
     saveProfileFilterActive(active);
     
     if (active && studentProfile) {
-      applyProfileToFilters();
+      // ✅ FIX: Apply profile to filters first, then force applyFilters
+      const newFilters: StudentFilterState = {
+        availableDays: studentProfile.availableDays || [],
+        timeSlots: {
+          morning: studentProfile.availableTimeSlots?.morning || false,
+          afternoon: studentProfile.availableTimeSlots?.afternoon || false,
+          evening: studentProfile.availableTimeSlots?.evening || false,
+          weekend: studentProfile.availableTimeSlots?.weekend || false,
+        },
+        maxDistance: studentProfile.maxDistance || 50,
+        preferredLocations: studentProfile.preferredLocations || [],
+        minHourlyRate: studentProfile.desiredSalary?.hourly || 0,
+        isActive: true, // ✅ Set active immediately
+      };
+      setFilters(newFilters);
+      saveFilters(newFilters);
     } else {
       setFilters(prev => ({ ...prev, isActive: false }));
     }
-  }, [studentProfile, applyProfileToFilters]);
+  }, [studentProfile]);
 
   const applyFilters = useCallback(() => {
     if (!filters.isActive) {

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -110,6 +111,8 @@ export default function CandidateProfile() {
     return `${num.toLocaleString('vi-VN')}đ/giờ`;
   };
 
+  const { goBack } = useSafeBack();
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -124,7 +127,7 @@ export default function CandidateProfile() {
       <SafeAreaView style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
         <Text style={styles.errorText}>Không tìm thấy hồ sơ</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={goBack}>
           <Text style={styles.backButtonText}>Quay lại</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -142,7 +145,7 @@ export default function CandidateProfile() {
           style={styles.headerBackButton} 
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
+            goBack();
           }}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />

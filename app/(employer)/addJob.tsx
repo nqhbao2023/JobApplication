@@ -18,6 +18,7 @@ import DropDownPicker from 'react-native-dropdown-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, { FadeInDown } from 'react-native-reanimated';
 import { useAddJobForm } from '@/hooks/addJob/useAddJobForm';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { SectionCard, AITemplateModal } from '@/components/employer/AddJobSections';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { filterJobPositions } from '@/constants/jobPositions';
@@ -118,6 +119,8 @@ const AddJob = () => {
     }
   }, [newCompany.city]);
 
+  const { goBack } = useSafeBack({ fallback: '/(employer)/myJobs' });
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -126,7 +129,7 @@ const AddJob = () => {
       >
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity onPress={goBack} style={styles.backBtn}>
               <Text style={styles.backBtnText}>✕</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Tạo công việc</Text>

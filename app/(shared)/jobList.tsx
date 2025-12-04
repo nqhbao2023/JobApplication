@@ -11,6 +11,7 @@ import {
   Animated as RNAnimated,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeBack } from "@/hooks/useSafeBack";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { db, auth } from "@/config/firebase";
@@ -313,13 +314,15 @@ const AllJobs = () => {
     fetchData();
   }, []);
 
+  const { goBack } = useSafeBack();
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F9F9FB" }}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />

@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { router } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { auth, db } from '@/config/firebase';
 import {
   collection,
@@ -230,10 +231,12 @@ const Notifications = () => {
     </View>
   );
 
+  const { goBack } = useSafeBack();
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.headerIcon} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.headerIcon} onPress={goBack}>
           <Ionicons name="arrow-back" size={22} color="#0f172a" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Thông báo</Text>

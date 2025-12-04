@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
@@ -29,6 +30,7 @@ const HORIZONTAL_PADDING = 20;
 
 export default function FindCandidates() {
   const router = useRouter();
+  const { goBack } = useSafeBack({ fallback: '/(employer)' });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [candidates, setCandidates] = useState<Job[]>([]);
@@ -268,7 +270,7 @@ export default function FindCandidates() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={goBack}
           >
             <Ionicons name="arrow-back" size={24} color="#0f172a" />
           </TouchableOpacity>
@@ -290,7 +292,7 @@ export default function FindCandidates() {
           style={styles.backButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
+            goBack();
           }}
         >
           <Ionicons name="arrow-back" size={24} color="#0f172a" />

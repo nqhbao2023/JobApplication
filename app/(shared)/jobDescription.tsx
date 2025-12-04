@@ -19,6 +19,7 @@ import { ActivityIndicator } from "react-native-paper";
 import { useRole } from "@/contexts/RoleContext";
 import { useJobDescription } from "@/hooks/useJobDescription";
 import { useJobStatus } from "@/hooks/useJobStatus";
+import { useSafeBack } from "@/hooks/useSafeBack";
 import JobApplySection from "@/components/JobApplySection";
 import * as Haptics from "expo-haptics";
 import { formatSalary } from "@/utils/salary.utils";
@@ -33,6 +34,11 @@ import { SalaryPredictionBadge } from "@/components/job/SalaryPredictionBadge";
 const JobDescription = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [hasFocused, setHasFocused] = useState(false); // Track if already focused once
+  const { role: userRole } = useRole();
+  
+  // ✅ Sử dụng useSafeBack hook để xử lý back navigation thống nhất
+  const { goBack } = useSafeBack();
+  
   const params = useLocalSearchParams<{ 
     jobId?: string; 
     id?: string;
@@ -42,32 +48,6 @@ const JobDescription = () => {
   }>();
   const jobId = (params.jobId || params.id || "") as string;
   const paramsApplicationStatus = params.applicationStatus as string | undefined;
-  const fromScreen = params.from as string | undefined; // ✅ Lưu thông tin trang trước
-  const { role: userRole } = useRole();
-
-  // ✅ Smart back handler - sử dụng thông tin from hoặc fallback theo role
-  const handleGoBack = React.useCallback(() => {
-    // Thử dùng router.back() trước
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    
-    // Nếu có thông tin from, quay về đó
-    if (fromScreen) {
-      router.replace(fromScreen as any);
-      return;
-    }
-    
-    // Fallback: quay về trang chính dựa theo role
-    if (userRole === 'employer') {
-      router.replace('/(employer)/myJobs');
-    } else if (userRole === 'candidate') {
-      router.replace('/(candidate)');
-    } else {
-      router.replace('/');
-    }
-  }, [userRole, fromScreen]);
 
   const {
     jobData,
@@ -203,7 +183,7 @@ const JobDescription = () => {
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={64} color="#FF6B6B" />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
+        <TouchableOpacity style={styles.backButton} onPress={goBack}>
           <Text style={styles.backButtonText}>Quay lại</Text>
         </TouchableOpacity>
       </View>
@@ -226,7 +206,7 @@ const JobDescription = () => {
       <View style={styles.fixedHeader}>
         <TouchableOpacity 
           style={styles.buttons} 
-          onPress={handleGoBack}
+          onPress={goBack}
         >
           <Ionicons name="arrow-back" size={24} />
         </TouchableOpacity>

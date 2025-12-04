@@ -23,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import Slider from '@react-native-community/slider';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
@@ -56,6 +57,7 @@ const COMMON_SKILLS = [
 ];
 
 const StudentProfileSettings = () => {
+  const { goBack } = useSafeBack({ fallback: '/(candidate)/profile' });
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<StudentProfile>({
     availableDays: [],
@@ -131,7 +133,7 @@ const StudentProfileSettings = () => {
       Alert.alert('Thành công', 'Đã lưu thông tin cá nhân', [
         {
           text: 'OK',
-          onPress: () => router.back(),
+          onPress: () => goBack(),
         },
       ]);
     } catch (error: any) {

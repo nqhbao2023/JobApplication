@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/config/firebase";
 import { useRouter } from "expo-router";
+import { useSafeBack } from "@/hooks/useSafeBack";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeIn } from "react-native-reanimated";
 
@@ -139,13 +140,15 @@ export default function CategoriesListScreen() {
     );
   };
 
+  const { goBack } = useSafeBack();
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => router.back()}
+          onPress={goBack}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={22} color="#fff" />

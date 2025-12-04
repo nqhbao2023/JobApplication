@@ -16,6 +16,7 @@ import {
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { searchJobs, isAlgoliaAvailable } from '@/services/algoliaSearch.service';
@@ -344,11 +345,13 @@ export default function SearchResultsPage() {
     return count;
   }, [selectedLocation, selectedRadius, selectedExperience, params.location]);
 
+  const { goBack } = useSafeBack();
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={goBack}>
           <Ionicons name="arrow-back" size={24} color="#1e293b" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>

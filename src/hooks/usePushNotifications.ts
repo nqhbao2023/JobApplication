@@ -70,7 +70,7 @@ export const usePushNotifications = () => {
     if (data.jobId) {
       router.push({
         pathname: '/(shared)/jobDescription',
-        params: { jobId: data.jobId },
+        params: { jobId: data.jobId, from: '/(candidate)' },
       });
     } else if (data.type === 'new_job_match') {
       router.push('/(candidate)');

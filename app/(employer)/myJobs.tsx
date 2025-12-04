@@ -54,11 +54,14 @@ export default function MyJobs() {
     fetchJobs();
   }, [fetchJobs]);
 
-  // ✅ Refresh jobs khi screen được focus (sau khi tạo job mới)
+  // ✅ Chỉ fetch khi cần (không fetch lại khi back từ jobDescription)
   useFocusEffect(
     useCallback(() => {
-      fetchJobs();
-    }, [fetchJobs])
+      // Chỉ fetch lại nếu chưa có data
+      if (jobs.length === 0 && !loading) {
+        fetchJobs();
+      }
+    }, [jobs.length, loading])
   );
 
   /**

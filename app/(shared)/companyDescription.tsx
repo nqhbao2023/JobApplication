@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
+import { useSafeBack } from "@/hooks/useSafeBack";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { db } from "@/config/firebase";
@@ -84,13 +85,15 @@ export default function CompanyDescription() {
       </View>
     );
 
+  const { goBack } = useSafeBack();
+
   return (
   <SafeAreaView style={styles.container}>
     {/* Header */}
     <View style={styles.header}>
       <TouchableOpacity
         style={styles.backBtn}
-        onPress={() => router.back()}
+        onPress={goBack}
         activeOpacity={0.7}
       >
         <Ionicons name="arrow-back" size={22} color="#fff" />

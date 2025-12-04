@@ -27,6 +27,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { CVData, EducationEntry, SkillCategory, ExperienceEntry } from '@/types/cv.types';
 import { cvService } from '@/services/cv.service';
 import { cvExportService } from '@/services/cvExport.service';
@@ -39,6 +40,7 @@ import { CVAnalysisCard } from '@/components/cv/CVAnalysisCard';
 const CVEditorScreen = () => {
   const params = useLocalSearchParams();
   const cvId = params.cvId as string;
+  const { goBack } = useSafeBack({ fallback: '/(candidate)/cvManagement' });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,14 +65,14 @@ const CVEditorScreen = () => {
       const cv = await cvService.loadCV(cvId);
       if (!cv) {
         Alert.alert('Lỗi', 'Không tìm thấy CV');
-        router.back();
+        goBack();
         return;
       }
       setCvData(cv);
     } catch (error) {
       console.error('Error loading CV:', error);
       Alert.alert('Lỗi', 'Không thể tải CV');
-      router.back();
+      goBack();
     } finally {
       setLoading(false);
     }
@@ -86,7 +88,7 @@ const CVEditorScreen = () => {
       await cvService.saveCV(cvData);
       
       Alert.alert('Thành công', 'Đã lưu CV', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: () => goBack() },
       ]);
     } catch (error) {
       console.error('Error saving CV:', error);
@@ -248,7 +250,7 @@ const CVEditorScreen = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={goBack}>
             <Ionicons name="arrow-back" size={24} color="#1e293b" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chỉnh sửa CV</Text>

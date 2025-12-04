@@ -260,10 +260,14 @@ export default function EmployerHome() {
     loadStats();
   }, [loadStats]);
 
+  // ✅ Không auto-reload khi focus, chỉ load nếu chưa có data (tránh reload khi back)
   useFocusEffect(
     useCallback(() => {
-      loadStats();
-    }, [loadStats])
+      // Chỉ load lại nếu chưa có data (lần đầu hoặc data bị clear)
+      if (jobCount === 0 && !loading) {
+        loadStats();
+      }
+    }, [jobCount, loading])
   );
 
   const onRefresh = useCallback(async () => {

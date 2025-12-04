@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { aiApiService } from '@/services/aiApi.service';
 import * as Haptics from 'expo-haptics';
 
@@ -141,6 +142,8 @@ export default function AIAssistant() {
     );
   };
 
+  const { goBack } = useSafeBack();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -148,7 +151,7 @@ export default function AIAssistant() {
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
+            goBack();
           }}
           style={styles.backButton}
         >

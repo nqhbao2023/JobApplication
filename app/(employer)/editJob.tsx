@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeBack } from '@/hooks/useSafeBack';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import DropDownPicker from 'react-native-dropdown-picker';
@@ -106,10 +107,12 @@ export default function EditJob() {
     }
   }, []);
 
+  const { goBack } = useSafeBack({ fallback: '/(employer)/myJobs' });
+
   const fetchJobData = useCallback(async () => {
     if (!jobId) {
       Alert.alert('Lỗi', 'Không tìm thấy ID công việc.');
-      router.back();
+      goBack();
       return;
     }
 
@@ -315,8 +318,8 @@ export default function EditJob() {
         {
           text: 'OK',
           onPress: () => {
-            // ✅ Luôn dùng back() để giữ navigation stack
-            router.back();
+            // ✅ Luôn dùng goBack() để giữ navigation stack
+            goBack();
           },
         },
       ]);
@@ -346,14 +349,7 @@ export default function EditJob() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => {
-            // ✅ Thử back trước, nếu không được thì về myJobs
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(employer)/myJobs');
-            }
-          }} style={styles.backBtn}>
+          <TouchableOpacity onPress={goBack} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#1f2937" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chỉnh sửa công việc</Text>

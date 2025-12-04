@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useSafeBack } from "@/hooks/useSafeBack";
 import * as DocumentPicker from "expo-document-picker";
 import { db, storage, auth } from "@/config/firebase";
 import {
@@ -291,12 +292,13 @@ router.replace({
     return 'Chưa chọn CV';
   };
 
+  const { goBack } = useSafeBack();
   const hasSelectedCV = (cvSource === 'library' && selectedCV) || (cvSource === 'upload' && cvFile);
 
   return (
     <View style={styles.container}>
       <View style={styles.top}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+        <TouchableOpacity onPress={goBack} style={styles.back}>
           <Ionicons name="arrow-back" size={24} />
         </TouchableOpacity>
         <Text style={styles.title}>Hồ sơ & Portfolio</Text>

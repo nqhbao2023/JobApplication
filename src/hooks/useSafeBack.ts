@@ -2,15 +2,14 @@
  * useSafeBack - Custom hook để xử lý back navigation an toàn
  * 
  * Vấn đề: Khi navigate giữa các tab groups khác nhau trong expo-router,
- * router.canGoBack() có thể trả về false vì navigation stack bị reset.
+ * router.canGoBack() có thể trả về true nhưng back() không quay về đúng trang.
  * 
  * Giải pháp: 
- * - Sử dụng `from` param để track nguồn gốc navigation
- * - Fallback về router.back() nếu có history
- * - Cuối cùng fallback về home dựa trên role
+ * - Sử dụng `from` param để track nguồn gốc navigation khi cross-tab
+ * - Fallback về home dựa trên role
  */
-import { useCallback } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useEffect } from 'react';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useRole } from '@/contexts/RoleContext';
 
 interface UseSafeBackOptions {
@@ -34,13 +33,24 @@ export const useSafeBack = (options?: UseSafeBackOptions) => {
   // Lấy params từ hook nếu không được truyền explicitly
   const searchParams = useLocalSearchParams<{ from?: string }>();
   const fromParam = options?.from ?? searchParams.from;
+  const segments = useSegments();
+  
+  // Debounce để tránh double navigation
+  const lastNavigationTimeRef = useRef(0);
 
   const goBack = useCallback(() => {
-    // Debug log
+    // Debounce: prevent rapid navigation calls (within 300ms)
+    const now = Date.now();
+    if (now - lastNavigationTimeRef.current < 300) {
+      console.log('[useSafeBack] Debounced - too soon since last navigation');
+      return;
+    }
+    lastNavigationTimeRef.current = now;
+    
     const canBack = router.canGoBack();
     console.log('[useSafeBack] canGoBack:', canBack, '| from param:', fromParam, '| role:', userRole);
     
-    // ✅ Ưu tiên 1: LUÔN dùng router.back() nếu có history
+    // ✅ Ưu tiên 1: Dùng router.back() nếu có history
     // Đây là cách navigation tự nhiên nhất, animation sẽ đúng hướng
     if (canBack) {
       console.log('[useSafeBack] Using router.back()');

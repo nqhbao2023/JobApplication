@@ -113,6 +113,7 @@ export const API_ENDPOINTS = {
     update: (id: string) => `/api/applications/${id}`,
     updateStatus: (id: string) => `/api/applications/${id}/status`,
     withdraw: (id: string) => `/api/applications/${id}`,
+    delete: (id: string) => `/api/applications/${id}/permanent`,
   },
   auth: {
     verify: '/api/auth/verify',

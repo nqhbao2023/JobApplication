@@ -157,7 +157,8 @@ export default function AppliedJob() {
   // Handle delete application for deleted jobs
   const handleDeleteApplication = useCallback(async (applicationId: string) => {
     try {
-      await applicationApiService.withdrawApplication(applicationId);
+      // Use permanent delete API instead of withdraw (which only updates status)
+      await applicationApiService.deleteApplication(applicationId);
       // Remove from local state immediately
       setApplications(prev => prev.filter(app => app.$id !== applicationId));
       Alert.alert('Thành công', 'Đã xóa hồ sơ ứng tuyển');

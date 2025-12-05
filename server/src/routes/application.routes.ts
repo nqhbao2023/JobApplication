@@ -10,6 +10,7 @@ import {
   updateApplication,
   updateApplicationStatus,
   withdrawApplication,
+  deleteApplication,
 } from '../controllers/application.controller';
 import { createApplicationSchema } from '../validators/application.validator';
 
@@ -22,6 +23,8 @@ router.get('/job/:jobId', authenticate, authorize('employer', 'admin'), getJobAp
 router.patch('/:id', authenticate, authorize('candidate'), updateApplication);
 router.patch('/:id/status', authenticate, authorize('employer', 'admin'), updateApplicationStatus);
 router.delete('/:id', authenticate, authorize('candidate'), withdrawApplication);
+// New route for permanent deletion (for deleted jobs)
+router.delete('/:id/permanent', authenticate, authorize('candidate'), deleteApplication);
 
 export default router;
 

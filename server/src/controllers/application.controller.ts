@@ -123,3 +123,22 @@ export const withdrawApplication = async (
   }
 };
 
+/**
+ * Permanently delete an application (for deleted jobs or cleanup)
+ */
+export const deleteApplication = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const candidateId = req.user!.uid;
+
+    await applicationService.deleteApplication(id, candidateId);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+

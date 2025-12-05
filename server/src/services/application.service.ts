@@ -359,6 +359,32 @@ export class ApplicationService {
       throw new AppError(`Failed to withdraw application: ${error.message}`, 500);
     }
   }
+
+  /**
+   * Permanently delete an application (for deleted jobs or cleanup)
+   * Different from withdraw - this actually removes the document
+   */
+  async deleteApplication(applicationId: string, candidateId: string): Promise<void> {
+    try {
+      const appRef = db.collection(APPLICATIONS_COLLECTION).doc(applicationId);
+      const doc = await appRef.get();
+
+      if (!doc.exists) {
+        throw new AppError('Application not found', 404);
+      }
+
+      const appData = doc.data();
+      if (appData?.candidateId !== candidateId) {
+        throw new AppError('Unauthorized to delete this application', 403);
+      }
+
+      // Actually delete the document
+      await appRef.delete();
+    } catch (error: any) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(`Failed to delete application: ${error.message}`, 500);
+    }
+  }
 }
 
 export default new ApplicationService();

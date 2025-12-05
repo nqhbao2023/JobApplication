@@ -36,9 +36,6 @@ const JobDescription = () => {
   const [hasFocused, setHasFocused] = useState(false); // Track if already focused once
   const { role: userRole } = useRole();
   
-  // ✅ Sử dụng useSafeBack hook để xử lý back navigation thống nhất
-  const { goBack } = useSafeBack();
-  
   const params = useLocalSearchParams<{ 
     jobId?: string; 
     id?: string;
@@ -48,6 +45,9 @@ const JobDescription = () => {
   }>();
   const jobId = (params.jobId || params.id || "") as string;
   const paramsApplicationStatus = params.applicationStatus as string | undefined;
+  
+  // ✅ Sử dụng useSafeBack hook với from param được truyền explicitly
+  const { goBack } = useSafeBack({ from: params.from });
 
   const {
     jobData,

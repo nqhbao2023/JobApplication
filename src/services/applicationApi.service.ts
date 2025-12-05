@@ -61,5 +61,13 @@ export const applicationApiService = {
   async withdrawApplication(id: string): Promise<void> {
     return apiClient.delete<void>(API_ENDPOINTS.applications.withdraw(id));
   },
+
+  /**
+   * Permanently delete an application (for deleted jobs or cleanup)
+   * Different from withdraw - this actually removes the document
+   */
+  async deleteApplication(id: string): Promise<void> {
+    return apiClient.delete<void>(API_ENDPOINTS.applications.delete(id));
+  },
 };
 

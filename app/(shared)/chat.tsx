@@ -33,6 +33,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "@/config/firebase";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeBack } from "@/hooks/useSafeBack";
 
 dayjs.extend(relativeTime);
 
@@ -121,6 +122,7 @@ const Chat = () => {
     partnerId?: string | string[];   // 👈 UID đối phương (bắt buộc nếu không truyền chatId)
     partnerName?: string | string[]; // 👈 tên hiển thị đối phương (tuỳ chọn)
     role?: "Recruiter" | "Candidate" | string | string[];
+    from?: string | string[]; // 👈 Track where user came from for safe back navigation
   }>();
 
   // Chuẩn hoá tham số
@@ -128,6 +130,10 @@ const Chat = () => {
   const partnerId = asStr(params.partnerId);
   const partnerName = asStr(params.partnerName) ?? "Chat";
   const myRole = (asStr(params.role) as "Recruiter" | "Candidate") ?? "Candidate";
+  const fromParam = asStr(params.from);
+
+  // ✅ Sử dụng useSafeBack hook để xử lý back navigation an toàn
+  const { goBack } = useSafeBack({ from: fromParam, fallback: '/(shared)/chatList' });
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<MessageType[]>([]);
@@ -277,12 +283,8 @@ const Chat = () => {
 
   const handleBackPress = useCallback(() => {
     Keyboard.dismiss(); // Dismiss keyboard trước khi back
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      router.replace('/(shared)/chatList');
-    }
-  }, [navigation, router]);
+    goBack();
+  }, [goBack]);
 
   // Cleanup keyboard khi unmount
   useEffect(() => {

@@ -326,7 +326,7 @@ const CVEditorScreen = () => {
                     onChangeText={(text) => updatePersonalInfo('address', text)}
                     placeholder="Thành phố Thủ Dầu Một, Bình Dương"
                   />
-                  <Text style={styles.hint}>💡 Gợi ý tự động 63 tỉnh thành VN</Text>
+                  <Text style={styles.hint}>63 tỉnh thành VN</Text>
                 </View>
               </View>
             )}

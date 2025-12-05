@@ -155,6 +155,7 @@ const JobDescription = () => {
         partnerName: employerName,
         role: "Candidate",
         jobId: jobId, // Optional: để context về job nào
+        from: "/(shared)/jobDescription",
       },
     });
   }, [jobData, companyData, jobId]);

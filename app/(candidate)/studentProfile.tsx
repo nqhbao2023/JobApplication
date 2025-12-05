@@ -32,6 +32,7 @@ import { authApiService } from '@/services/authApi.service';
 import { StudentProfile } from '@/types';
 import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { DrawerMenuButton } from '@/components/candidate/DrawerMenu';
+import { eventBus, EVENTS } from '@/utils/eventBus';
 
 const DAYS_OF_WEEK = [
   { key: 'monday', label: 'T2', fullName: 'Thứ 2' },
@@ -128,6 +129,13 @@ const StudentProfileSettings = () => {
       // Update user profile in Firestore
       await authApiService.updateProfile({
         studentProfile: updatedProfile,
+      });
+
+      // ✅ Emit event để các component khác biết profile đã update
+      // Điều này giúp trang chủ và jobList refresh ngay lập tức
+      eventBus.emit(EVENTS.PROFILE_UPDATED, {
+        profile: updatedProfile,
+        timestamp: Date.now(),
       });
 
       Alert.alert('Thành công', 'Đã lưu thông tin cá nhân', [

@@ -66,7 +66,7 @@ export const EducationSection: React.FC<EducationSectionProps> = ({
               onChangeText={(text) => onUpdate(edu.id, 'school', text)}
               placeholder="Bắt đầu nhập tên trường..."
             />
-            <Text style={styles.hint}>💡 Gợi ý tự động khi bạn nhập</Text>
+            <Text style={styles.hint}>Gợi ý tự động khi bạn nhập</Text>
           </View>
 
           {/* Degree - with picker */}

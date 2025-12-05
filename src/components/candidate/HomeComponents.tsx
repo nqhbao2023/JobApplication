@@ -153,11 +153,13 @@ export const JobCard = memo(({
   company,
   matchScore,
   isHighMatch,
+  showMatchScore = false,
 }: {
   item: Job;
   company?: Company;
   matchScore?: JobMatchScore;
   isHighMatch?: boolean;
+  showMatchScore?: boolean;
 }) => {
   // Determine the best image to display
   // Priority: item.image (employer uploaded) > item.company_logo (viecoi/crawled) > company.image > placeholder
@@ -220,11 +222,20 @@ export const JobCard = memo(({
       cachePolicy="memory-disk"
       recyclingKey={item.$id}
     />
-    {/* High Match Badge */}
-    {isHighMatch && (
-      <View style={styles.highMatchBadge}>
-        <Ionicons name="star" size={12} color="#fff" />
-        <Text style={styles.highMatchText}>Phù hợp {Math.round((matchScore?.totalScore || 0) * 100)}%</Text>
+    {/* Match Score Badge - Show only when showMatchScore is true */}
+    {showMatchScore && matchScore && matchScore.totalScore > 0 && (
+      <View style={[
+        styles.highMatchBadge, 
+        !isHighMatch && styles.mediumMatchBadge
+      ]}>
+        <Ionicons 
+          name={isHighMatch ? "star" : "checkmark-circle"} 
+          size={12} 
+          color="#fff" 
+        />
+        <Text style={styles.highMatchText}>
+          Phù hợp {Math.round(matchScore.totalScore * 100)}%
+        </Text>
       </View>
     )}
     {/* Badge for external jobs */}
@@ -615,6 +626,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  // ✅ NEW: Medium match badge (for jobs with score < 60%)
+  mediumMatchBadge: {
+    backgroundColor: '#f59e0b',
   },
   highMatchText: {
     color: '#fff',

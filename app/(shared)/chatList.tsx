@@ -78,6 +78,7 @@ export default function ChatList() {
           partnerId,
           partnerName,
           role: viewerRole === "candidate" ? "Candidate" : "Recruiter",
+          from: "/(shared)/chatList",
         },
       });
     },

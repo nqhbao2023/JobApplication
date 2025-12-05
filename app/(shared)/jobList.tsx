@@ -21,6 +21,9 @@ import { authApiService } from "@/services/authApi.service";
 import { StudentProfile, Job as JobTypeFromTypes } from "@/types";
 import { useStudentFilters } from "@/hooks/useStudentFilters";
 import { eventBus, EVENTS } from "@/utils/eventBus";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const PROFILE_FILTER_ACTIVE_KEY = '@profile_filter_active';
 
 type Job = {
   $id: string;
@@ -51,6 +54,90 @@ type JobType = {
   type_name: string;
 };
 
+// ✅ Category mappings for slug matching (used in both filteredJobs and sortedJobs)
+const CATEGORY_MAPPINGS: Record<string, string[]> = {
+  'công nghệ thông tin': ['it-software', 'it', 'software', 'tech', 'cntt', 'công nghệ'],
+  'kế toán / kiểm toán': ['finance', 'accounting', 'ke-toan', 'kiem-toan', 'kế toán'],
+  'marketing / truyền thông': ['marketing', 'pr', 'truyen-thong', 'digital-marketing'],
+  'bán hàng / kinh doanh': ['sales', 'business', 'kinh-doanh', 'ban-hang'],
+  'nhân sự': ['hr', 'human-resource', 'nhan-su', 'tuyen-dung'],
+  'thiết kế đồ họa': ['design', 'graphic', 'thiet-ke', 'ui-ux', 'uiux'],
+  'ẩm thực / f&b': ['f&b', 'fb', 'food', 'restaurant', 'am-thuc', 'nha-hang'],
+  'du lịch / khách sạn': ['hospitality', 'hotel', 'tourism', 'du-lich', 'khach-san'],
+  'xây dựng / kiến trúc': ['construction', 'xay-dung', 'kien-truc', 'building'],
+  'giáo dục / đào tạo': ['education', 'giao-duc', 'dao-tao', 'teacher', 'giang-vien'],
+  'bảo hiểm': ['insurance', 'bao-hiem'],
+  'logistics / vận tải': ['logistics', 'shipping', 'van-tai', 'giao-hang'],
+  'y tế / dược': ['healthcare', 'medical', 'y-te', 'duoc', 'pharmacy'],
+  'hành chính / văn phòng': ['admin', 'office', 'hanh-chinh', 'van-phong'],
+  'dịch vụ khách hàng': ['customer-service', 'cskh', 'support', 'call-center'],
+  'khác': ['other', 'khac', 'general'],
+};
+
+// ✅ Helper: Check if job matches category
+const jobMatchesCategory = (job: any, activeCategory: string, activeCatName: string): boolean => {
+  if (activeCategory === "all") return true;
+  
+  const activeCatId = activeCategory.toLowerCase();
+  
+  // Method 1: Direct ID match
+  const jobCatId = job.jobCategoryId || job.jobCategories?.$id || job.jobCategories?.id ||
+                  (typeof job.jobCategories === "string" ? job.jobCategories : "");
+  if (jobCatId === activeCategory) return true;
+  
+  // Method 2: Match category_name directly
+  const jobCatName = (job.jobCategories?.category_name || '').toLowerCase();
+  if (jobCatName && activeCatName && jobCatName === activeCatName) return true;
+  
+  // Method 3: Match by slug/name patterns (for crawled jobs like viecoi)
+  const jobCatSlug = (typeof job.jobCategories === "string" ? job.jobCategories : job.jobCategoryId || '').toLowerCase();
+  
+  if (jobCatSlug && activeCatName) {
+    // Check if the job's category slug matches any pattern for the selected category
+    const patterns = CATEGORY_MAPPINGS[activeCatName] || [];
+    if (patterns.some(pattern => jobCatSlug.includes(pattern) || pattern.includes(jobCatSlug))) {
+      return true;
+    }
+    
+    // Also check reverse - if selected category ID matches job's category name
+    const reversePatterns = Object.entries(CATEGORY_MAPPINGS)
+      .filter(([_, slugs]) => slugs.includes(activeCatId))
+      .map(([name]) => name);
+    if (reversePatterns.some(name => jobCatName.includes(name) || name.includes(jobCatName))) {
+      return true;
+    }
+  }
+  
+  return false;
+};
+
+// ✅ Helper: Check if job matches type
+const jobMatchesType = (job: any, activeType: string, activeTypeName: string): boolean => {
+  if (activeType === "all") return true;
+  
+  // Method 1: Direct ID match
+  const jobTypeId = job.jobTypeId || job.jobTypes?.$id || job.jobTypes?.id ||
+                   (typeof job.jobTypes === "string" ? job.jobTypes : "");
+  if (jobTypeId === activeType) return true;
+  
+  // Method 2: Match viecoi job_type_id with type_name
+  const vieoiTypeId = job.job_type_id?.toLowerCase() || '';
+  if (vieoiTypeId && activeTypeName) {
+    if (vieoiTypeId === activeTypeName ||
+        vieoiTypeId.replace(/-/g, ' ') === activeTypeName.replace(/-/g, ' ') ||
+        vieoiTypeId.includes(activeTypeName) ||
+        activeTypeName.includes(vieoiTypeId)) {
+      return true;
+    }
+  }
+  
+  // Method 3: Match type_name directly
+  const jobTypeName = (job.jobTypes?.type_name || '').toLowerCase();
+  if (jobTypeName && activeTypeName && jobTypeName === activeTypeName) return true;
+  
+  return false;
+};
+
 const AllJobs = () => {
   const router = useRouter();
   const params = useLocalSearchParams<{ filterActive?: string }>();
@@ -59,16 +146,61 @@ const AllJobs = () => {
   const [types, setTypes] = useState<JobType[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [activeType, setActiveType] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"newest" | "salary">("newest");
+  const [sortBy, setSortBy] = useState<"newest" | "salary" | "match">("newest");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
+  // ✅ NEW: Pagination - hiển thị 10 jobs mỗi lần
+  const JOBS_PER_PAGE = 10;
+  const [visibleCount, setVisibleCount] = useState(JOBS_PER_PAGE);
+  
   // ✅ NEW: Student profile filter integration
   const [studentProfile, setStudentProfile] = useState<StudentProfile | undefined>();
-  const [profileFilterEnabled, setProfileFilterEnabled] = useState(params.filterActive === 'true');
+  // ✅ FIX: Initialize as undefined, will be set from AsyncStorage or params
+  const [profileFilterEnabled, setProfileFilterEnabled] = useState<boolean | undefined>(undefined);
   
   // Animation refs for each job card
   const fadeAnims = React.useRef<RNAnimated.Value[]>([]).current;
+
+  // ✅ FIX: Load persisted profile filter state from AsyncStorage on mount
+  // This ensures sync between home page and jobList page
+  useEffect(() => {
+    const loadPersistedFilterState = async () => {
+      try {
+        // If URL param is provided, use it (navigation from home with filter active)
+        if (params.filterActive === 'true') {
+          setProfileFilterEnabled(true);
+          return;
+        }
+        
+        // Otherwise, load from AsyncStorage to sync with home page state
+        const savedActive = await AsyncStorage.getItem(PROFILE_FILTER_ACTIVE_KEY);
+        if (savedActive !== null) {
+          setProfileFilterEnabled(JSON.parse(savedActive));
+        } else {
+          setProfileFilterEnabled(false);
+        }
+      } catch (error) {
+        console.error('Error loading filter state:', error);
+        setProfileFilterEnabled(false);
+      }
+    };
+    loadPersistedFilterState();
+  }, [params.filterActive]);
+
+  // ✅ NEW: Listen for FILTER_CHANGED events from home page
+  useEffect(() => {
+    const unsubscribe = eventBus.on(EVENTS.FILTER_CHANGED, (data) => {
+      if (typeof data?.active === 'boolean') {
+        setProfileFilterEnabled(data.active);
+        // Reset sortBy if filter is turned off and currently on "match"
+        if (!data.active && sortBy === "match") {
+          setSortBy("newest");
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [sortBy]);
 
   // ✅ Load student profile on mount
   useEffect(() => {
@@ -137,6 +269,17 @@ const AllJobs = () => {
             // FILTER 2: Exclude current user's own job posts
             const jobPosterId = jobData.posterId || jobData.employerId || jobData.ownerId;
             if (currentUserId && jobPosterId === currentUserId) {
+              return null;
+            }
+            
+            // ✅ FILTER 3: Only show approved/active jobs (exclude pending/rejected)
+            // Jobs from external sources (viecoi) don't need approval - always show them
+            const jobStatus = jobData.status?.toLowerCase();
+            const isExternalJob = jobData.source === 'viecoi' || jobData.external_url;
+            
+            // External jobs (viecoi crawled) always pass - they don't need approval
+            // Internal jobs must be approved or active
+            if (!isExternalJob && jobStatus && jobStatus !== 'approved' && jobStatus !== 'active') {
               return null;
             }
 
@@ -290,114 +433,19 @@ const AllJobs = () => {
   // Memoized filtered & sorted jobs with fixed logic
   const filteredJobs = useMemo(() => {
     let result = [...jobs];
+    
+    // Get active category/type names for matching
+    const activeCatName = categories.find(c => c.$id === activeCategory)?.category_name?.toLowerCase() || '';
+    const activeTypeName = types.find(t => t.$id === activeType)?.type_name?.toLowerCase() || '';
 
-    // 1. Filter by category - ✅ FIX: Support multiple matching methods
-    // - Match by categoryId (document ID)
-    // - Match by category_name (for display matching)
-    // - Match by slug patterns (for crawled jobs)
+    // 1. Filter by category using helper
     if (activeCategory !== "all") {
-      // Get the active category's name for text matching
-      const activeCat = categories.find(c => c.$id === activeCategory);
-      const activeCatName = activeCat?.category_name?.toLowerCase() || '';
-      const activeCatId = activeCategory.toLowerCase();
-      
-      result = result.filter((job) => {
-        // Method 1: Direct ID match (for employer jobs with document references)
-        const jobCatId = (job as any).jobCategoryId || 
-                        (job.jobCategories?.$id) || 
-                        (job.jobCategories?.id) ||
-                        (typeof job.jobCategories === "string" ? job.jobCategories : "");
-        if (jobCatId === activeCategory) return true;
-        
-        // Method 2: Match category_name directly (for jobs with embedded category object)
-        const jobCatName = (job.jobCategories?.category_name || '').toLowerCase();
-        if (jobCatName && activeCatName && jobCatName === activeCatName) {
-          return true;
-        }
-        
-        // Method 3: Match by slug/name patterns (for crawled jobs like viecoi)
-        // e.g., "it-software" should match "Công nghệ thông tin"
-        const jobCatSlug = (typeof job.jobCategories === "string" ? job.jobCategories : 
-                          (job as any).jobCategoryId || '').toLowerCase();
-        
-        if (jobCatSlug && activeCatName) {
-          // Create mapping for common categories
-          const categoryMappings: Record<string, string[]> = {
-            'công nghệ thông tin': ['it-software', 'it', 'software', 'tech', 'cntt', 'công nghệ'],
-            'kế toán / kiểm toán': ['finance', 'accounting', 'ke-toan', 'kiem-toan', 'kế toán'],
-            'marketing / truyền thông': ['marketing', 'pr', 'truyen-thong', 'digital-marketing'],
-            'bán hàng / kinh doanh': ['sales', 'business', 'kinh-doanh', 'ban-hang'],
-            'nhân sự': ['hr', 'human-resource', 'nhan-su', 'tuyen-dung'],
-            'thiết kế đồ họa': ['design', 'graphic', 'thiet-ke', 'ui-ux', 'uiux'],
-            'ẩm thực / f&b': ['f&b', 'fb', 'food', 'restaurant', 'am-thuc', 'nha-hang'],
-            'du lịch / khách sạn': ['hospitality', 'hotel', 'tourism', 'du-lich', 'khach-san'],
-            'xây dựng / kiến trúc': ['construction', 'xay-dung', 'kien-truc', 'building'],
-            'giáo dục / đào tạo': ['education', 'giao-duc', 'dao-tao', 'teacher', 'giang-vien'],
-            'bảo hiểm': ['insurance', 'bao-hiem'],
-            'logistics / vận tải': ['logistics', 'shipping', 'van-tai', 'giao-hang'],
-            'y tế / dược': ['healthcare', 'medical', 'y-te', 'duoc', 'pharmacy'],
-            'hành chính / văn phòng': ['admin', 'office', 'hanh-chinh', 'van-phong'],
-            'dịch vụ khách hàng': ['customer-service', 'cskh', 'support', 'call-center'],
-            'khác': ['other', 'khac', 'general'],
-          };
-          
-          // Check if the job's category slug matches any pattern for the selected category
-          const patterns = categoryMappings[activeCatName] || [];
-          if (patterns.some(pattern => 
-            jobCatSlug.includes(pattern) || pattern.includes(jobCatSlug)
-          )) {
-            return true;
-          }
-          
-          // Also check reverse - if selected category ID matches job's category name
-          const reversePatterns = Object.entries(categoryMappings)
-            .filter(([_, slugs]) => slugs.includes(activeCatId))
-            .map(([name]) => name);
-          if (reversePatterns.some(name => jobCatName.includes(name) || name.includes(jobCatName))) {
-            return true;
-          }
-        }
-        
-        return false;
-      });
+      result = result.filter((job) => jobMatchesCategory(job, activeCategory, activeCatName));
     }
 
-    // 2. Filter by type - ✅ FIX: Support multiple matching methods
-    // - Match by typeId (for employer jobs with references)
-    // - Match by type_name (for both employer & viecoi jobs)
-    // - Match by job_type_id string slug (for viecoi crawled jobs)
+    // 2. Filter by type using helper
     if (activeType !== "all") {
-      // Find the active type's name for text matching
-      const activeTypeName = types.find(t => t.$id === activeType)?.type_name?.toLowerCase() || '';
-      
-      result = result.filter((job) => {
-        // Method 1: Direct ID match
-        const jobTypeId = (job as any).jobTypeId || 
-                         (job.jobTypes?.$id) || 
-                         (job.jobTypes?.id) ||
-                         (typeof job.jobTypes === "string" ? job.jobTypes : "");
-        if (jobTypeId === activeType) return true;
-        
-        // Method 2: Match viecoi job_type_id with type_name (e.g., 'internship' matches 'Internship')
-        const vieoiTypeId = (job as any).job_type_id?.toLowerCase() || '';
-        if (vieoiTypeId && activeTypeName) {
-          // Normalize for comparison: 'part-time' vs 'Part-time', 'internship' vs 'Internship'
-          if (vieoiTypeId === activeTypeName ||
-              vieoiTypeId.replace(/-/g, ' ') === activeTypeName.replace(/-/g, ' ') ||
-              vieoiTypeId.includes(activeTypeName) ||
-              activeTypeName.includes(vieoiTypeId)) {
-            return true;
-          }
-        }
-        
-        // Method 3: Match type_name directly
-        const jobTypeName = (job.jobTypes?.type_name || '').toLowerCase();
-        if (jobTypeName && activeTypeName && jobTypeName === activeTypeName) {
-          return true;
-        }
-        
-        return false;
-      });
+      result = result.filter((job) => jobMatchesType(job, activeType, activeTypeName));
     }
 
     // 3. Sort
@@ -423,36 +471,127 @@ const AllJobs = () => {
     return result;
   }, [jobs, activeCategory, activeType, sortBy, types, categories]);
 
-  // ✅ NEW: Apply student profile filter using useStudentFilters hook
+  // ✅ FIX: Apply student profile filter using useStudentFilters hook
+  // Truyền TOÀN BỘ jobs (không qua category/type filter) để hook tính matchScore chính xác
+  // Category/type filter sẽ được áp dụng SAU khi đã có matchScore
   const {
     filteredJobs: profileFilteredJobs,
     profileFilterActive,
     handleProfileFilterToggle,
     matchedJobsCount,
+    totalJobsCount,
   } = useStudentFilters(
-    filteredJobs as unknown as JobTypeFromTypes[],
+    jobs as unknown as JobTypeFromTypes[], // ✅ FIX: Truyền toàn bộ jobs thay vì filteredJobs
     studentProfile
   );
 
-  // ✅ FIX: Use local profileFilterEnabled state as the source of truth
-  // profileFilterActive from hook may have async delay from AsyncStorage
-  const displayJobs = useMemo(() => {
-    // When profile filter is enabled AND we have filtered results
-    if (profileFilterEnabled && profileFilteredJobs.length > 0) {
-      return profileFilteredJobs;
-    }
-    // When profile filter is enabled but no results (show empty or fallback)
+  // ✅ FIX: Combine category/type filter + profile filter + sorting
+  const sortedJobs = useMemo(() => {
+    let result: any[] = [];
+    
+    // Get active category/type names for matching
+    const activeCatName = categories.find(c => c.$id === activeCategory)?.category_name?.toLowerCase() || '';
+    const activeTypeName = types.find(t => t.$id === activeType)?.type_name?.toLowerCase() || '';
+    
+    // When profile filter is enabled, start from profileFilteredJobs (has matchScore)
+    // Then apply category/type filters ON TOP of profile filter
     if (profileFilterEnabled && studentProfile) {
-      return profileFilteredJobs; // May be empty array
+      result = [...profileFilteredJobs];
+      
+      // ✅ FIX: Apply category filter using helper
+      if (activeCategory !== "all") {
+        result = result.filter((job: any) => jobMatchesCategory(job, activeCategory, activeCatName));
+      }
+      
+      // ✅ FIX: Apply type filter using helper
+      if (activeType !== "all") {
+        result = result.filter((job: any) => jobMatchesType(job, activeType, activeTypeName));
+      }
+    } else {
+      // Khi tắt profile filter: dùng filteredJobs (đã qua category/type filter)
+      result = [...filteredJobs];
     }
-    return filteredJobs;
-  }, [profileFilterEnabled, profileFilteredJobs, filteredJobs, studentProfile]);
+    
+    // ✅ FIX: Apply sorting - giữ nguyên matchScore
+    if (sortBy === "newest") {
+      result.sort((a, b) => {
+        const aTime = (a as any).createdAt?.toMillis?.() || (a as any).createdAt?.seconds * 1000 || 0;
+        const bTime = (b as any).createdAt?.toMillis?.() || (b as any).createdAt?.seconds * 1000 || 0;
+        return bTime - aTime;
+      });
+    } else if (sortBy === "salary") {
+      result.sort((a, b) => {
+        const getSalaryValue = (job: any) => {
+          if (typeof job.salary === "object" && job.salary?.max) return job.salary.max;
+          if (job.salary_max) return job.salary_max;
+          if (job.salary_min) return job.salary_min;
+          if (job.salary_text) {
+            const match = job.salary_text.match(/(\d+)/g);
+            if (match && match.length > 0) {
+              return parseInt(match[match.length - 1]) * (job.salary_text.includes('triệu') ? 1000000 : 1);
+            }
+          }
+          return 0;
+        };
+        return getSalaryValue(b) - getSalaryValue(a);
+      });
+    } else if (sortBy === "match") {
+      // Sort by match score (highest first)
+      result.sort((a, b) => {
+        const aScore = (a as any).matchScore?.totalScore || 0;
+        const bScore = (b as any).matchScore?.totalScore || 0;
+        return bScore - aScore;
+      });
+    }
+    
+    return result;
+  }, [profileFilterEnabled, profileFilteredJobs, filteredJobs, studentProfile, sortBy, activeCategory, activeType, categories, types]);
 
-  // ✅ Toggle profile filter
-  const toggleProfileFilter = useCallback((value: boolean) => {
+  // ✅ NEW: Apply pagination - khi bật filter thì hiển thị tất cả jobs phù hợp, khi tắt thì phân trang
+  const displayJobs = useMemo(() => {
+    // ✅ FIX: Treat undefined as false (filter OFF)
+    const filterEnabled = profileFilterEnabled === true;
+    
+    // Khi bật lọc theo hồ sơ: hiển thị TẤT CẢ công việc phù hợp
+    if (filterEnabled && studentProfile) {
+      return sortedJobs;
+    }
+    // Khi tắt lọc hoặc chưa load xong: hiển thị theo pagination
+    return sortedJobs.slice(0, visibleCount);
+  }, [sortedJobs, visibleCount, profileFilterEnabled, studentProfile]);
+
+  // ✅ NEW: Reset visible count khi thay đổi filter
+  useEffect(() => {
+    setVisibleCount(JOBS_PER_PAGE);
+  }, [activeCategory, activeType, profileFilterEnabled]);
+
+  // ✅ NEW: Kiểm tra còn jobs để load thêm không
+  // ✅ FIX: Treat undefined as false (filter OFF)
+  const hasMoreJobs = profileFilterEnabled !== true && visibleCount < sortedJobs.length;
+
+  // ✅ NEW: Load thêm jobs
+  const handleLoadMore = useCallback(() => {
+    setVisibleCount(prev => prev + JOBS_PER_PAGE);
+  }, []);
+
+  // ✅ FIX: Toggle profile filter - sync với hook và persist to AsyncStorage
+  const toggleProfileFilter = useCallback(async (value: boolean) => {
     setProfileFilterEnabled(value);
     handleProfileFilterToggle(value);
-  }, [handleProfileFilterToggle]);
+    
+    // ✅ Persist to AsyncStorage so other pages stay in sync
+    try {
+      await AsyncStorage.setItem(PROFILE_FILTER_ACTIVE_KEY, JSON.stringify(value));
+    } catch (error) {
+      console.error('Error saving filter state:', error);
+    }
+    
+    // ✅ FIX: Reset sortBy to "newest" when turning OFF profile filter
+    // This prevents "match" sort from persisting when it's no longer available
+    if (!value && sortBy === "match") {
+      setSortBy("newest");
+    }
+  }, [handleProfileFilterToggle, sortBy]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -463,12 +602,7 @@ const AllJobs = () => {
     fetchData();
   }, []);
 
-  // ✅ Auto-enable filter when navigated from home with filterActive param
-  useEffect(() => {
-    if (params.filterActive === 'true' && studentProfile) {
-      toggleProfileFilter(true);
-    }
-  }, [params.filterActive, studentProfile]);
+  // ✅ REMOVED: Old auto-enable effect - now handled in loadPersistedFilterState useEffect
 
   const { goBack } = useSafeBack();
 
@@ -496,34 +630,34 @@ const AllJobs = () => {
         </View>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* ✅ NEW: Profile Filter Toggle */}
+          {/* ✅ FIX: Profile Filter Toggle - hiển thị đúng matchedJobsCount từ hook */}
           {studentProfile && (
             <View style={styles.profileFilterRow}>
               <View style={styles.profileFilterLeft}>
                 <Ionicons 
-                  name={profileFilterEnabled ? "filter" : "filter-outline"} 
+                  name={profileFilterEnabled === true ? "filter" : "filter-outline"} 
                   size={18} 
-                  color={profileFilterEnabled ? "#4A80F0" : "#64748b"} 
+                  color={profileFilterEnabled === true ? "#4A80F0" : "#64748b"} 
                 />
                 <Text style={[
                   styles.profileFilterText,
-                  profileFilterEnabled && styles.profileFilterTextActive
+                  profileFilterEnabled === true && styles.profileFilterTextActive
                 ]}>
                   Lọc theo hồ sơ
                 </Text>
-                {profileFilterEnabled && (
-                  <View style={styles.matchBadge}>
-                    <Text style={styles.matchBadgeText}>
+                {profileFilterEnabled === true && (
+                  <View style={styles.filterMatchBadge}>
+                    <Text style={styles.filterMatchBadgeText}>
                       {matchedJobsCount} phù hợp
                     </Text>
                   </View>
                 )}
               </View>
               <Switch
-                value={profileFilterEnabled}
+                value={profileFilterEnabled === true}
                 onValueChange={toggleProfileFilter}
                 trackColor={{ false: '#e2e8f0', true: '#93c5fd' }}
-                thumbColor={profileFilterEnabled ? '#4A80F0' : '#f4f4f5'}
+                thumbColor={profileFilterEnabled === true ? '#4A80F0' : '#f4f4f5'}
               />
             </View>
           )}
@@ -531,8 +665,14 @@ const AllJobs = () => {
           {/* Filter Stats & Sort */}
           <View style={styles.filterStatsRow}>
             <Text style={styles.filterStatsText}>
-              {displayJobs.length} công việc
-              {activeCategory !== "all" || activeType !== "all" || profileFilterEnabled ? " phù hợp" : ""}
+              {profileFilterEnabled === true 
+                ? (activeCategory !== "all" || activeType !== "all")
+                  ? `${sortedJobs.length}/${matchedJobsCount} công việc phù hợp (đã lọc thêm)`
+                  : `${matchedJobsCount} công việc phù hợp`
+                : (activeCategory !== "all" || activeType !== "all")
+                  ? `${sortedJobs.length}/${jobs.length} công việc (đã lọc)`
+                  : `${jobs.length} công việc`
+              }
             </Text>
             
             <View style={styles.sortButtons}>
@@ -563,6 +703,23 @@ const AllJobs = () => {
                   Lương cao
                 </Text>
               </TouchableOpacity>
+              
+              {/* Show "Phù hợp" sort only when profile filter is enabled */}
+              {profileFilterEnabled === true && studentProfile && (
+                <TouchableOpacity
+                  style={[styles.sortBtn, sortBy === "match" && styles.sortBtnActive]}
+                  onPress={() => setSortBy("match")}
+                >
+                  <Ionicons 
+                    name="star-outline" 
+                    size={14} 
+                    color={sortBy === "match" ? "#4A80F0" : "#64748b"} 
+                  />
+                  <Text style={[styles.sortBtnText, sortBy === "match" && styles.sortBtnTextActive]}>
+                    Phù hợp
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -630,7 +787,13 @@ const AllJobs = () => {
 
             {/* Jobs List - Using native Animated instead of reanimated */}
             <View style={styles.jobsContainer}>
-              {displayJobs.map((job, index) => (
+              {displayJobs.map((job, index) => {
+                // ✅ FIX: Get matchScore for displaying "phù hợp %"
+                const matchScore = (job as any).matchScore;
+                const isHighMatch = (job as any).isHighMatch || (matchScore?.totalScore >= 0.6);
+                const matchPercent = matchScore?.totalScore ? Math.round(matchScore.totalScore * 100) : 0;
+                
+                return (
                 <RNAnimated.View
                   key={job.$id}
                   style={{
@@ -650,6 +813,23 @@ const AllJobs = () => {
                     activeOpacity={0.7}
                     onPress={() => router.push({ pathname: "/(shared)/jobDescription", params: { jobId: job.$id, from: '/(shared)/jobList' } })}
                   >
+                    {/* ✅ NEW: Match Score Badge - only show when profile filter is enabled */}
+                    {profileFilterEnabled === true && matchScore && matchPercent > 0 && (
+                      <View style={[
+                        styles.matchBadge, 
+                        isHighMatch ? styles.matchBadgeHigh : styles.matchBadgeLow
+                      ]}>
+                        <Ionicons 
+                          name={isHighMatch ? "star" : "checkmark-circle"} 
+                          size={12} 
+                          color="#fff" 
+                        />
+                        <Text style={styles.matchBadgeText}>
+                          Phù hợp {matchPercent}%
+                        </Text>
+                      </View>
+                    )}
+                    
                     {/* Job Image with fallback */}
                     {(job as any).displayImage ? (
                       <Image source={{ uri: (job as any).displayImage }} style={styles.jobImage} />
@@ -711,7 +891,8 @@ const AllJobs = () => {
                     <Ionicons name="chevron-forward" size={20} color="#cbd5e1" style={styles.arrowIcon} />
                   </TouchableOpacity>
                 </RNAnimated.View>
-              ))}
+              );
+              })}
 
               {displayJobs.length === 0 && (
                 <View style={styles.emptyContainer}>
@@ -720,18 +901,18 @@ const AllJobs = () => {
                   </View>
                   <Text style={styles.emptyTitle}>Không tìm thấy công việc</Text>
                   <Text style={styles.emptySubtitle}>
-                    {profileFilterEnabled 
+                    {profileFilterEnabled === true 
                       ? "Không có công việc phù hợp với hồ sơ. Thử tắt bộ lọc hoặc cập nhật hồ sơ."
                       : "Thử điều chỉnh bộ lọc để xem thêm công việc"
                     }
                   </Text>
-                  {(activeCategory !== "all" || activeType !== "all" || profileFilterEnabled) && (
+                  {(activeCategory !== "all" || activeType !== "all" || profileFilterEnabled === true) && (
                     <TouchableOpacity
                       style={styles.resetButton}
                       onPress={() => {
                         setActiveCategory("all");
                         setActiveType("all");
-                        if (profileFilterEnabled) {
+                        if (profileFilterEnabled === true) {
                           toggleProfileFilter(false);
                         }
                       }}
@@ -739,6 +920,29 @@ const AllJobs = () => {
                       <Text style={styles.resetButtonText}>Xóa bộ lọc</Text>
                     </TouchableOpacity>
                   )}
+                </View>
+              )}
+
+              {/* ✅ NEW: Nút Xem thêm - chỉ hiện khi không bật filter và còn jobs */}
+              {hasMoreJobs && (
+                <TouchableOpacity
+                  style={styles.loadMoreButton}
+                  onPress={handleLoadMore}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.loadMoreText}>
+                    Xem thêm ({sortedJobs.length - visibleCount} công việc)
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color="#4A80F0" />
+                </TouchableOpacity>
+              )}
+
+              {/* Hiển thị thông tin đã xem hết */}
+              {!hasMoreJobs && displayJobs.length > 0 && profileFilterEnabled !== true && (
+                <View style={styles.endListContainer}>
+                  <Text style={styles.endListText}>
+                    Đã hiển thị tất cả {sortedJobs.length} công việc
+                  </Text>
                 </View>
               )}
             </View>
@@ -814,13 +1018,14 @@ const styles = StyleSheet.create({
   profileFilterTextActive: {
     color: "#4A80F0",
   },
-  matchBadge: {
+  // ✅ Style for match badge in filter row
+  filterMatchBadge: {
     backgroundColor: "#dbeafe",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
   },
-  matchBadgeText: {
+  filterMatchBadgeText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#3b82f6",
@@ -933,6 +1138,31 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: "#f1f5f9",
+    position: "relative", // ✅ For absolute positioning of match badge
+  },
+  // ✅ NEW: Match score badge styles
+  matchBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 10,
+  },
+  matchBadgeHigh: {
+    backgroundColor: "#10b981",
+  },
+  matchBadgeLow: {
+    backgroundColor: "#f59e0b",
+  },
+  matchBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
   },
   jobImage: {
     width: 70,
@@ -1052,5 +1282,36 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "700",
+  },
+  // ✅ NEW: Load More button styles
+  loadMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#4A80F0",
+    gap: 8,
+  },
+  loadMoreText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#4A80F0",
+  },
+  endListContainer: {
+    alignItems: "center",
+    paddingVertical: 20,
+    marginBottom: 16,
+  },
+  endListText: {
+    fontSize: 13,
+    color: "#94a3b8",
+    fontStyle: "italic",
   },
 });

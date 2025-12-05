@@ -39,6 +39,9 @@ export interface StudentFilterState {
   // Salary
   minHourlyRate: number; // VNĐ/giờ
   
+  // ✅ NEW: Skills
+  skills?: string[]; // e.g., ['Microsoft Office', 'Tiếng Anh']
+  
   // Active state
   isActive: boolean; // Whether filters are applied
 }

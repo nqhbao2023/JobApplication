@@ -227,6 +227,7 @@ export default function ApplicationDetail() {
         partnerId: candidateId,
         partnerName: application.candidate.name,
         role: "Recruiter",
+        from: "/(employer)/applicationDetail",
       },
     });
   };

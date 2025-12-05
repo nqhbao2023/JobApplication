@@ -2,14 +2,18 @@
  * useSafeBack - Custom hook để xử lý back navigation an toàn
  * 
  * Vấn đề: Khi navigate giữa các tab groups khác nhau trong expo-router,
- * router.canGoBack() có thể trả về true nhưng back() không quay về đúng trang.
+ * router.canGoBack() và navigation.canGoBack() có thể trả về true 
+ * nhưng back() không quay về đúng trang vì navigation stack không được 
+ * maintain đúng cách giữa các tab groups.
  * 
  * Giải pháp: 
- * - Sử dụng `from` param để track nguồn gốc navigation khi cross-tab
+ * - ƯU TIÊN sử dụng `from` param để navigate về đúng trang nguồn
+ * - Chỉ dùng goBack() khi không có `from` param và canGoBack() = true
  * - Fallback về home dựa trên role
  */
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef } from 'react';
 import { router, useLocalSearchParams, useSegments } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { useRole } from '@/contexts/RoleContext';
 
 interface UseSafeBackOptions {
@@ -30,6 +34,7 @@ interface UseSafeBackOptions {
  */
 export const useSafeBack = (options?: UseSafeBackOptions) => {
   const { role: userRole } = useRole();
+  const navigation = useNavigation();
   // Lấy params từ hook nếu không được truyền explicitly
   const searchParams = useLocalSearchParams<{ from?: string }>();
   const fromParam = options?.from ?? searchParams.from;
@@ -47,22 +52,23 @@ export const useSafeBack = (options?: UseSafeBackOptions) => {
     }
     lastNavigationTimeRef.current = now;
     
-    const canBack = router.canGoBack();
-    console.log('[useSafeBack] canGoBack:', canBack, '| from param:', fromParam, '| role:', userRole);
+    const canBack = navigation.canGoBack();
+    const routerCanBack = router.canGoBack();
+    console.log('[useSafeBack] navigation.canGoBack:', canBack, '| router.canGoBack:', routerCanBack, '| from param:', fromParam, '| role:', userRole);
     
-    // ✅ Ưu tiên 1: Dùng router.back() nếu có history
-    // Đây là cách navigation tự nhiên nhất, animation sẽ đúng hướng
-    if (canBack) {
-      console.log('[useSafeBack] Using router.back()');
-      router.back();
+    // ✅ ƯU TIÊN 1: Sử dụng `from` param nếu có
+    // Đây là cách đáng tin cậy nhất vì expo-router không maintain đúng stack giữa tab groups
+    if (fromParam) {
+      console.log('[useSafeBack] Using from param:', fromParam);
+      router.replace(fromParam as any);
       return;
     }
     
-    // ✅ Ưu tiên 2: Sử dụng `from` param nếu có (chỉ khi không thể back())
-    // Trường hợp này xảy ra khi navigate cross-tab hoặc deep link
-    if (fromParam) {
-      console.log('[useSafeBack] Using from param (no back history):', fromParam);
-      router.replace(fromParam as any);
+    // ✅ Ưu tiên 2: Dùng navigation.goBack() nếu có history và KHÔNG có from param
+    // Trường hợp này chỉ xảy ra khi navigate trong cùng một tab group
+    if (canBack) {
+      console.log('[useSafeBack] Using navigation.goBack() (no from param)');
+      navigation.goBack();
       return;
     }
 
@@ -84,11 +90,11 @@ export const useSafeBack = (options?: UseSafeBackOptions) => {
     } else {
       router.replace('/');
     }
-  }, [userRole, options?.fallback, fromParam]);
+  }, [userRole, options?.fallback, fromParam, navigation]);
 
   const canGoBack = useCallback(() => {
-    return router.canGoBack() || !!fromParam;
-  }, [fromParam]);
+    return navigation.canGoBack() || !!fromParam;
+  }, [fromParam, navigation]);
 
   return { goBack, canGoBack };
 };

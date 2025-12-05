@@ -53,8 +53,10 @@ export const ProfileFilterToggle: React.FC<ProfileFilterToggleProps> = ({
   const hasTimeSlots = studentProfile?.availableTimeSlots && 
     Object.values(studentProfile.availableTimeSlots).some(v => v);
   const hasLocation = !!studentProfile?.schoolLocation?.address;
+  const hasSalary = (studentProfile?.desiredSalary?.hourly || 0) > 0;
+  const hasSkills = (studentProfile?.skills?.length || 0) > 0;
   
-  const hasProfileData = hasSchedule || hasTimeSlots || hasLocation;
+  const hasProfileData = hasSchedule || hasTimeSlots || hasLocation || hasSalary || hasSkills;
 
   // Generate summary text
   const getSummary = (): string => {
@@ -82,7 +84,17 @@ export const ProfileFilterToggle: React.FC<ProfileFilterToggleProps> = ({
     // Location
     if (hasLocation && studentProfile.schoolLocation?.address) {
       const maxDist = studentProfile.maxDistance || 50;
-      parts.push(`Khu vực: ${studentProfile.schoolLocation.address} (${maxDist}km)`);
+      parts.push(`Khu vực: ${maxDist}km`);
+    }
+    
+    // ✅ NEW: Show salary info
+    if (hasSalary && studentProfile.desiredSalary?.hourly) {
+      parts.push(`Lương: ${(studentProfile.desiredSalary.hourly / 1000).toFixed(0)}k/h`);
+    }
+    
+    // ✅ NEW: Show skills count
+    if (hasSkills && studentProfile.skills) {
+      parts.push(`${studentProfile.skills.length} kỹ năng`);
     }
     
     return parts.join(' • ');
@@ -138,7 +150,7 @@ export const ProfileFilterToggle: React.FC<ProfileFilterToggleProps> = ({
             </Text>
             {isActive && matchedJobsCount > 0 && (
               <Text style={styles.matchCount}>
-                {matchedJobsCount}/{totalJobsCount} việc phù hợp
+                {matchedJobsCount} việc phù hợp
               </Text>
             )}
           </View>

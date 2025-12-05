@@ -76,6 +76,7 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
         partnerId: candidateId,          // UID ứng viên
         partnerName: user?.name || "Ứng viên",
         role: "Recruiter",               // vai trò employer
+        from: "/(employer)/applications",
       },
     });
   };

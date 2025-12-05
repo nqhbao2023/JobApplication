@@ -26,6 +26,7 @@ const DEFAULT_FILTERS: StudentFilterState = {
   maxDistance: 50,
   preferredLocations: [], // ✅ NEW
   minHourlyRate: 0,
+  skills: [], // ✅ NEW
   isActive: false,
 };
 
@@ -123,8 +124,9 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
         weekend: studentProfile.availableTimeSlots?.weekend || false,
       },
       maxDistance: studentProfile.maxDistance || 50,
-      preferredLocations: studentProfile.preferredLocations || [], // ✅ NEW
+      preferredLocations: studentProfile.preferredLocations || [],
       minHourlyRate: studentProfile.desiredSalary?.hourly || 0,
+      skills: studentProfile.skills || [], // ✅ NEW
       isActive: true,
     };
 
@@ -147,6 +149,7 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
       maxDistance: profile.maxDistance || 50,
       preferredLocations: profile.preferredLocations || [],
       minHourlyRate: profile.desiredSalary?.hourly || 0,
+      skills: profile.skills || [], // ✅ NEW
       isActive: true,
     };
 
@@ -158,6 +161,7 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
         days: newFilters.availableDays,
         locations: newFilters.preferredLocations,
         salary: newFilters.minHourlyRate,
+        skills: newFilters.skills,
       });
     }
   }, []);
@@ -168,7 +172,12 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
   }, []);
 
   // Toggle profile-based filtering
+  // ✅ IMPROVED: Force immediate re-filter when toggle changes
   const handleProfileFilterToggle = useCallback((active: boolean) => {
+    if (__DEV__) {
+      console.log('[StudentFilters] Toggle profile filter:', active);
+    }
+    
     setProfileFilterActive(active);
     saveProfileFilterActive(active);
     
@@ -185,14 +194,30 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
         maxDistance: studentProfile.maxDistance || 50,
         preferredLocations: studentProfile.preferredLocations || [],
         minHourlyRate: studentProfile.desiredSalary?.hourly || 0,
+        skills: studentProfile.skills || [], // ✅ NEW: Include skills
         isActive: true, // ✅ Set active immediately
       };
       setFilters(newFilters);
       saveFilters(newFilters);
+      
+      // ✅ NEW: Emit event to notify other components that filter state changed
+      eventBus.emit(EVENTS.FILTER_CHANGED, { 
+        active: true, 
+        filters: newFilters,
+        timestamp: Date.now() 
+      });
     } else {
-      setFilters(prev => ({ ...prev, isActive: false }));
+      const newFilters = { ...filters, isActive: false };
+      setFilters(newFilters);
+      saveFilters(newFilters);
+      
+      // ✅ NEW: Emit event for filter OFF
+      eventBus.emit(EVENTS.FILTER_CHANGED, { 
+        active: false, 
+        timestamp: Date.now() 
+      });
     }
-  }, [studentProfile]);
+  }, [studentProfile, filters]);
 
   const applyFilters = useCallback(() => {
     if (!filters.isActive) {
@@ -211,10 +236,11 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
     const hasSchedulePrefs = filters.availableDays.length > 0;
     const hasTimeSlotPrefs = Object.values(filters.timeSlots).some(v => v);
     const hasSalaryPrefs = filters.minHourlyRate > 0;
-    const hasLocationPrefs = (filters.preferredLocations?.length || 0) > 0; // ✅ NEW
+    const hasLocationPrefs = (filters.preferredLocations?.length || 0) > 0;
+    const hasSkillsPrefs = (filters.skills?.length || 0) > 0; // ✅ NEW
     
     // If no preferences set, return all jobs
-    if (!hasSchedulePrefs && !hasTimeSlotPrefs && !hasSalaryPrefs && !hasLocationPrefs) {
+    if (!hasSchedulePrefs && !hasTimeSlotPrefs && !hasSalaryPrefs && !hasLocationPrefs && !hasSkillsPrefs) {
       console.log('[Filter] No preferences set, returning all jobs');
       setFilteredJobs(jobs.map(job => ({ ...job })));
       return;
@@ -225,44 +251,58 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
       let score = 0;
       let maxScore = 0;
       const matchDetails: string[] = [];
+      const matchedSkills: string[] = [];
 
-      // ========== 1. SCHEDULE MATCH (weight: 40%) ==========
+      // ========== 1. SCHEDULE MATCH (weight: 35%) ==========
       if (hasSchedulePrefs) {
-        maxScore += 40;
+        maxScore += 35;
         const scheduleScore = calculateScheduleScore(job, filters.availableDays);
-        score += scheduleScore * 40;
+        score += scheduleScore * 35;
         if (scheduleScore > 0) {
           matchDetails.push(`schedule:${Math.round(scheduleScore * 100)}%`);
         }
       }
 
-      // ========== 2. TIME SLOT MATCH (weight: 30%) ==========
+      // ========== 2. TIME SLOT MATCH (weight: 25%) ==========
       if (hasTimeSlotPrefs) {
-        maxScore += 30;
+        maxScore += 25;
         const timeSlotScore = calculateTimeSlotScore(job, filters.timeSlots);
-        score += timeSlotScore * 30;
+        score += timeSlotScore * 25;
         if (timeSlotScore > 0) {
           matchDetails.push(`timeSlot:${Math.round(timeSlotScore * 100)}%`);
         }
       }
 
-      // ========== 3. SALARY MATCH (weight: 20%) ==========
+      // ========== 3. SALARY MATCH (weight: 15%) ==========
       if (hasSalaryPrefs) {
-        maxScore += 20;
+        maxScore += 15;
         const salaryScore = calculateSalaryMatchScore(job, filters.minHourlyRate);
-        score += salaryScore * 20;
+        score += salaryScore * 15;
         if (salaryScore > 0) {
           matchDetails.push(`salary:${Math.round(salaryScore * 100)}%`);
         }
       }
 
-      // ========== 4. LOCATION MATCH (weight: 20%) ========== ✅ NEW
+      // ========== 4. LOCATION MATCH (weight: 15%) ==========
       if (hasLocationPrefs) {
-        maxScore += 20;
+        maxScore += 15;
         const locationScore = calculateLocationScore(job, filters.preferredLocations || []);
-        score += locationScore * 20;
+        score += locationScore * 15;
         if (locationScore > 0) {
           matchDetails.push(`location:${Math.round(locationScore * 100)}%`);
+        }
+      }
+
+      // ========== 5. SKILLS MATCH (weight: 10%) ========== ✅ NEW
+      let skillScore = 0;
+      if (hasSkillsPrefs) {
+        maxScore += 10;
+        const skillResult = calculateSkillsScore(job, filters.skills || []);
+        skillScore = skillResult.score;
+        matchedSkills.push(...skillResult.matchedSkills);
+        score += skillScore * 10;
+        if (skillScore > 0) {
+          matchDetails.push(`skills:${Math.round(skillScore * 100)}%`);
         }
       }
 
@@ -280,10 +320,10 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
           scheduleScore: hasSchedulePrefs ? calculateScheduleScore(job, filters.availableDays) : 0,
           distanceScore: hasLocationPrefs ? calculateLocationScore(job, filters.preferredLocations || []) : 0.5,
           salaryScore: hasSalaryPrefs ? calculateSalaryMatchScore(job, filters.minHourlyRate) : 0,
-          skillScore: 0,
+          skillScore: skillScore,
           breakdown: {
             scheduleMatch: [],
-            matchedSkills: [],
+            matchedSkills: matchedSkills,
           },
         },
         isHighMatch: normalizedScore >= 0.6,
@@ -579,4 +619,62 @@ const calculateLocationScore = (job: Job, preferredLocations: string[]): number 
   }
   
   return 0.1; // No match
+};
+
+/**
+ * ✅ NEW: Calculate skills match score (0-1)
+ * Matches job requirements against user's skills
+ */
+const calculateSkillsScore = (job: Job, userSkills: string[]): { score: number; matchedSkills: string[] } => {
+  if (!userSkills.length) return { score: 0, matchedSkills: [] };
+  
+  // Collect all text fields that might contain skill requirements
+  const jobTitle = (job.title || '').toLowerCase();
+  const jobDescription = (job.description || '').toLowerCase();
+  const jobRequirements = Array.isArray(job.requirements)
+    ? job.requirements.join(' ').toLowerCase()
+    : (typeof job.requirements === 'string' ? job.requirements.toLowerCase() : '');
+  const jobSkills = Array.isArray(job.skills)
+    ? job.skills.join(' ').toLowerCase()
+    : (typeof job.skills === 'string' ? job.skills.toLowerCase() : '');
+  const skillsRequired = (job.skills_required || '').toLowerCase();
+  
+  const combined = `${jobTitle} ${jobDescription} ${jobRequirements} ${jobSkills} ${skillsRequired}`;
+  
+  const matchedSkills: string[] = [];
+  
+  // Check each user skill
+  for (const skill of userSkills) {
+    const skillLower = skill.toLowerCase();
+    
+    // Direct match
+    if (combined.includes(skillLower)) {
+      matchedSkills.push(skill);
+      continue;
+    }
+    
+    // Check for skill aliases/variations
+    const skillAliases: Record<string, string[]> = {
+      'microsoft office': ['word', 'excel', 'powerpoint', 'ms office', 'tin học văn phòng'],
+      'tiếng anh': ['english', 'giao tiếp tiếng anh', 'ielts', 'toeic', 'toefl'],
+      'photoshop': ['adobe photoshop', 'ps', 'thiết kế đồ họa'],
+      'video editing': ['premiere', 'after effects', 'capcut', 'biên tập video', 'dựng phim'],
+      'sales': ['bán hàng', 'kinh doanh', 'sale', 'telesales'],
+      'marketing': ['digital marketing', 'tiếp thị', 'quảng cáo', 'ads'],
+      'customer service': ['chăm sóc khách hàng', 'cskh', 'support', 'hỗ trợ khách hàng'],
+      'kế toán': ['accounting', 'kế toán tổng hợp', 'sổ sách', 'thuế'],
+      'lái xe': ['bằng lái', 'giao hàng', 'shipper', 'driver'],
+      'nấu ăn': ['đầu bếp', 'cook', 'chef', 'pha chế', 'barista'],
+    };
+    
+    const aliases = skillAliases[skillLower] || [];
+    if (aliases.some(alias => combined.includes(alias))) {
+      matchedSkills.push(skill);
+    }
+  }
+  
+  // Calculate score based on matched skills ratio
+  const score = matchedSkills.length / userSkills.length;
+  
+  return { score, matchedSkills };
 };

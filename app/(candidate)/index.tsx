@@ -337,6 +337,7 @@ const CandidateHome = () => {
                       company={getJobCompany(item)}
                       matchScore={item.matchScore}
                       isHighMatch={item.isHighMatch}
+                      showMatchScore={true}
                     />
                   </View>
                 ))}
@@ -375,6 +376,7 @@ const CandidateHome = () => {
                     company={getJobCompany(item)}
                     matchScore={item.matchScore}
                     isHighMatch={item.isHighMatch}
+                    showMatchScore={false}
                   />
                 </View>
               ))

@@ -65,6 +65,7 @@ const Message = () => {
         partnerName: userName, // ✅ Thêm partnerName 
         role: userRole === "Recruiter" ? "Candidate" : "Recruiter", 
         // 👆 Nếu đối phương là Recruiter thì mình là Candidate, ngược lại
+        from: "/(main)/message",
       },
     });
   };

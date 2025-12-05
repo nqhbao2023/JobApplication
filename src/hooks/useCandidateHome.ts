@@ -260,18 +260,31 @@ export const useCandidateHome = () => {
   useEffect(() => {
     const unsubscribe = eventBus.on(EVENTS.PROFILE_UPDATED, (data) => {
       if (__DEV__) {
-        console.log('[CandidateHome] Profile updated, invalidating cache and forcing refresh...');
+        console.log('[CandidateHome] Profile updated event received:', data);
       }
-      // ✅ FIX: Invalidate cache FIRST to ensure loadAllData doesn't skip due to TTL
+      
+      // ✅ IMPROVED: Update studentProfile in store immediately (no need to reload)
+      if (data?.profile && dataUser) {
+        setStoreState({
+          user: {
+            ...dataUser,
+            studentProfile: data.profile,
+          },
+        });
+        if (__DEV__) {
+          console.log('[CandidateHome] Updated studentProfile in store immediately');
+        }
+      }
+      
+      // ✅ Also invalidate cache and reload for fresh job data
       invalidateCache();
-      // Small delay to ensure state is updated before loading
       setTimeout(() => {
         loadAllData(true);
-      }, 50);
+      }, 100);
     });
 
     return () => unsubscribe();
-  }, [loadAllData, invalidateCache]);
+  }, [loadAllData, invalidateCache, dataUser, setStoreState]);
 
   // ✅ Listen for NOTIFICATIONS_READ event to sync badge count
   useEffect(() => {
@@ -372,8 +385,12 @@ export const useCandidateHome = () => {
     // ✅ STEP 1: Base filter by jobType - chỉ hiển thị employer_seeking jobs
     // (jobs mà employer đăng để tìm candidate, KHÔNG phải candidate_seeking - candidate tìm việc)
     let baseFiltered = dataJob.filter(job => {
-      // ✅ FIX: Skip inactive/pending jobs (chưa được duyệt)
-      if (job.status !== 'active') return false;
+      // ✅ FIX: External jobs (viecoi crawled) don't need approval - always show
+      const isExternalJob = job.source === 'viecoi' || job.external_url;
+      const jobStatus = job.status?.toLowerCase();
+      
+      // Skip pending/draft/rejected jobs UNLESS they are external (viecoi)
+      if (!isExternalJob && jobStatus && jobStatus !== 'active' && jobStatus !== 'approved') return false;
       
       // Skip candidate_seeking jobs (quick-post từ candidate tìm việc)
       if (job.jobType === 'candidate_seeking') return false;
@@ -452,8 +469,12 @@ export const useCandidateHome = () => {
   // ✅ Base filtered jobs (before quick filters) for match scoring
   const baseFilteredJobs = useMemo(() => {
     return dataJob.filter(job => {
-      // ✅ FIX: Skip inactive/pending jobs (chưa được duyệt)
-      if (job.status !== 'active') return false;
+      // ✅ FIX: External jobs (viecoi crawled) don't need approval - always show
+      const isExternalJob = job.source === 'viecoi' || job.external_url;
+      const jobStatus = job.status?.toLowerCase();
+      
+      // Skip pending/draft/rejected jobs UNLESS they are external (viecoi)
+      if (!isExternalJob && jobStatus && jobStatus !== 'active' && jobStatus !== 'approved') return false;
       
       // Skip candidate_seeking jobs (quick-post từ candidate tìm việc)
       if (job.jobType === 'candidate_seeking') return false;

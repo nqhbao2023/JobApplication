@@ -83,6 +83,7 @@ export const EVENTS = {
   PROFILE_UPDATED: 'profile:updated',
   JOBS_REFRESH: 'jobs:refresh',
   FILTER_CHANGED: 'filter:changed',
+  NOTIFICATIONS_READ: 'notifications:read', // Emitted when notifications are marked as read
 } as const;
 
 export default eventBus;

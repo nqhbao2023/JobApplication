@@ -73,7 +73,7 @@ export const useCandidateHomeStore = create<CandidateHomeStore>()(
         jobs: state.jobs,
         companies: state.companies,
         categories: state.categories,
-        unreadCount: state.unreadCount,
+        // ❌ Don't persist unreadCount - always fetch fresh from server/Firestore
         lastFetchedAt: state.lastFetchedAt,
       }),
       onRehydrateStorage: () => (state, error) => {

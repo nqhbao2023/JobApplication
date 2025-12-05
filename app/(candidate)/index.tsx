@@ -196,7 +196,6 @@ const CandidateHome = () => {
               style={styles.iconButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                resetUnreadCount();
                 router.push('/(shared)/Notifications');
               }}
             >

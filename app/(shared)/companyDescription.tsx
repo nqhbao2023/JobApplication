@@ -41,6 +41,9 @@ export default function CompanyDescription() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [tab, setTab] = useState<"info" | "jobs">("info");
   const [loading, setLoading] = useState(true);
+  
+  // ✅ Hooks phải được gọi ở đầu component, TRƯỚC các early returns
+  const { goBack } = useSafeBack();
 
   useEffect(() => {
     if (!companyId) return;
@@ -84,8 +87,6 @@ export default function CompanyDescription() {
         <Text style={{ color: "#94a3b8", marginTop: 6 }}>Không tìm thấy công ty.</Text>
       </View>
     );
-
-  const { goBack } = useSafeBack();
 
   return (
   <SafeAreaView style={styles.container}>

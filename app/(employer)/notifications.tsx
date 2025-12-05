@@ -29,6 +29,7 @@ import {
   doc,
   deleteDoc,
 } from 'firebase/firestore';
+import { eventBus, EVENTS } from '@/utils/eventBus';
 
 dayjs.extend(relativeTime);
 dayjs.locale('vi');
@@ -106,6 +107,9 @@ const EmployerNotifications = () => {
         });
         
         setNotifications(docs);
+        // Emit event with actual unread count to sync badge
+        const unreadCount = docs.filter((n) => !n.read).length;
+        eventBus.emit(EVENTS.NOTIFICATIONS_READ, { unreadCount });
       } catch (error: any) {
         console.error('❌ [Notifications] Failed to fetch:', error);
       } finally {
@@ -130,7 +134,13 @@ const EmployerNotifications = () => {
   const markAsRead = useCallback(async (notificationId: string) => {
     try {
       await updateDoc(doc(db, 'notifications', notificationId), { read: true });
-      setNotifications((prev) => prev.map((notif) => (notif.$id === notificationId ? { ...notif, read: true } : notif)));
+      setNotifications((prev) => {
+        const updated = prev.map((notif) => (notif.$id === notificationId ? { ...notif, read: true } : notif));
+        // Emit event with new unread count
+        const newUnreadCount = updated.filter((n) => !n.read).length;
+        eventBus.emit(EVENTS.NOTIFICATIONS_READ, { unreadCount: newUnreadCount });
+        return updated;
+      });
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
@@ -142,6 +152,8 @@ const EmployerNotifications = () => {
     try {
       await Promise.all(unread.map((notif) => updateDoc(doc(db, 'notifications', notif.$id), { read: true })));
       setNotifications((prev) => prev.map((notif) => ({ ...notif, read: true })));
+      // Emit event with unread count = 0
+      eventBus.emit(EVENTS.NOTIFICATIONS_READ, { unreadCount: 0 });
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -154,12 +166,38 @@ const EmployerNotifications = () => {
       const querySnapshot = await getDocs(q);
       await Promise.all(querySnapshot.docs.map((notif) => deleteDoc(doc(db, 'notifications', notif.id))));
       setNotifications([]);
+      // Emit event with unread count = 0
+      eventBus.emit(EVENTS.NOTIFICATIONS_READ, { unreadCount: 0 });
       Alert.alert('Thành công', 'Đã xóa tất cả thông báo');
     } catch (error) {
       console.error('Failed to delete all notifications:', error);
       Alert.alert('Lỗi', 'Không thể xóa thông báo. Vui lòng thử lại.');
     }
   }, [userId]);
+
+  // ✅ Delete single notification
+  const deleteSingleNotification = useCallback(async (notificationId: string) => {
+    try {
+      await deleteDoc(doc(db, 'notifications', notificationId));
+      setNotifications((prev) => {
+        const updated = prev.filter((notif) => notif.$id !== notificationId);
+        // Emit event with new unread count
+        const newUnreadCount = updated.filter((n) => !n.read).length;
+        eventBus.emit(EVENTS.NOTIFICATIONS_READ, { unreadCount: newUnreadCount });
+        return updated;
+      });
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+      Alert.alert('Lỗi', 'Không thể xóa thông báo.');
+    }
+  }, []);
+
+  const handleDeleteSingle = useCallback((notificationId: string) => {
+    Alert.alert('Xóa thông báo', 'Bạn có chắc chắn muốn xóa thông báo này?', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Xóa', onPress: () => deleteSingleNotification(notificationId), style: 'destructive' },
+    ]);
+  }, [deleteSingleNotification]);
 
   const handleDeleteAll = useCallback(() => {
     Alert.alert('Xóa tất cả thông báo', 'Bạn có chắc chắn muốn xóa tất cả thông báo không?', [
@@ -249,15 +287,26 @@ const EmployerNotifications = () => {
               )}
             </View>
           </View>
-          <TouchableOpacity
-            onPress={(event) => {
-              event.stopPropagation();
-              markAsRead(item.$id);
-            }}
-            style={styles.markReadButton}
-          >
-            <Ionicons name={item.read ? 'checkmark-done-outline' : 'checkmark-outline'} size={20} color={item.read ? '#22c55e' : '#94a3b8'} />
-          </TouchableOpacity>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              onPress={(event) => {
+                event.stopPropagation();
+                markAsRead(item.$id);
+              }}
+              style={styles.markReadButton}
+            >
+              <Ionicons name={item.read ? 'checkmark-done-outline' : 'checkmark-outline'} size={20} color={item.read ? '#22c55e' : '#94a3b8'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={(event) => {
+                event.stopPropagation();
+                handleDeleteSingle(item.$id);
+              }}
+              style={styles.deleteButton}
+            >
+              <Ionicons name="trash-outline" size={18} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </View>
     );
@@ -541,9 +590,17 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#10b981',
   },
+  actionButtons: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 8,
+  },
   markReadButton: {
-    paddingLeft: 10,
-    paddingTop: 6,
+    padding: 6,
+  },
+  deleteButton: {
+    padding: 6,
   },
   emptyContainer: {
     alignItems: 'center',

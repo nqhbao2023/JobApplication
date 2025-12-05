@@ -35,6 +35,7 @@ import { authApiService } from '@/services/authApi.service';
 import { jobApiService } from '@/services/jobApi.service';
 import { applicationApiService } from '@/services/applicationApi.service';
 import { handleApiError } from '@/utils/errorHandler';
+import { eventBus, EVENTS } from '@/utils/eventBus';
 type RecentApp = {
   userName: string;
   jobTitle: string;
@@ -78,27 +79,40 @@ export default function EmployerHome() {
   const hasTriggeredHaptic = useSharedValue(false);
 
   // 🔔 Fetch unread notifications count
-  useEffect(() => {
-    const fetchUnreadNotifications = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      
-      try {
-        const notifQuery = query(
-          collection(db, 'notifications'),
-          where('userId', '==', user.uid),
-          where('read', '==', false)
-        );
-        const snapshot = await getDocs(notifQuery);
-        console.log(`🔔 Unread notifications: ${snapshot.docs.length}`);
-        setUnreadNotificationCount(snapshot.docs.length);
-      } catch (error: any) {
-        console.warn('⚠️ Could not fetch notifications count:', error.message);
-        // Fallback: use appCount as badge
-      }
-    };
+  const fetchUnreadNotifications = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) return;
     
+    try {
+      const notifQuery = query(
+        collection(db, 'notifications'),
+        where('userId', '==', user.uid),
+        where('read', '==', false)
+      );
+      const snapshot = await getDocs(notifQuery);
+      console.log(`🔔 Unread notifications: ${snapshot.docs.length}`);
+      setUnreadNotificationCount(snapshot.docs.length);
+    } catch (error: any) {
+      console.warn('⚠️ Could not fetch notifications count:', error.message);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchUnreadNotifications();
+  }, [fetchUnreadNotifications]);
+
+  // 🔔 Listen for NOTIFICATIONS_READ event to sync badge count
+  useEffect(() => {
+    const unsubscribe = eventBus.on(EVENTS.NOTIFICATIONS_READ, (data) => {
+      if (__DEV__) {
+        console.log('[EmployerHome] Notifications read, updating unread count:', data?.unreadCount);
+      }
+      if (typeof data?.unreadCount === 'number') {
+        setUnreadNotificationCount(data.unreadCount);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -266,8 +280,11 @@ export default function EmployerHome() {
       // Chỉ load lại nếu chưa có data (lần đầu hoặc data bị clear)
       if (jobCount === 0 && !loading) {
         loadStats();
+      } else {
+        // ✅ Always refresh unread count when returning to home
+        fetchUnreadNotifications();
       }
-    }, [jobCount, loading])
+    }, [jobCount, loading, fetchUnreadNotifications])
   );
 
   const onRefresh = useCallback(async () => {
@@ -498,7 +515,7 @@ export default function EmployerHome() {
             >
               <View style={{ position: 'relative' }}>
                 <Ionicons name="notifications-outline" size={26} color="#FFFFFF" />
-                {(unreadNotificationCount > 0 || appCount > 0) && (
+                {unreadNotificationCount > 0 && (
                   <View style={{
                     position: 'absolute',
                     top: -4,
@@ -512,7 +529,7 @@ export default function EmployerHome() {
                     paddingHorizontal: 4,
                   }}>
                     <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
-                      {(unreadNotificationCount || appCount) > 9 ? '9+' : (unreadNotificationCount || appCount)}
+                      {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
                     </Text>
                   </View>
                 )}

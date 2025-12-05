@@ -48,6 +48,9 @@ export default function AIAssistant() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  
+  // ✅ Hook phải được gọi ở đầu component
+  const { goBack } = useSafeBack();
 
   useEffect(() => {
     // cuộn xuống dưới khi tin nhắn được thêm vào
@@ -141,8 +144,6 @@ export default function AIAssistant() {
       </View>
     );
   };
-
-  const { goBack } = useSafeBack();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

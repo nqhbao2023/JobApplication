@@ -273,14 +273,33 @@ export const useCandidateHome = () => {
     return () => unsubscribe();
   }, [loadAllData, invalidateCache]);
 
+  // ✅ Listen for NOTIFICATIONS_READ event to sync badge count
+  useEffect(() => {
+    const unsubscribe = eventBus.on(EVENTS.NOTIFICATIONS_READ, (data) => {
+      if (__DEV__) {
+        console.log('[CandidateHome] Notifications read, updating unread count:', data?.unreadCount);
+      }
+      if (typeof data?.unreadCount === 'number') {
+        setStoreUnread(data.unreadCount);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [setStoreUnread]);
+
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
       // ✅ Không auto-reload khi focus, chỉ load nếu chưa có data
       if (dataJob.length === 0) {
         loadAllData(true); // Force load lần đầu
+      } else {
+        // ✅ Always refresh unread count when returning to home
+        loadUnreadNotifications().then((count) => {
+          setStoreUnread(count);
+        });
       }
-    }, [userId, dataJob.length])
+    }, [userId, dataJob.length, loadUnreadNotifications, setStoreUnread])
   );
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

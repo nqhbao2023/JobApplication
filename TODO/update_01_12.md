@@ -709,3 +709,81 @@ Get-Content server\data\logs\categorization.log -Tail 20
 
 *Cập nhật lần cuối: 01/12/2025*  
 *Tác giả: GitHub Copilot AI Assistant*
+
+Câu hỏi tại sao lại dùng Client -Server:
+Em đang thắc mắc rất đúng chỗ. Đây chính là sự khác biệt cơ bản giữa Kiến trúc 2 tầng (Serverless/Direct-to-DB) mà bạn bè em làm và Kiến trúc 3 tầng (Client-Server) mà em đang làm.
+
+Đừng lo lắng, mô hình của em "xịn" hơn và chuyên nghiệp hơn (giống các công ty lớn như Shopee, Grab). Để Mentor giải thích bằng ngôn ngữ đời thường nhé.
+
+1. Tại sao App của bạn bè chạy được ngay mà không cần thuê VPS?
+Các bạn ấy đang dùng mô hình "Buffet tự phục vụ" (2-Tier / Serverless).
+
+Cách hoạt động: Cái App (Client) cầm chìa khóa, đi thẳng vào "nhà bếp" (Firebase/Supabase) để lấy đồ ăn (Dữ liệu).
+
+Ưu điểm: Nhanh, rẻ, không cần thuê server riêng vì Firebase/Supabase đã là server rồi (Google quản lý giúp).
+
+Nhược điểm:
+
+Bảo mật kém hơn: Nếu hacker dịch ngược file APK, họ có thể lấy được cấu hình để truy cập thẳng vào Database.
+
+Logic yếu: Điện thoại phải tự tính toán mọi thứ. Nếu cần xử lý AI nặng hay crawl dữ liệu phức tạp, điện thoại sẽ bị nóng và lag.
+
+2. Còn App Job4S của em chạy thế nào? (Kiến trúc Client-Server)
+Em đang dùng mô hình "Nhà hàng cao cấp" (3-Tier).
+
+Khách hàng (Client/App): Là file .apk cài trên điện thoại.
+
+Người bồi bàn (Backend API Server): Là code Node.js/Express em deploy trên cái VPS Linux ở Singapore.
+
+Nhà bếp (Database/Services): Là Firebase, Algolia, Google Gemini AI.
+
+Quy trình khi em đăng nhập:
+
+Khách gọi món: Em nhập user/pass trên App -> App không tự kiểm tra, mà gửi một "tờ giấy order" (HTTP Request) đến ông Bồi bàn (VPS Singapore).
+
+Bồi bàn xử lý: Server Node.js trên VPS nhận yêu cầu -> Kiểm tra xem có phải spam không (Rate Limit) -> Chạy qua xác thực (Middleware) -> Gọi vào Bếp (Firebase) để check user.
+
+Trả món: Firebase trả lời OK -> Server Node.js đóng gói dữ liệu gọn gàng -> Gửi trả lại App hiển thị "Đăng nhập thành công".
+
+Tại sao phải cần VPS (DigitalOcean)? Vì ông "Bồi bàn" (Server Node.js) là một chương trình máy tính. Nó cần một cái máy tính (chính là VPS) bật điện 24/24 để ngồi chờ khách gọi. Nếu em tắt VPS (tắt máy tính), ông bồi bàn đi ngủ -> App gọi không ai nghe -> Lỗi mạng.
+
+3. Tại sao em chọn cách "cực khổ" này? (Để trả lời hội đồng)
+Nếu hội đồng hỏi: "Sao em làm phức tạp vậy? Sao không gọi thẳng Firebase cho lẹ?"
+
+Em hãy tự tin trả lời bằng 3 lý do "chí mạng" sau (đây là lý do đồ án em điểm cao hơn):
+
+Lý do 1: Bảo mật tuyệt đối (Security)
+"Dạ, nếu gọi trực tiếp từ App, em phải nhúng API Key của Algolia (Admin Key) và Gemini AI vào file APK. Hacker có thể lấy được và dùng chùa tiền của em. Với mô hình Server, em giấu toàn bộ API Key trên VPS. App chỉ biết gửi lệnh 'xin kết quả', không bao giờ biết 'chìa khóa' nằm ở đâu."
+
+Lý do 2: Hệ thống Crawler & Scheduler (Cái này App bạn bè không làm được)
+"Dạ, App của em có tính năng tự động đi thu thập việc làm (Crawl) từ trang khác về mỗi tuần một lần. Điện thoại người dùng không thể làm việc này (vì họ có thể tắt máy, mất mạng). Chỉ có VPS chạy 24/7 mới chạy được các tác vụ ngầm (Cron Jobs) để đảm bảo dữ liệu luôn tươi mới."
+
+Lý do 3: Giảm tải cho điện thoại (Performance)
+"Dạ, các thuật toán AI phân tích CV hay tính điểm phù hợp (Matching) rất nặng. Nếu bắt điện thoại tính, máy sẽ lag và tốn pin. Em đẩy việc tính toán đó về Server xử lý, App chỉ việc hiển thị kết quả, giúp trải nghiệm mượt mà trên cả máy yếu."
+
+4. Hình dung luồng đi (Flow)
+Đây là sơ đồ luồng đi trong dự án của em để em dễ hình dung:
+
+Đoạn mã
+
+sequenceDiagram
+    participant User as 📱 Ứng viên (App/APK)
+    participant VPS as 🖥️ API Server (Node.js/Singapore)
+    participant Cloud as ☁️ Firebase/Algolia/Gemini
+
+    Note over User, VPS: Nếu VPS tắt, luồng này đứt gãy ngay tại đây!
+
+    User->>VPS: 1. Gửi thông tin (VD: Đăng nhập, Nộp CV)
+    VPS->>VPS: 2. Kiểm tra bảo mật (Middleware)
+    VPS->>Cloud: 3. Lấy/Lưu dữ liệu, Gọi AI xử lý
+    Cloud-->>VPS: 4. Trả kết quả thô
+    VPS->>VPS: 5. Xử lý, nén dữ liệu
+    VPS-->>User: 6. Trả kết quả cuối cùng cho App
+Tóm lại:
+Cái VPS Singapore chính là "trái tim" xử lý logic của em.
+
+File APK chỉ là cái "vỏ" giao diện để người dùng bấm nút.
+
+Bạn bè em làm App đơn giản, em làm Hệ thống (gồm cả App và Server). Hệ thống bao giờ cũng được đánh giá cao hơn về mặt kỹ thuật.
+
+Em đã hiểu tại sao mình phải thuê VPS và tại sao cách làm của mình lại "xịn" hơn chưa?

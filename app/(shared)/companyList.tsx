@@ -38,6 +38,9 @@ const CompanyList = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // ✅ Hook phải được gọi ở đầu component
+  const { goBack } = useSafeBack();
 
   const fetchCompanyData = async () => {
     try {
@@ -116,8 +119,6 @@ const CompanyList = () => {
       </TouchableOpacity>
     );
   };
-
-  const { goBack } = useSafeBack();
 
   return (
     <SafeAreaView style={styles.container}>

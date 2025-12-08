@@ -70,6 +70,6 @@ if (isAlgoliaEnabled()) {
   console.log('   - App ID:', ALGOLIA_APP_ID);
   console.log('   - Available indices:', Object.values(INDEX_NAMES).join(', '));
 } else {
-  console.log('ℹ️  Algolia is disabled (missing credentials)');
+  console.log('  Algolia is disabled (missing credentials)');
 }
 

@@ -10,7 +10,7 @@
  * - Đặt CV mặc định
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { CVData } from '@/types/cv.types';
 import { cvService } from '@/services/cv.service';
@@ -46,10 +46,18 @@ const CVManagementScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // Ref to prevent double-tap on create button
+  const isCreatingRef = useRef(false);
 
-  useEffect(() => {
-    loadCVs();
-  }, []);
+  // ✅ FIX: Use useFocusEffect to reload CVs when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      loadCVs();
+      // Reset creating flag when screen is focused
+      isCreatingRef.current = false;
+    }, [])
+  );
 
   const loadCVs = async () => {
     try {
@@ -71,10 +79,11 @@ const CVManagementScreen = () => {
   }, []);
 
   const handleCreateCV = async () => {
-    // Prevent duplicate creation
-    if (loading) return;
+    // ✅ FIX: Use ref to prevent duplicate creation from double-tap
+    if (loading || isCreatingRef.current) return;
     
     try {
+      isCreatingRef.current = true;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setLoading(true);
 
@@ -94,14 +103,15 @@ const CVManagementScreen = () => {
       // Save to Firestore
       const cvId = await cvService.saveCV(autoFilledCV);
 
-      // Navigate to editor
+      // ✅ FIX: Navigate to editor with 'from' param for proper back navigation
       router.push({
         pathname: '/(candidate)/cvEditor',
-        params: { cvId },
+        params: { cvId, from: '/(candidate)/cvManagement' },
       });
     } catch (error) {
       console.error('Error creating CV:', error);
       Alert.alert('Lỗi', 'Không thể tạo CV mới');
+      isCreatingRef.current = false;
     } finally {
       setLoading(false);
     }
@@ -160,9 +170,10 @@ const CVManagementScreen = () => {
 
   const handleEditCV = (cvId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // ✅ FIX: Add 'from' param for proper back navigation
     router.push({
       pathname: '/(candidate)/cvEditor',
-      params: { cvId },
+      params: { cvId, from: '/(candidate)/cvManagement' },
     });
   };
 

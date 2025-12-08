@@ -1,0 +1,30 @@
+@startuml UC_Candidate_Application
+left to right direction
+skinparam monochrome true
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "?ng viên" as Candidate
+
+rectangle "H? th?ng Job4S" {
+  usecase "?ng tuy?n vi?c làm" as UC_Apply
+  usecase "Qu?n lý don ?ng tuy?n" as UC_ManageApp
+  
+  usecase "Ch?n CV có s?n" as UC_SelectCV
+  usecase "Upload CV m?i" as UC_UploadCV
+  usecase "Vi?t Cover Letter" as UC_CoverLetter
+  usecase "Rút don" as UC_Withdraw
+  usecase "Chat v?i NTD" as UC_Chat
+}
+
+Candidate --> UC_Apply
+Candidate --> UC_ManageApp
+
+UC_SelectCV .> UC_Apply : <<extend>>
+UC_UploadCV .> UC_Apply : <<extend>>
+UC_CoverLetter .> UC_Apply : <<extend>>
+
+UC_Withdraw .> UC_ManageApp : <<extend>>
+UC_Chat .> UC_ManageApp : <<extend>>
+
+@enduml

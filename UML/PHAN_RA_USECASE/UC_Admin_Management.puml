@@ -1,0 +1,37 @@
+@startuml UC_Admin_Management
+left to right direction
+skinparam monochrome true
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Qu?n tr? viên" as Admin
+
+rectangle "H? th?ng Job4S" {
+  usecase "Qu?n lý ngu?i dùng" as UC_ManageUser
+  usecase "Qu?n lý tin tuy?n d?ng" as UC_ManageJob
+  usecase "Qu?n lý danh m?c" as UC_ManageCategory
+  
+  usecase "Xem danh sách User" as UC_ViewUser
+  usecase "Khóa tài kho?n" as UC_BlockUser
+  
+  usecase "Duy?t tin dang" as UC_ApproveJob
+  usecase "Xóa tin vi ph?m" as UC_DeleteJob
+  
+  usecase "Thêm danh m?c m?i" as UC_AddCategory
+  usecase "S?a danh m?c" as UC_EditCategory
+}
+
+Admin --> UC_ManageUser
+Admin --> UC_ManageJob
+Admin --> UC_ManageCategory
+
+UC_ViewUser .> UC_ManageUser : <<include>>
+UC_BlockUser .> UC_ManageUser : <<extend>>
+
+UC_ApproveJob .> UC_ManageJob : <<extend>>
+UC_DeleteJob .> UC_ManageJob : <<extend>>
+
+UC_AddCategory .> UC_ManageCategory : <<extend>>
+UC_EditCategory .> UC_ManageCategory : <<extend>>
+
+@enduml

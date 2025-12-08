@@ -45,7 +45,7 @@ export const recommendJobs = async (
 
     // 2. Check if user has skills
     if (!user.skills || user.skills.length === 0) {
-      console.log(`ℹ️ [AI Recommend] User has no skills, returning empty recommendations`);
+      console.log(`[AI Recommend] User has no skills, returning empty recommendations`);
       res.json([]);
       return;
     }

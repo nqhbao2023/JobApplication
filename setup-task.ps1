@@ -55,7 +55,7 @@ if ($Remove) {
         Write-Host "✅ Task removed successfully!" -ForegroundColor Green
     }
     else {
-        Write-Host "ℹ️  Task not found." -ForegroundColor Cyan
+        Write-Host "ℹ  Task not found." -ForegroundColor Cyan
     }
     exit 0
 }

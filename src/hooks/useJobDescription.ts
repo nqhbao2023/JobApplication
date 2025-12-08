@@ -251,7 +251,7 @@ export const useJobDescription = (jobId: string) => {
           }
           // Không log error trong production để tránh noise
           if (__DEV__) {
-            console.log('ℹ️ Apply status check skipped: User is not a candidate');
+            console.log('Apply status check skipped: User is not a candidate');
           }
         } else if (isAuthError(e)) {
           // 401: Auth error - sẽ được handle ở auth flow

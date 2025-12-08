@@ -168,7 +168,7 @@ export default function AppliedList() {
       
       // ✅ Show info if some applications were filtered out
       if (deletedJobsCount > 0) {
-        console.log(`ℹ️ Filtered out ${deletedJobsCount} application(s) for deleted jobs`);
+        console.log(`ℹ Filtered out ${deletedJobsCount} application(s) for deleted jobs`);
         // Optional: Show toast or silent notification
         // Alert.alert(
         //   "Thông báo", 

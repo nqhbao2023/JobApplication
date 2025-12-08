@@ -1,0 +1,35 @@
+@startuml UC_Candidate_CV_Profile
+left to right direction
+skinparam monochrome true
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "?ng viên" as Candidate
+
+rectangle "H? th?ng Job4S" {
+  usecase "Qu?n lý CV" as UC_ManageCV
+  usecase "Qu?n lý H? so" as UC_Profile
+  
+  usecase "T?o CV t? Template" as UC_CreateCV
+  usecase "Upload CV" as UC_Upload
+  usecase "Ch?nh s?a CV" as UC_EditCV
+  usecase "Xóa CV" as UC_DeleteCV
+  
+  usecase "C?p nh?t thông tin" as UC_UpdateInfo
+  usecase "Thêm k? nang" as UC_AddSkill
+  usecase "Cài d?t l?ch làm vi?c" as UC_Schedule
+}
+
+Candidate --> UC_ManageCV
+Candidate --> UC_Profile
+
+UC_CreateCV .> UC_ManageCV : <<extend>>
+UC_Upload .> UC_ManageCV : <<extend>>
+UC_EditCV .> UC_ManageCV : <<extend>>
+UC_DeleteCV .> UC_ManageCV : <<extend>>
+
+UC_UpdateInfo .> UC_Profile : <<extend>>
+UC_AddSkill .> UC_Profile : <<extend>>
+UC_Schedule .> UC_Profile : <<extend>>
+
+@enduml

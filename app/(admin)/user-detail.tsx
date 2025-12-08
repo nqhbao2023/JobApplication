@@ -246,8 +246,8 @@ const UserDetailScreen = () => {
 
         <Text style={styles.noteText}>
           {isDisabled 
-            ? "⚠️ User đã bị vô hiệu hóa và không thể đăng nhập vào hệ thống."
-            : "ℹ️ Vô hiệu hóa sẽ ngăn user đăng nhập nhưng không xóa dữ liệu."}
+            ? " User đã bị vô hiệu hóa và không thể đăng nhập vào hệ thống."
+            : " Vô hiệu hóa sẽ ngăn user đăng nhập nhưng không xóa dữ liệu."}
         </Text>
       </View>
     </ScrollView>

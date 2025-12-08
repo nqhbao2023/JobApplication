@@ -53,7 +53,7 @@ class EmailService {
         },
       });
 
-      console.log('✅ Email service initialized');
+      console.log(' Email service initialized');
     } catch (error) {
       console.error('❌ Failed to initialize email service:', error);
     }

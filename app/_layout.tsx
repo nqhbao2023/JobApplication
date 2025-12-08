@@ -32,7 +32,7 @@ export default function RootLayout() {
     listenerAttached.current = true;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("🔐 Auth state:", user ? user.email : "No user");
+      console.log("Auth state:", user ? user.email : "No user");
 
       const group = segments?.[0];
       const inAuth = group === "(auth)";
@@ -45,7 +45,7 @@ export default function RootLayout() {
         try {
           const roleData = await getCurrentUserRole();
           role = roleData;
-          console.log("👤 User role:", role, "| Current segment:", group);
+          console.log(" User role:", role, "| Current segment:", group);
         } catch (roleError) {
           console.warn("⚠️ Error getting role, using default:", roleError);
           role = "candidate"; // Default to candidate on error

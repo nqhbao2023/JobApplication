@@ -39,7 +39,7 @@ export interface CategorizationStats {
 }
 
 // ============ CONSTANTS ============
-const CONFIDENCE_THRESHOLD = 80; // Higher threshold = more AI usage (regex must be very confident)
+const CONFIDENCE_THRESHOLD = 90; // Higher threshold = more AI usage (regex must be very confident)
 const AI_BATCH_SIZE = 5; // Jobs per AI request
 const AI_TIMEOUT = 30000; // 30 seconds
 

@@ -1,0 +1,33 @@
+@startuml UC_Employer_JobManagement
+left to right direction
+skinparam monochrome true
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Nhà tuy?n d?ng" as Employer
+
+rectangle "H? th?ng Job4S" {
+  usecase "Ðang tin tuy?n d?ng" as UC_PostJob
+  usecase "Qu?n lý tin dang" as UC_ManageJob
+  
+  usecase "Ði?n thông tin Job" as UC_FillJob
+  usecase "S? d?ng AI Template" as UC_AITemplate
+  usecase "Luu nháp" as UC_Draft
+  
+  usecase "Ch?nh s?a tin" as UC_EditJob
+  usecase "Xóa tin" as UC_DeleteJob
+  usecase "?n/Hi?n tin" as UC_ToggleJob
+}
+
+Employer --> UC_PostJob
+Employer --> UC_ManageJob
+
+UC_FillJob .> UC_PostJob : <<include>>
+UC_AITemplate .> UC_PostJob : <<extend>>
+UC_Draft .> UC_PostJob : <<extend>>
+
+UC_EditJob .> UC_ManageJob : <<extend>>
+UC_DeleteJob .> UC_ManageJob : <<extend>>
+UC_ToggleJob .> UC_ManageJob : <<extend>>
+
+@enduml

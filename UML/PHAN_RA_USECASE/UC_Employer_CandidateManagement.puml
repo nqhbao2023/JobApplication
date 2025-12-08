@@ -1,0 +1,34 @@
+@startuml UC_Employer_CandidateManagement
+left to right direction
+skinparam monochrome true
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Nhà tuy?n d?ng" as Employer
+
+rectangle "H? th?ng Job4S" {
+  usecase "Qu?n lı ?ng viên" as UC_ManageCandidate
+  usecase "Tìm ki?m ?ng viên" as UC_FindCandidate
+  
+  usecase "Xem CV chi ti?t" as UC_ViewCV
+  usecase "Duy?t h? so" as UC_Accept
+  usecase "T? ch?i h? so" as UC_Reject
+  usecase "Chat v?i ?ng viên" as UC_Chat
+  
+  usecase "L?c theo k? nang" as UC_FilterSkill
+  usecase "Xem h? so công khai" as UC_ViewProfile
+}
+
+Employer --> UC_ManageCandidate
+Employer --> UC_FindCandidate
+
+UC_ViewCV .> UC_ManageCandidate : <<include>>
+UC_Accept .> UC_ManageCandidate : <<extend>>
+UC_Reject .> UC_ManageCandidate : <<extend>>
+UC_Chat .> UC_ManageCandidate : <<extend>>
+
+UC_FilterSkill .> UC_FindCandidate : <<extend>>
+UC_ViewProfile .> UC_FindCandidate : <<include>>
+UC_Chat .> UC_ViewProfile : <<extend>>
+
+@enduml

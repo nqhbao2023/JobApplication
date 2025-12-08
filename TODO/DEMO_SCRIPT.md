@@ -12,6 +12,20 @@ Trước khi bắt đầu demo, hãy đảm bảo mọi thứ đã sẵn sàng �
 1.  **Database**: Đảm bảo Firestore và Algolia đang hoạt động.
 2.  **API Keys**: Kiểm tra file `.env` trong thư mục `server` đã có `AI_API_KEY` (Gemini) chưa.
 3.  **Mạng**: Đảm bảo kết nối internet ổn định (cần cho Gemini và Crawl).
+4.  **Node.js**: Đảm bảo đã cài Node.js phiên bản >= 18.0.0
+
+### 🔧 Cài đặt Dependencies (CHỈ CẦN LÀM 1 LẦN ĐẦU)
+Nếu chưa cài đặt, chạy các lệnh sau:
+
+```powershell
+# Cài dependencies cho thư mục gốc (Frontend)
+npm install
+
+# Cài dependencies cho Server (Backend)
+cd server
+npm install
+cd ..
+```
 
 ### 🚀 Khởi động hệ thống
 Mở 2 terminal riêng biệt trong VS Code:
@@ -38,19 +52,96 @@ npx expo start -c
 **Mục tiêu**: Chứng minh hệ thống có dữ liệu thật, tự động hóa, không nhập tay thủ công.
 
 1.  **Giới thiệu**: "Một trong những thách thức lớn nhất của nền tảng tuyển dụng là dữ liệu. Thay vì nhập tay, em đã xây dựng hệ thống **Auto-Crawler** thông minh."
-2.  **Thao tác**:
-    *   Mở file `crawl-local.ps1` để show code (ngắn gọn).
-    *   Chạy lệnh demo (chỉ lấy 5-10 job để nhanh):
+
+2.  **Thao tác**: Mở Terminal trong VS Code, vào thư mục `server`:
     ```powershell
-    .\crawl-local.ps1 -Limit 10
+    cd server
     ```
-3.  **Giải thích trong lúc chạy**:
-    *   "Hệ thống đang tự động truy cập Viecoi.vn."
+
+3.  **Chạy crawler** (CHỌN 1 TRONG 2 CÁCH):
+
+    **🔥 CÁCH 1: Full Pipeline (KHUYẾN NGHỊ - Tự động làm hết)**
+    ```powershell
+    npm run crawl:viecoi-pipeline -- --limit 10
+    ```
+    > Script này tự động: Crawl → Normalize → AI Categorize → Upsert Firestore → Sync Algolia
+    
+    **📦 CÁCH 2: Chạy từng bước thủ công**
+    ```powershell
+    # Bước 1: Crawl dữ liệu raw từ viecoi.vn (dùng Puppeteer - vượt Cloudflare)
+    npm run crawl:viecoi-puppeteer -- --limit 10
+    # → Output: server/data/viecoi/raw-jobs.json
+    
+    # Bước 2: Upsert lên Firestore (script này tự normalize và sync Algolia)
+    npm run upsert:viecoi-jobs
+    # → Đọc từ: server/data/viecoi/normalized-jobs.json
+    # → Lưu vào: Firestore collection "jobs"
+    # → Tự động sync: Algolia index
+    ```
+
+4.  **Giải thích trong lúc chạy**:
+    *   "Hệ thống đang dùng Puppeteer (trình duyệt tự động) để truy cập Viecoi.vn."
     *   "Bóc tách dữ liệu (Title, Salary, Company, Skills)."
     *   "Chuẩn hóa dữ liệu và lưu vào Firestore + đồng bộ sang Algolia để tìm kiếm siêu nhanh."
-4.  **Kết quả**: Show log "✅ Done" và mở App lên thấy Job mới xuất hiện (hoặc show log terminal).
+
+5.  **Kết quả mong đợi**:
+    ```
+    ✅ Saved 10 jobs to .../server/data/viecoi/raw-jobs.json
+    📊 Summary:
+       - URLs found: 10
+       - Jobs crawled: 10
+       - Success rate: 100.0%
+    🔒 Browser closed
+    ```
 
 ---
+
+### 📁 CẤU TRÚC FILE CRAWLER (GIẢI THÍCH CHI TIẾT)
+
+```
+server/src/crawlers/viecoi/
+├── puppeteer-crawler.ts      # Crawl raw data (vượt Cloudflare)
+├── puppeteer-full-pipeline.ts # ⭐ FULL PIPELINE (Crawl → Normalize → Upsert → Algolia)
+├── upsert-jobs.ts            # Lưu vào Firestore (tự động sync Algolia)
+├── sync-algolia.ts           # Sync riêng lên Algolia
+├── ai-categorizer.ts         # AI phân loại job category
+└── README.md                 # Hướng dẫn chi tiết
+```
+
+**Luồng dữ liệu:**
+```
+viecoi.vn → [puppeteer-crawler] → raw-jobs.json
+                                       ↓
+                              [puppeteer-full-pipeline]
+                                       ↓
+                              normalized-jobs.json
+                                       ↓
+                              [upsert-jobs] → Firestore
+                                       ↓
+                              [sync-algolia] → Algolia
+```
+
+---
+
+### ⚠️ XỬ LÝ LỖI THƯỜNG GẶP KHI CRAWL
+
+| Lỗi | Nguyên nhân | Cách khắc phục |
+|-----|-------------|----------------|
+| `Missing script` | Chưa vào thư mục `server` | Chạy `cd server` trước |
+| `Cannot find module 'ts-node'` | Chưa cài dependencies | Chạy `npm install` trong server |
+| `ECONNREFUSED` | Không kết nối được website | Kiểm tra kết nối internet |
+| `Firebase/Firestore error` | Chưa cấu hình Firebase | Kiểm tra file `serviceAccountKey.json` |
+| `403 Forbidden` / `Cloudflare` | Website chặn bot | Đã xử lý bằng Puppeteer |
+| `Normalized jobs file not found` | Chưa normalize dữ liệu | Chạy `crawl:viecoi-pipeline` thay vì `crawl:viecoi-puppeteer` |
+
+### 💡 MẸO DEMO NHANH
+
+Nếu muốn demo nhanh nhất, chỉ cần 1 lệnh:
+```powershell
+cd server
+npm run crawl:viecoi-pipeline -- --limit 5
+```
+Lệnh này sẽ tự động làm tất cả và hiển thị log đẹp mắt!
 
 ### 🔹 PHẦN 2: TRẢI NGHIỆM ỨNG DỤNG (USER EXPERIENCE)
 **Mục tiêu**: Demo luồng chính của người dùng (Candidate).

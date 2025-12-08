@@ -34,6 +34,7 @@ import {
 import { db, auth } from "@/config/firebase";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeBack } from "@/hooks/useSafeBack";
+import { useRole } from "@/contexts/RoleContext";
 
 dayjs.extend(relativeTime);
 
@@ -132,8 +133,12 @@ const Chat = () => {
   const myRole = (asStr(params.role) as "Recruiter" | "Candidate") ?? "Candidate";
   const fromParam = asStr(params.from);
 
+  // ✅ Get user role for fallback route
+  const { role: ctxRole } = useRole();
+  const fallbackRoute = ctxRole === "employer" ? "/(employer)/chat" : "/(candidate)/chat";
+
   // ✅ Sử dụng useSafeBack hook để xử lý back navigation an toàn
-  const { goBack } = useSafeBack({ from: fromParam, fallback: '/(shared)/chatList' });
+  const { goBack } = useSafeBack({ from: fromParam, fallback: fallbackRoute });
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<MessageType[]>([]);

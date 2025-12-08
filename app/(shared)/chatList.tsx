@@ -71,6 +71,9 @@ export default function ChatList() {
       const partnerName =
         chat.participantsInfo?.[partnerId]?.displayName || "Người dùng";
 
+      // ✅ Use tab route based on role so back navigation returns to correct tab
+      const fromRoute = viewerRole === "employer" ? "/(employer)/chat" : "/(candidate)/chat";
+
       router.push({
         pathname: "/(shared)/chat",
         params: {
@@ -78,7 +81,7 @@ export default function ChatList() {
           partnerId,
           partnerName,
           role: viewerRole === "candidate" ? "Candidate" : "Recruiter",
-          from: "/(shared)/chatList",
+          from: fromRoute,
         },
       });
     },

@@ -1,0 +1,33 @@
+@startuml UC_Authentication
+left to right direction
+skinparam monochrome true
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "Ngu?i dùng" as User
+
+rectangle "H? th?ng Job4S" {
+  usecase "Ðang ký" as UC_Register
+  usecase "Ðang nh?p" as UC_Login
+  usecase "Quên m?t kh?u" as UC_ForgotPassword
+  
+  usecase "Ði?n thông tin" as UC_FillInfo
+  usecase "Google Sign In" as UC_Google
+  usecase "Nh?p Email/Pass" as UC_EmailPass
+  usecase "Xác th?c OTP" as UC_OTP
+}
+
+User --> UC_Register
+User --> UC_Login
+User --> UC_ForgotPassword
+
+UC_FillInfo .> UC_Register : <<extend>>
+UC_Google .> UC_Register : <<extend>>
+
+UC_EmailPass .> UC_Login : <<extend>>
+UC_Google .> UC_Login : <<extend>>
+
+UC_OTP .> UC_ForgotPassword : <<include>>
+UC_OTP .> UC_Register : <<include>>
+
+@enduml

@@ -299,7 +299,7 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
           {/* ===== SECTION: Ảnh đại diện ===== */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              {isCandidateSeeking ? '📸 Ảnh đại diện' : 'Hình ảnh'} (không bắt buộc)
+              {isCandidateSeeking ? ' Ảnh đại diện' : 'Hình ảnh'} (không bắt buộc)
             </Text>
             {!showImageInput ? (
               <TouchableOpacity 
@@ -343,7 +343,7 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
           {/* ===== SECTION: CV (Candidate only) ===== */}
           {isCandidateSeeking && (
             <View style={styles.formGroup}>
-              <Text style={styles.label}>📄 CV của bạn (khuyến khích)</Text>
+              <Text style={styles.label}> CV của bạn (khuyến khích)</Text>
               
               {/* ✅ NEW: Option 1 - Select from Library */}
               <TouchableOpacity 
@@ -457,7 +457,7 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
           {/* ===== SECTION: Vị trí mong muốn / Tiêu đề ===== */}
           <View style={styles.formGroup}>
             <Text style={styles.label}>
-              {isCandidateSeeking ? '💼 Vị trí mong muốn' : 'Tiêu đề'} <Text style={styles.required}>*</Text>
+              {isCandidateSeeking ? 'Vị trí mong muốn' : 'Tiêu đề'} <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
               style={styles.input}

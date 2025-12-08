@@ -49,7 +49,7 @@ try {
   }
 } catch (error) {
   // Expected in Expo Go - notifications not supported
-  console.log('ℹ️ Push notifications not available (expected in Expo Go)');
+  console.log(' Push notifications not available (expected in Expo Go)');
   isNotificationsAvailable = false;
 }
 
@@ -100,7 +100,7 @@ class PushNotificationService {
       }
 
       if (finalStatus !== 'granted') {
-        console.log('ℹ️ Permission to receive notifications was denied');
+        console.log(' Permission to receive notifications was denied');
         return null;
       }
 
@@ -374,7 +374,7 @@ class PushNotificationService {
    */
   async cancelAllNotifications() {
     if (!this.isAvailable() || !Notifications) {
-      console.log('ℹ️ Cancel notifications skipped (not available)');
+      console.log(' Cancel notifications skipped (not available)');
       return;
     }
     

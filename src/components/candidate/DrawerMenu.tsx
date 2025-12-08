@@ -96,7 +96,7 @@ export function DrawerMenuButton() {
                     <Ionicons name="close" size={28} color="#666" />
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.headerTitle}>Job4Students</Text>
+                <Text style={styles.headerTitle}>Job_4S</Text>
                 <Text style={styles.headerSubtitle}>Menu chính</Text>
               </View>
 

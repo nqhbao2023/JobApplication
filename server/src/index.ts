@@ -96,8 +96,8 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(` Server running on port ${PORT}`);
+  console.log(` Environment: ${process.env.NODE_ENV || 'development'}`);
   
   // Hiển thị IP hiện tại của máy
   const os = require('os');
@@ -114,8 +114,8 @@ app.listen(PORT, '0.0.0.0', () => {
     if (localIP !== 'unknown') break;
   }
   
-  console.log(`🌐 Local: http://localhost:${PORT}`);
-  console.log(`🌐 Network: http://${localIP}:${PORT}`);
+  console.log(` Local: http://localhost:${PORT}`);
+  console.log(` Network: http://${localIP}:${PORT}`);
 });
 
 export default app;

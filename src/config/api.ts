@@ -48,7 +48,7 @@ const getBaseURL = (): string => {
     // Make sure it's a valid IP (not localhost)
     if (host && host !== 'localhost' && host !== '127.0.0.1') {
       const autoUrl = `http://${host}:3000`;
-      console.log('🌐 Auto-detected API URL from Metro:', autoUrl);
+      console.log(' Auto-detected API URL from Metro:', autoUrl);
       cachedApiUrl = autoUrl;
       return autoUrl;
     }

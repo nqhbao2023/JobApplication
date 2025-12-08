@@ -72,11 +72,11 @@ try {
 
   console.log(
     shouldUsePersistentCache
-      ? '✅ Firestore initialized with persistent cache'
-      : 'ℹ️ Firestore using in-memory cache (dev mode)'
+      ? ' Firestore initialized with persistent cache'
+      : 'ℹ Firestore using in-memory cache (dev mode)'
   );
 } catch (error) {
-  console.warn('⚠️ Could not initialize Firestore with configured cache, using default:', error);
+  console.warn(' Could not initialize Firestore with configured cache, using default:', error);
   db = getFirestore(app);
 }
 

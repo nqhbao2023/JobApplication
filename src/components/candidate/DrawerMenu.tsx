@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.75;
@@ -88,17 +89,28 @@ export function DrawerMenuButton() {
             ]}
           >
             <SafeAreaView style={styles.drawerContent} edges={['top', 'bottom']}>
-              {/* Header */}
-              <View style={styles.header}>
+              {/* Header với Gradient đẹp */}
+              <LinearGradient
+                colors={['#4A80F0', '#6B5CE7']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.header}
+              >
                 <View style={styles.headerTop}>
-                  <Ionicons name="briefcase" size={32} color="#007AFF" />
+                  <View style={styles.logoContainer}>
+                    <View style={styles.logoIcon}>
+                      <Ionicons name="briefcase" size={24} color="#4A80F0" />
+                    </View>
+                    <View>
+                      <Text style={styles.headerTitle}>Job<Text style={styles.headerTitleAccent}>_4S</Text></Text>
+                      <Text style={styles.headerSubtitle}>Việc làm cho sinh viên</Text>
+                    </View>
+                  </View>
                   <TouchableOpacity onPress={closeDrawer} style={styles.closeButton}>
-                    <Ionicons name="close" size={28} color="#666" />
+                    <Ionicons name="close" size={24} color="rgba(255,255,255,0.9)" />
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.headerTitle}>Job_4S</Text>
-                <Text style={styles.headerSubtitle}>Menu chính</Text>
-              </View>
+              </LinearGradient>
 
               {/* Menu Items */}
               <View style={styles.menuList}>
@@ -160,49 +172,72 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: DRAWER_WIDTH,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
     shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
   },
   drawerContent: {
     flex: 1,
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   closeButton: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 4,
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  headerTitleAccent: {
+    color: '#FFD700',
+    fontWeight: '900',
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 2,
+    fontWeight: '500',
   },
   menuList: {
     flex: 1,
-    paddingTop: 8,
+    paddingTop: 12,
+    paddingHorizontal: 12,
   },
   firstMenuItem: {
     marginTop: 0,
@@ -210,48 +245,52 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    borderRadius: 12,
+    backgroundColor: '#fff',
   },
   menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#E8F1FF',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#EEF4FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   menuText: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1a1a1a',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
   },
   badge: {
     backgroundColor: '#EF4444',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     marginRight: 8,
-    minWidth: 20,
+    minWidth: 24,
     alignItems: 'center',
   },
   badgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   footer: {
     padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
   },
   footerText: {
     fontSize: 12,
-    color: '#999',
+    color: '#64748b',
+    fontWeight: '500',
   },
 });

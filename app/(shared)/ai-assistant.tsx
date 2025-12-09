@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,10 +48,30 @@ export default function AIAssistant() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   
   // ✅ Hook phải được gọi ở đầu component
   const { goBack } = useSafeBack();
+
+  // Keyboard listeners for Android
+  useEffect(() => {
+    const keyboardDidShow = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+      // Scroll to end when keyboard opens
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    const keyboardDidHide = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShow.remove();
+      keyboardDidHide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     // cuộn xuống dưới khi tin nhắn được thêm vào
@@ -170,76 +191,83 @@ export default function AIAssistant() {
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Messages List */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messagesList}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }}
-        />
+        <View style={styles.innerContainer}>
+          {/* Messages List */}
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.messagesList}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          />
 
-        {/* Loading indicator */}
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#4A80F0" />
-            <Text style={styles.loadingText}>AI đang suy nghĩ...</Text>
-          </View>
-        )}
+          {/* Loading indicator */}
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#4A80F0" />
+              <Text style={styles.loadingText}>AI đang suy nghĩ...</Text>
+            </View>
+          )}
 
-        {/* Suggested Questions (show when no messages yet) */}
-        {messages.length === 1 && !loading && (
-          <View style={styles.suggestedContainer}>
-            <Text style={styles.suggestedTitle}>Câu hỏi gợi ý:</Text>
-            {SUGGESTED_QUESTIONS.map((question, index) => (
+          {/* Suggested Questions (show when no messages yet) */}
+          {messages.length === 1 && !loading && !keyboardVisible && (
+            <View style={styles.suggestedContainer}>
+              <Text style={styles.suggestedTitle}>Câu hỏi gợi ý:</Text>
+              {SUGGESTED_QUESTIONS.map((question, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.suggestedButton}
+                  onPress={() => handleSuggestedQuestion(question)}
+                >
+                  <Ionicons
+                    name="bulb-outline"
+                    size={16}
+                    color="#4A80F0"
+                  />
+                  <Text style={styles.suggestedText}>{question}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Input Bar - Fixed at bottom */}
+          <View style={[styles.inputWrapper, keyboardVisible && styles.inputWrapperKeyboard]}>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={input}
+                onChangeText={setInput}
+                placeholder="Nhập câu hỏi của bạn..."
+                placeholderTextColor="#999"
+                multiline
+                maxLength={500}
+                onSubmitEditing={() => sendMessage()}
+                blurOnSubmit={false}
+              />
               <TouchableOpacity
-                key={index}
-                style={styles.suggestedButton}
-                onPress={() => handleSuggestedQuestion(question)}
+                style={[
+                  styles.sendButton,
+                  (!input.trim() || loading) && styles.sendButtonDisabled,
+                ]}
+                onPress={() => sendMessage()}
+                disabled={!input.trim() || loading}
               >
                 <Ionicons
-                  name="bulb-outline"
-                  size={16}
-                  color="#4A80F0"
-                />
-                <Text style={styles.suggestedText}>{question}</Text>
-              </TouchableOpacity>
-            ))}
+                name="send"
+                size={20}
+                color={!input.trim() || loading ? '#ccc' : '#fff'}
+              />
+            </TouchableOpacity>
           </View>
-        )}
-
-        {/* Input Bar */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Nhập câu hỏi của bạn..."
-            placeholderTextColor="#999"
-            multiline
-            maxLength={500}
-            onSubmitEditing={() => sendMessage()}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!input.trim() || loading) && styles.sendButtonDisabled,
-            ]}
-            onPress={() => sendMessage()}
-            disabled={!input.trim() || loading}
-          >
-            <Ionicons
-              name="send"
-              size={20}
-              color={!input.trim() || loading ? '#ccc' : '#fff'}
-            />
-          </TouchableOpacity>
+        </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -285,9 +313,13 @@ const styles = StyleSheet.create({
   chatContainer: {
     flex: 1,
   },
+  innerContainer: {
+    flex: 1,
+  },
   messagesList: {
     padding: 16,
     paddingBottom: 8,
+    flexGrow: 1,
   },
   messageBubble: {
     marginBottom: 12,
@@ -375,13 +407,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    padding: 12,
+  inputWrapper: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
+    paddingBottom: Platform.OS === 'android' ? 8 : 0,
+  },
+  inputWrapperKeyboard: {
+    paddingBottom: 0,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     gap: 8,
   },
   input: {

@@ -66,6 +66,7 @@ export const aiApiService = {
     skills?: string[];
     projects?: string;
     summary?: string;
+    hasPersonalInfo?: boolean;
   }): Promise<CVAnalysis> {
     const response = await apiClient.post<CVAnalysis>(
       API_ENDPOINTS.ai.analyzeCV,

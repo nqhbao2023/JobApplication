@@ -30,14 +30,49 @@ export const CVAnalysisCard: React.FC<CVAnalysisCardProps> = ({ cvData }) => {
       setLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // Transform CV data for AI analysis
+      // Transform CV data for AI analysis - GỬI ĐẦY ĐỦ THÔNG TIN
+      const educationDetails = cvData.education?.map(e => {
+        let details = `${e.degree || 'Đang học'} tại ${e.school || 'N/A'}`;
+        if (e.major) details += `, chuyên ngành ${e.major}`;
+        if (e.gpa) details += `, GPA: ${e.gpa}`;
+        if (e.achievements && e.achievements.length > 0) {
+          details += `. Thành tích: ${e.achievements.join(', ')}`;
+        }
+        if (e.startDate) details += ` (${e.startDate}${e.endDate ? ' - ' + e.endDate : ' - Hiện tại'})`;
+        return details;
+      }).join('; ') || '';
+
+      const experienceDetails = cvData.experience?.map(e => {
+        let details = `${e.title || 'Vị trí'} tại ${e.company || 'Công ty'}`;
+        if (e.description) details += `: ${e.description}`;
+        if (e.startDate) details += ` (${e.startDate}${e.endDate ? ' - ' + e.endDate : ' - Hiện tại'})`;
+        return details;
+      }).join('; ') || '';
+
+      const projectDetails = cvData.projects?.map(p => {
+        let details = p.name || 'Dự án';
+        if (p.description) details += `: ${p.description}`;
+        if (p.technologies && p.technologies.length > 0) {
+          details += `. Công nghệ: ${p.technologies.join(', ')}`;
+        }
+        if (p.link) details += ` (Link: ${p.link})`;
+        return details;
+      }).join('; ') || '';
+
+      // Collect all skills with their items
+      const allSkills = cvData.skills?.flatMap(s => s.items || []) || [];
+
       const cvForAnalysis = {
-        education: cvData.education?.map(e => `${e.degree} tại ${e.school}`).join(', ') || '',
-        experience: cvData.experience?.map(e => `${e.title} tại ${e.company}`).join(', ') || '',
-        skills: cvData.skills?.flatMap(s => s.items || []) || [],
-        projects: cvData.projects?.map(p => p.name).join(', ') || '',
+        education: educationDetails,
+        experience: experienceDetails,
+        skills: allSkills,
+        projects: projectDetails,
         summary: cvData.objective || '',
+        // Thêm thông tin cá nhân để AI đánh giá tổng thể
+        hasPersonalInfo: !!(cvData.personalInfo?.fullName && cvData.personalInfo?.email && cvData.personalInfo?.phone),
       };
+
+      console.log('📊 CV Analysis data sent:', JSON.stringify(cvForAnalysis, null, 2));
 
       const result = await aiApiService.analyzeCV(cvForAnalysis);
       setAnalysis(result);

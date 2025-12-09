@@ -48,25 +48,51 @@ export class AIService {
   }
 
   // 2. HỎI AI (Google Gemini) - Dùng cho chatbot hoặc hỏi đáp chung
-  async askAI(prompt: string): Promise<string> {
+  async askAI(prompt: string, isChat: boolean = true): Promise<string> {
     try {
       if (!this.apiKey || !this.apiUrl) {
         console.warn('AI API not configured');
         return 'AI chưa được cấu hình. Vui lòng kiểm tra lại API key.';
       }
 
+      // System instruction cho chatbot - giúp AI trả lời ngắn gọn, thân thiện
+      const systemInstruction = isChat ? `Bạn là trợ lý AI tên "Job4S Assistant" chuyên hỗ trợ sinh viên Việt Nam tìm việc làm.
+
+QUY TẮC TRẢ LỜI (BẮT BUỘC TUÂN THEO):
+1. Trả lời NGẮN GỌN, tối đa 3-4 câu cho câu hỏi đơn giản
+2. KHÔNG dùng markdown (**, ##, *, -) - chỉ dùng văn bản thuần
+3. Dùng emoji phù hợp để thân thiện hơn 😊
+4. Nếu cần liệt kê, dùng số (1. 2. 3.) thay vì dấu *
+5. Tập trung vào việc làm part-time, thực tập, freelance cho sinh viên
+6. Trả lời bằng tiếng Việt tự nhiên, thân thiện như đang chat với bạn bè
+7. Nếu không biết, nói thẳng "Mình không chắc về vấn đề này"
+
+VÍ DỤ CÁCH TRẢ LỜI TỐT:
+- "Lương part-time F&B thường từ 20-30k/giờ tùy quán. Quán café thường trả 25k, còn nhà hàng có thể cao hơn 😊"
+- "Để viết CV tốt, bạn nên: 1. Thông tin cá nhân rõ ràng 2. Liệt kê kỹ năng 3. Thêm dự án/hoạt động. Đừng quên kiểm tra lỗi chính tả nhé!"
+
+Câu hỏi của user: ` : '';
+
+      const fullPrompt = systemInstruction + prompt;
+
       const response = await axios.post(
         `${this.apiUrl}?key=${this.apiKey}`,
         {
           contents: [{
             parts: [{
-              text: prompt
+              text: fullPrompt
             }]
           }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 500,
-          }
+            maxOutputTokens: isChat ? 300 : 500, // Giới hạn token cho chat
+            topP: 0.9,
+            topK: 40,
+          },
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          ]
         },
         {
           headers: { 'Content-Type': 'application/json' },
@@ -74,17 +100,44 @@ export class AIService {
         }
       );
 
-      return response.data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có phản hồi từ AI.';
+      let result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Không có phản hồi từ AI.';
+      
+      // Clean up markdown formatting từ response nếu AI vẫn dùng
+      if (isChat) {
+        result = this.cleanMarkdown(result);
+      }
+      
+      return result;
     } catch (error: any) {
       console.error('AI request failed:', error.message);
-      return 'Lỗi khi gọi AI. Vui lòng thử lại sau.';
+      return 'Xin lỗi, mình gặp lỗi kết nối. Bạn thử lại sau nhé! 🙏';
     }
+  }
+
+  // Helper: Clean markdown từ response
+  private cleanMarkdown(text: string): string {
+    return text
+      // Remove bold/italic markers
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/_([^_]+)_/g, '$1')
+      // Remove headers
+      .replace(/^#{1,6}\s+/gm, '')
+      // Replace bullet points with numbers or clean format
+      .replace(/^[\*\-]\s+/gm, '• ')
+      // Remove code blocks
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      // Clean up extra whitespace
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   // 3. ENHANCE JOB DESCRIPTION (Google Gemini)
   async enhanceJobDescription(description: string): Promise<string> {
     const prompt = `Bạn là chuyên gia viết mô tả công việc. Hãy cải thiện mô tả sau để rõ ràng, hấp dẫn hơn (giữ tiếng Việt):\n\n${description}`;
-    return this.askAI(prompt);
+    return this.askAI(prompt, false); // isChat = false để giữ format
   }
 
   // 3.5. AUTO-CATEGORIZE JOB (Google Gemini)
@@ -105,7 +158,7 @@ Chỉ trả về TÊN CATEGORY duy nhất, không giải thích. Ví dụ: "IT-S
     `.trim();
 
     try {
-      const result = await this.askAI(prompt);
+      const result = await this.askAI(prompt, false); // isChat = false
       const category = result.trim().replace(/["']/g, '');
       
       // Validate result is in our categories list
@@ -184,34 +237,56 @@ Chỉ trả về TÊN CATEGORY duy nhất, không giải thích. Ví dụ: "IT-S
     return `✓ Có ${matchedSkills.length} kỹ năng phù hợp: ${matchedSkills.slice(0, 3).join(', ')}`;
   }
 
-  // 5. ANALYZE CV STRENGTH (Google Gemini)
+  // 5. ANALYZE CV STRENGTH (Google Gemini) - OPTIMIZED FOR STUDENTS
   async analyzeCVStrength(cvData: {
     education?: string;
     experience?: string;
     skills?: string[];
     projects?: string;
     summary?: string;
+    hasPersonalInfo?: boolean;
   }): Promise<{
     score: number;
     strengths: string[];
     improvements: string[];
     suggestions: string[];
   }> {
+    // Tính điểm cơ bản trước để làm tham chiếu cho AI
+    const baseScore = this.calculateBaseScore(cvData);
+    
     const prompt = `
-Bạn là chuyên gia đánh giá CV. Phân tích CV sinh viên sau và cho điểm từ 0-100:
+Bạn là chuyên gia đánh giá CV cho SINH VIÊN và người mới ra trường tại Việt Nam.
 
-Học vấn: ${cvData.education || 'Chưa có'}
-Kinh nghiệm: ${cvData.experience || 'Chưa có'}
-Kỹ năng: ${cvData.skills?.join(', ') || 'Chưa có'}
-Dự án: ${cvData.projects || 'Chưa có'}
-Giới thiệu: ${cvData.summary || 'Chưa có'}
+⚠️ QUY TẮC QUAN TRỌNG:
+1. Đây là CV của SINH VIÊN - họ có thể chưa có nhiều kinh nghiệm làm việc chính thức
+2. Đánh giá CÔNG BẰNG dựa trên những gì họ CÓ, không trừ điểm quá nặng vì thiếu kinh nghiệm
+3. DỰ ÁN cá nhân và HOẠT ĐỘNG ngoại khóa cũng có giá trị như kinh nghiệm làm việc với sinh viên
+4. Điểm tối thiểu là 30/100 nếu CV có đầy đủ thông tin cơ bản
 
-Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, chỉ JSON thuần):
+📊 THANG ĐIỂM THAM KHẢO CHO SINH VIÊN:
+- 80-100: CV xuất sắc (có GPA cao, nhiều dự án, kỹ năng đa dạng, kinh nghiệm thực tập)
+- 60-79: CV tốt (có học vấn rõ ràng, vài kỹ năng và dự án)
+- 40-59: CV khá (có thông tin cơ bản, cần bổ sung thêm chi tiết)
+- 30-39: CV cơ bản (thiếu nhiều thông tin quan trọng)
+- Dưới 30: Chỉ khi CV gần như trống hoàn toàn
+
+📋 CV CẦN ĐÁNH GIÁ:
+
+Học vấn: ${cvData.education || 'Chưa có thông tin'}
+Kinh nghiệm: ${cvData.experience || 'Chưa có kinh nghiệm (bình thường với sinh viên)'}
+Kỹ năng: ${cvData.skills?.length ? cvData.skills.join(', ') : 'Chưa liệt kê kỹ năng'}
+Dự án: ${cvData.projects || 'Chưa có dự án'}
+Mục tiêu nghề nghiệp: ${cvData.summary || 'Chưa có'}
+Thông tin cá nhân đầy đủ: ${cvData.hasPersonalInfo ? 'Có' : 'Thiếu'}
+
+📊 Điểm tham chiếu dựa trên độ đầy đủ: ${baseScore}/100
+
+Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, không giải thích, chỉ JSON thuần):
 {
-  "score": 75,
-  "strengths": ["Có kinh nghiệm thực tập tại công ty IT", "GPA cao 3.5/4.0"],
-  "improvements": ["Thiếu kỹ năng mềm", "Chưa có dự án cá nhân"],
-  "suggestions": ["Thêm section Hobbies/Interests", "Viết rõ achievements với số liệu cụ thể", "Bổ sung soft skills"]
+  "score": <số từ ${Math.max(30, baseScore - 10)} đến ${Math.min(100, baseScore + 15)}>,
+  "strengths": ["điểm mạnh 1", "điểm mạnh 2"],
+  "improvements": ["cần cải thiện 1", "cần cải thiện 2"],
+  "suggestions": ["gợi ý cụ thể 1", "gợi ý cụ thể 2"]
 }
     `.trim();
 
@@ -219,7 +294,6 @@ Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, chỉ 
       const result = await this.askAI(prompt);
       
       // Try to parse JSON from response
-      // Gemini sometimes wraps JSON in markdown code blocks
       let jsonText = result.trim();
       
       // Remove markdown code blocks if present
@@ -229,64 +303,156 @@ Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, chỉ 
         jsonText = jsonText.replace(/```\n?/g, '');
       }
       
+      // Try to extract JSON if there's extra text
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[0];
+      }
+      
       const parsed = JSON.parse(jsonText);
       
+      // Ensure score is within reasonable bounds for students
+      const finalScore = Math.min(100, Math.max(30, parsed.score || baseScore));
+      
       return {
-        score: Math.min(100, Math.max(0, parsed.score || 0)),
-        strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
-        improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
-        suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+        score: finalScore,
+        strengths: Array.isArray(parsed.strengths) && parsed.strengths.length > 0 
+          ? parsed.strengths 
+          : this.getDefaultStrengths(cvData),
+        improvements: Array.isArray(parsed.improvements) && parsed.improvements.length > 0 
+          ? parsed.improvements 
+          : this.getDefaultImprovements(cvData),
+        suggestions: Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0 
+          ? parsed.suggestions 
+          : this.getDefaultSuggestions(cvData),
       };
     } catch (error) {
-      console.error('CV analysis failed:', error);
+      console.error('CV analysis failed, using rule-based scoring:', error);
       
-      // Fallback: rule-based scoring
-      let score = 0;
-      const strengths: string[] = [];
-      const improvements: string[] = [];
-      const suggestions: string[] = [];
-      
-      if (cvData.education) {
-        score += 20;
-        strengths.push('Có thông tin học vấn');
-      } else {
-        improvements.push('Chưa có thông tin học vấn');
-        suggestions.push('Thêm thông tin trường học, chuyên ngành, GPA');
-      }
-      
-      if (cvData.experience) {
-        score += 30;
-        strengths.push('Có kinh nghiệm làm việc');
-      } else {
-        improvements.push('Chưa có kinh nghiệm');
-        suggestions.push('Thêm kinh nghiệm thực tập hoặc dự án');
-      }
-      
-      if (cvData.skills && cvData.skills.length > 0) {
-        score += 25;
-        strengths.push(`Có ${cvData.skills.length} kỹ năng`);
-      } else {
-        improvements.push('Chưa liệt kê kỹ năng');
-        suggestions.push('Thêm kỹ năng chuyên môn và kỹ năng mềm');
-      }
-      
-      if (cvData.projects) {
-        score += 15;
-        strengths.push('Có dự án cá nhân');
-      } else {
-        improvements.push('Chưa có dự án');
-        suggestions.push('Thêm dự án cá nhân hoặc dự án học tập');
-      }
-      
-      if (cvData.summary) {
-        score += 10;
-        strengths.push('Có phần giới thiệu bản thân');
-      } else {
-        suggestions.push('Thêm phần tóm tắt giới thiệu bản thân ngắn gọn');
-      }
-      
-      return { score, strengths, improvements, suggestions };
+      // Enhanced fallback: rule-based scoring optimized for students
+      return this.fallbackCVAnalysis(cvData);
     }
+  }
+
+  // Helper: Calculate base score for CV
+  private calculateBaseScore(cvData: {
+    education?: string;
+    experience?: string;
+    skills?: string[];
+    projects?: string;
+    summary?: string;
+    hasPersonalInfo?: boolean;
+  }): number {
+    let score = 35; // Base score for any CV attempt
+    
+    // Personal Info (10 points)
+    if (cvData.hasPersonalInfo) score += 10;
+    
+    // Education (25 points) - Most important for students
+    if (cvData.education && cvData.education.length > 10) {
+      score += 15;
+      if (cvData.education.toLowerCase().includes('gpa') || 
+          cvData.education.toLowerCase().includes('thành tích')) {
+        score += 10;
+      }
+    }
+    
+    // Skills (20 points)
+    if (cvData.skills && cvData.skills.length > 0) {
+      score += Math.min(20, cvData.skills.length * 4);
+    }
+    
+    // Projects (20 points) - Very important for students without experience
+    if (cvData.projects && cvData.projects.length > 10) {
+      score += 15;
+      if (cvData.projects.toLowerCase().includes('công nghệ') || 
+          cvData.projects.toLowerCase().includes('link')) {
+        score += 5;
+      }
+    }
+    
+    // Experience (10 points) - Optional for students
+    if (cvData.experience && cvData.experience.length > 10) {
+      score += 10;
+    }
+    
+    // Summary/Objective (5 points)
+    if (cvData.summary && cvData.summary.length > 20) {
+      score += 5;
+    }
+    
+    return Math.min(100, score);
+  }
+
+  // Helper: Get default strengths based on CV data
+  private getDefaultStrengths(cvData: any): string[] {
+    const strengths: string[] = [];
+    
+    if (cvData.education) strengths.push('Có thông tin học vấn rõ ràng');
+    if (cvData.skills?.length > 3) strengths.push(`Có ${cvData.skills.length} kỹ năng được liệt kê`);
+    if (cvData.projects) strengths.push('Có dự án cá nhân/học tập');
+    if (cvData.experience) strengths.push('Có kinh nghiệm làm việc');
+    if (cvData.hasPersonalInfo) strengths.push('Thông tin liên hệ đầy đủ');
+    
+    if (strengths.length === 0) {
+      strengths.push('Đã bắt đầu xây dựng CV');
+    }
+    
+    return strengths;
+  }
+
+  // Helper: Get default improvements based on CV data
+  private getDefaultImprovements(cvData: any): string[] {
+    const improvements: string[] = [];
+    
+    if (!cvData.education || cvData.education.length < 20) {
+      improvements.push('Cần bổ sung chi tiết về học vấn (trường, ngành, GPA)');
+    }
+    if (!cvData.skills || cvData.skills.length < 3) {
+      improvements.push('Nên thêm nhiều kỹ năng hơn (tối thiểu 5-8 kỹ năng)');
+    }
+    if (!cvData.projects || cvData.projects.length < 20) {
+      improvements.push('Cần thêm mô tả chi tiết về các dự án đã làm');
+    }
+    if (!cvData.summary) {
+      improvements.push('Thiếu phần mục tiêu nghề nghiệp');
+    }
+    
+    return improvements.slice(0, 3);
+  }
+
+  // Helper: Get default suggestions based on CV data
+  private getDefaultSuggestions(cvData: any): string[] {
+    const suggestions: string[] = [];
+    
+    suggestions.push('Thêm số liệu cụ thể vào các thành tích (VD: "Tăng 20% hiệu suất")');
+    
+    if (!cvData.skills || cvData.skills.length < 5) {
+      suggestions.push('Bổ sung cả kỹ năng cứng (technical) và kỹ năng mềm (soft skills)');
+    }
+    
+    if (!cvData.projects) {
+      suggestions.push('Thêm các dự án học tập, dự án cá nhân hoặc hoạt động ngoại khóa');
+    }
+    
+    suggestions.push('Sử dụng các từ khóa liên quan đến ngành nghề bạn muốn ứng tuyển');
+    
+    return suggestions.slice(0, 3);
+  }
+
+  // Enhanced fallback CV analysis for students
+  private fallbackCVAnalysis(cvData: any): {
+    score: number;
+    strengths: string[];
+    improvements: string[];
+    suggestions: string[];
+  } {
+    const score = this.calculateBaseScore(cvData);
+    const strengths = this.getDefaultStrengths(cvData);
+    const improvements = this.getDefaultImprovements(cvData);
+    const suggestions = this.getDefaultSuggestions(cvData);
+    
+    return { score, strengths, improvements, suggestions };
   }
 
   // 6. PREDICT JOB SALARY (Rule-based + Market data)

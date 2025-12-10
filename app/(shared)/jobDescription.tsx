@@ -29,6 +29,7 @@ import { Job } from "@/types";
 import { auth } from "@/config/firebase";
 import { quickPostService } from "@/services/quickPostApi.service";
 import { authApiService } from "@/services/authApi.service";
+import { cvService } from "@/services/cv.service";
 import { SalaryPredictionBadge } from "@/components/job/SalaryPredictionBadge";
 
 const JobDescription = () => {
@@ -190,6 +191,22 @@ const JobDescription = () => {
       // Get user profile
       const profile = await authApiService.getProfile();
       
+      // ✅ FIX: Get user's CV
+      let cvUrl: string | undefined = undefined;
+      try {
+        const defaultCV = await cvService.getDefaultCV();
+        if (defaultCV) {
+          cvUrl = defaultCV.pdfUrl || defaultCV.fileUrl;
+        } else {
+          const allCVs = await cvService.getUserCVs();
+          if (allCVs.length > 0) {
+            cvUrl = allCVs[0].pdfUrl || allCVs[0].fileUrl;
+          }
+        }
+      } catch (cvError) {
+        console.warn('Error fetching CV for quick post:', cvError);
+      }
+      
       // Show confirmation
       Alert.alert(
         'Gửi CV ứng tuyển',
@@ -204,8 +221,7 @@ const JobDescription = () => {
                   name: profile.name || user.displayName || 'Ứng viên',
                   email: user.email || profile.email || '',
                   phone: profile.phone || undefined,
-                  // TODO: Add CV URL if user has uploaded CV
-                  cvUrl: undefined,
+                  cvUrl: cvUrl,
                 });
 
                 Alert.alert(

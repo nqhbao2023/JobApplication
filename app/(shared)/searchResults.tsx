@@ -473,7 +473,7 @@ export default function SearchResultsPage() {
                   <TouchableOpacity
                     style={styles.jobCard}
                     onPress={() =>
-                      router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.$id, from: '/(shared)/searchResults' } })
+                      router.push({ pathname: '/(shared)/jobDescription', params: { jobId: job.$id } })
                     }
                   >
                     {/* Job/Company Image */}

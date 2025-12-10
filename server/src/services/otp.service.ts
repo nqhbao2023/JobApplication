@@ -96,7 +96,9 @@ class OTPService {
       };
     }
 
-    console.log(`📧 OTP created for ${email} (${purpose}): ${code} - expires at ${expiresAt.toISOString()}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📧 OTP created for ${email} (${purpose}): ${code} - expires at ${expiresAt.toISOString()}`);
+    }
 
     return {
       success: true,

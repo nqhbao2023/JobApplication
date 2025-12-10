@@ -84,6 +84,7 @@ export const EVENTS = {
   JOBS_REFRESH: 'jobs:refresh',
   FILTER_CHANGED: 'filter:changed',
   NOTIFICATIONS_READ: 'notifications:read', // Emitted when notifications are marked as read
+  APPLICATION_STATUS_UPDATED: 'application:status_updated', // Emitted when application status changes
 } as const;
 
 export default eventBus;

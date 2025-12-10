@@ -219,7 +219,6 @@ const CandidateHome = () => {
                 style={styles.avatar}
                 source={{ uri: data?.user?.photoURL || 'https://randomuser.me/api/portraits/men/1.jpg' }}
                 contentFit="cover"
-                transition={200}
               />
             </TouchableOpacity>
           </View>

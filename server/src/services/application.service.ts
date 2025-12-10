@@ -48,6 +48,13 @@ export class ApplicationService {
 
       await appRef.set(newApplication);
 
+      console.log('✅ Created draft application:', {
+        id: newApplication.id?.substring(0, 8) + '...' || 'unknown',
+        jobId: newApplication.jobId?.substring(0, 8) + '...' || 'unknown',
+        candidateId: newApplication.candidateId?.substring(0, 8) + '...' || 'unknown',
+        status: newApplication.status,
+      });
+
       // ✅ NOTE: applicantCount và notifications sẽ được gửi khi CV được upload (trong updateApplication)
       // Không gửi notification/tăng count khi tạo draft
 
@@ -102,6 +109,17 @@ export class ApplicationService {
 
       // ✅ Filter out draft applications (employer should only see submitted applications)
       const submittedApplications = applications.filter(app => app.status !== 'draft');
+
+      console.log('📄 getApplicationsByEmployer result:', {
+        employerId: employerId?.substring(0, 8) + '...' || 'unknown',
+        total: applications.length,
+        drafts: applications.filter(app => app.status === 'draft').length,
+        submitted: submittedApplications.length,
+        statuses: submittedApplications.reduce((acc: any, app) => {
+          acc[app.status] = (acc[app.status] || 0) + 1;
+          return acc;
+        }, {}),
+      });
 
       // Sort by appliedAt descending
       submittedApplications.sort((a, b) => {
@@ -174,10 +192,46 @@ export class ApplicationService {
       throw new AppError(`Failed to fetch applications: ${error.message}`, 500);
     }
   }
+
+  async getApplicationById(id: string): Promise<Application> {
+    try {
+      const doc = await db.collection(APPLICATIONS_COLLECTION).doc(id).get();
+      if (!doc.exists) {
+        throw new AppError('Application not found', 404);
+      }
+      
+      const app = { id: doc.id, ...doc.data() } as Application;
+      
+      // Enrich with candidate data if needed (optional but helpful)
+      if (app.candidateId) {
+        try {
+          const candidateDoc = await db.collection('users').doc(app.candidateId).get();
+          if (candidateDoc.exists) {
+            const candidateData = candidateDoc.data();
+            (app as any).candidate = {
+              uid: candidateDoc.id,
+              displayName: candidateData?.displayName || candidateData?.fullName || candidateData?.name || null,
+              email: candidateData?.email || null,
+              photoURL: candidateData?.photoURL || candidateData?.avatar || null,
+              phone: candidateData?.phone || candidateData?.phoneNumber || null,
+            };
+          }
+        } catch (err) {
+          console.warn(`⚠️ Could not fetch candidate ${app.candidateId}:`, err);
+        }
+      }
+      
+      return app;
+    } catch (error: any) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(`Failed to fetch application: ${error.message}`, 500);
+    }
+  }
+
   async updateApplication(
     applicationId: string,
     candidateId: string,
-    updates: Partial<Pick<Application, 'cvUrl' | 'coverLetter'>>
+    updates: Partial<Pick<Application, 'cvUrl' | 'coverLetter' | 'cvId' | 'cvSource'>>
   ): Promise<Application> {
     try {
       const appRef = db.collection(APPLICATIONS_COLLECTION).doc(applicationId);
@@ -197,20 +251,41 @@ export class ApplicationService {
       };
 
       // ✅ Check if this is the first CV submission (draft -> pending)
-      const isFirstSubmission = data.status === 'draft' && updates.cvUrl !== undefined;
+      const isFirstSubmission = data.status === 'draft';
 
-      if (updates.cvUrl !== undefined) {
-        updatePayload.cvUrl = updates.cvUrl;
+      // ✅ CRITICAL FIX: Always set status to pending when updating from draft
+      // This handles both template CVs (no cvUrl) and uploaded CVs (with cvUrl)
+      if (isFirstSubmission) {
         updatePayload.status = 'pending';
+        console.log('✅ Setting application status to pending (first submission)');
+      }
+
+      // ✅ Update cvUrl if provided (optional for template CVs)
+      if (updates.cvUrl !== undefined) {
+        updatePayload.cvUrl = updates.cvUrl || undefined; // Store undefined instead of null
+      }
+
+      // ✅ Update cvId and cvSource
+      if (updates.cvId !== undefined) {
+        updatePayload.cvId = updates.cvId;
+      }
+      if (updates.cvSource !== undefined) {
+        updatePayload.cvSource = updates.cvSource;
       }
 
       if (updates.coverLetter !== undefined) {
         updatePayload.coverLetter = updates.coverLetter;
       }
 
-      if (Object.keys(updatePayload).length === 1) {
-        throw new AppError('No valid fields provided for update', 400);
-      }
+      console.log('📦 Updating application:', {
+        applicationId,
+        oldStatus: data.status,
+        newStatus: updatePayload.status,
+        hasCvUrl: !!updatePayload.cvUrl,
+        cvId: updatePayload.cvId,
+        cvSource: updatePayload.cvSource,
+        isFirstSubmission,
+      });
 
       await appRef.update(updatePayload);
 

@@ -201,7 +201,13 @@ const Notifications = () => {
         markAsRead(item.$id);
       }
       if (item.jobId) {
-        router.push({ pathname: '/(shared)/jobDescription', params: { jobId: item.jobId, from: '/(shared)/Notifications' } });
+        // ✅ FIX: Don't pass 'from' param to avoid circular navigation loop
+        // When 'from' is passed, useSafeBack uses router.replace() which stacks up the same screen
+        // By removing it, we allow standard stack navigation (push/pop) which is correct here
+        router.push({ 
+          pathname: '/(shared)/jobDescription', 
+          params: { jobId: item.jobId } 
+        });
       }
     },
     [markAsRead]

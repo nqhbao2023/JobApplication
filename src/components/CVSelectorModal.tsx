@@ -82,9 +82,25 @@ export default function CVSelectorModal({
       if (defaultCV?.id) {
         setSelectedCvId(defaultCV.id);
       }
-    } catch (error) {
-      console.error('Error loading CVs:', error);
-      Alert.alert('Lỗi', 'Không thể tải danh sách CV');
+    } catch (error: any) {
+      console.error('❌ Error loading CVs:', error);
+      
+      // Show user-friendly error message
+      const isNetworkError = error.message?.includes('network') || error.message?.includes('connect');
+      
+      Alert.alert(
+        isNetworkError ? 'Lỗi kết nối' : 'Lỗi', 
+        isNetworkError 
+          ? 'Không thể kết nối đến server. Vui lòng kiểm tra:\n\n• Kết nối internet\n• Server đang chạy (port 3000)\n• VPN/Firewall'
+          : 'Không thể tải danh sách CV. Vui lòng thử lại.',
+        [
+          { text: 'Đóng', onPress: onClose },
+          { text: 'Thử lại', onPress: loadCVs }
+        ]
+      );
+      
+      // Set empty array to show upload option
+      setCvs([]);
     } finally {
       setLoading(false);
     }
@@ -164,23 +180,16 @@ export default function CVSelectorModal({
     const selectedCV = cvs.find(cv => cv.id === selectedCvId);
     if (!selectedCV) return;
 
-    // ✅ Check if template CV doesn't have PDF URL
+    // ✅ FIXED: For Quick Post, we don't need PDF - we save cvSnapshot
+    // Only check PDF for job application submissions
     const isTemplateCV = selectedCV.type !== 'uploaded';
     const hasPdfUrl = selectedCV.pdfUrl || selectedCV.fileUrl;
     
-    if (isTemplateCV && !hasPdfUrl) {
-      Alert.alert(
-        'CV chưa có file PDF',
-        'CV từ template này chưa được xuất thành file PDF.\n\nĐể nộp CV này, bạn cần:\n1. Vào phần "CV của tôi"\n2. Chọn CV này\n3. Nhấn nút "Xuất PDF" để tạo file',
-        [
-          { text: 'Để sau', style: 'cancel' },
-          { 
-            text: 'Chọn CV khác', 
-            onPress: () => setSelectedCvId(null)
-          }
-        ]
-      );
-      return;
+    // ✅ Allow template CV without PDF (will use cvSnapshot in Quick Post)
+    // Just warn user, but still allow selection
+    if (isTemplateCV && !hasPdfUrl && !allowNoCV) {
+      // Only warn for job applications, not Quick Post
+      console.log('⚠️ Template CV without PDF, but allowing selection (will use cvSnapshot)');
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -215,8 +224,8 @@ export default function CVSelectorModal({
   const renderCVItem = ({ item }: { item: CVData }) => {
     const isSelected = selectedCvId === item.id;
     const isUploaded = item.type === 'uploaded';
-    // ✅ Check if template CV has PDF URL
-    const isTemplateWithoutPdf = !isUploaded && !item.pdfUrl && !item.fileUrl;
+    // ✅ REMOVED: No longer need to warn about template without PDF
+    // const isTemplateWithoutPdf = !isUploaded && !item.pdfUrl && !item.fileUrl;
 
     return (
       <TouchableOpacity
@@ -258,16 +267,10 @@ export default function CVSelectorModal({
             {isUploaded ? '📄 CV tải lên' : '✨ CV từ template'}
           </Text>
           
-          {/* ✅ Warning if template without PDF */}
-          {isTemplateWithoutPdf ? (
-            <Text style={styles.cvWarning}>
-              ⚠️ Chưa xuất PDF - Cần xuất trước khi nộp
-            </Text>
-          ) : (
-            <Text style={styles.cvDate}>
-              Cập nhật: {formatDate(item.updatedAt)}
-            </Text>
-          )}
+          {/* ✅ FIXED: Always show update date, no warning */}
+          <Text style={styles.cvDate}>
+            Cập nhật: {formatDate(item.updatedAt)}
+          </Text>
         </View>
 
         {/* Selection indicator */}
@@ -358,8 +361,11 @@ export default function CVSelectorModal({
               <TouchableOpacity
                 style={styles.noCVButton}
                 onPress={handleNoCV}
+                activeOpacity={0.7}
               >
-                <Ionicons name="close-circle-outline" size={20} color="#64748b" />
+                <View style={styles.noCVIconContainer}>
+                  <Ionicons name="close-circle" size={18} color="#64748b" />
+                </View>
                 <Text style={styles.noCVText}>Không dùng CV</Text>
               </TouchableOpacity>
             )}
@@ -599,13 +605,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    gap: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    gap: 6,
+  },
+  noCVIconContainer: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   noCVText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#475569',
   },
   selectButton: {
     flex: 2,

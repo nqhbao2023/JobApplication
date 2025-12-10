@@ -135,21 +135,25 @@ export default function Submit() {
       // Check if CV has a valid URL
       const cvUrl = selectedCV.pdfUrl || selectedCV.fileUrl;
       
-      if (!cvUrl) {
-        // CV từ template chưa được export sang PDF
-        if (selectedCV.type === 'template' || !selectedCV.type) {
+      // ✅ For template CVs: URL is optional (can view via CVTemplateViewer using cvId)
+      // ✅ For uploaded CVs: URL is required and must be valid Firebase Storage URL
+      if (selectedCV.type === 'uploaded' && cvUrl) {
+        // Block file:/// URLs only for uploaded CVs
+        if (cvUrl.startsWith('file:///')) {
+          console.error('❌ BLOCKED: file:/// URL detected for uploaded CV:', cvUrl.substring(0, 50));
           Alert.alert(
-            "CV chưa có file PDF",
-            "CV này được tạo từ mẫu nhưng chưa được xuất sang PDF.\n\n" +
-            "Hãy vào mục 'CV của tôi' → chọn CV này → nhấn 'Xuất PDF' trước khi nộp.\n\n" +
-            "Hoặc chọn CV đã tải lên (file PDF/DOC).",
+            "Lỗi CV",
+            "CV này chứa đường dẫn file nội bộ không hợp lệ.\n\n" +
+            "Vui lòng chọn CV khác hoặc tải lên CV mới.",
             [{ text: "Đã hiểu" }]
           );
           return null;
         }
       }
       
-      return cvUrl;
+      // Template CVs can be submitted without PDF URL (will use cvId to fetch from Firestore)
+      // Return cvUrl if available, or null for templates (will be handled by cv_id + cv_source)
+      return cvUrl || null;
     }
     
     // Case 2: Direct file upload
@@ -209,17 +213,9 @@ export default function Submit() {
       setProgress(1);
       console.log("🚀 Bắt đầu nộp CV...");
 
-      // ✅ NEW: Get CV URL (from library or upload new)
+      // ✅ Get CV URL (from library or upload new)
+      // Note: Template CVs may return null (will use cv_id instead)
       const url = await getCvUrlForSubmission();
-      
-      if (!url) {
-        // Alert đã được hiển thị trong getCvUrlForSubmission nếu CV từ template chưa có PDF
-        // Không throw error để tránh hiển thị Alert trùng
-        setIsUploading(false);
-        setProgress(0);
-        isSubmittingRef.current = false;
-        return;
-      }
 
       // 🔎 Lấy dữ liệu user + job
       const [userSnap, jobSnap] = await Promise.all([
@@ -252,11 +248,11 @@ export default function Submit() {
         employerId,
         userInfo,
         jobInfo,
-        cv_url: url,
+        cv_url: url || null, // ✅ Allow null for template CVs
         cv_path: cvSource === 'library' ? `library/${selectedCV?.id}` : uploadRef.current?.snapshot?.ref?.fullPath,
         cv_uploaded: true,
-        cv_source: cvSource, // ✅ NEW: Track CV source
-        cv_id: selectedCV?.id || null, // ✅ NEW: Track CV ID if from library
+        cv_source: cvSource, // ✅ Track CV source
+        cv_id: selectedCV?.id || null, // ✅ Track CV ID if from library
         status: "pending",
         applied_at: serverTimestamp(),
         updated_at: serverTimestamp(),
@@ -267,18 +263,40 @@ export default function Submit() {
       } else {
         await updateDoc(snap.docs[0].ref, payload);
       }
-await applicationApiService.updateApplication(applyDocId, {
-  cvUrl: url,
-});
+
+      // ✅ Update application with cvUrl (can be null for template CVs)
+      console.log('📦 Updating application:', {
+        applyDocId,
+        cvUrl: url?.substring(0, 30) + '...',
+        cvSource,
+        selectedCvId: selectedCV?.id,
+      });
+      
+      const updateResult = await applicationApiService.updateApplication(applyDocId, {
+        cvUrl: url || undefined, // Use undefined instead of null for API
+        cvId: selectedCV?.id || undefined,
+        cvSource: cvSource,
+      });
+      
+      console.log('✅ Application updated:', {
+        id: updateResult.id,
+        status: updateResult.status,
+        hasCvUrl: !!updateResult.cvUrl,
+      });
 
 Alert.alert("🎉 Thành công", "Bạn đã nộp CV thành công!");
 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 await new Promise((r) => setTimeout(r, 400));
 
-router.dismiss(1); // 👈 Đóng màn hình JobDescription cũ phía dưới Submit
+// ✅ Navigate back và force refresh apply status
+router.dismissAll(); // Đóng tất cả modal/screen phía trên
 router.replace({
   pathname: "/(shared)/jobDescription",
-  params: { jobId, success: "true" },
+  params: { 
+    jobId, 
+    success: "true",
+    _timestamp: Date.now().toString() // Force re-render
+  },
 });
 
     } catch (e: any) {

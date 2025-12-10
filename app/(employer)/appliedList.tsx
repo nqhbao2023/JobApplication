@@ -18,6 +18,7 @@ import { applicationApiService } from "@/services/applicationApi.service";
 import { jobApiService } from "@/services/jobApi.service";
 import { userApiService } from "@/services/userApi.service";
 import { notificationApiService } from "@/services/notificationApi.service";
+import { eventBus, EVENTS } from "@/utils/eventBus";
 import Application from "@/components/Application";
 import { Application as ApplicationType } from "@/services/applicationApi.service";
 
@@ -41,8 +42,27 @@ export default function AppliedList() {
       // ✅ Lấy applications từ API
       const applications = await applicationApiService.getEmployerApplications();
       
-      // ✅ Filter out rejected/deleted applications
-      const activeApplications = applications.filter(app => app.status !== 'rejected');
+      console.log('📊 Employer applications fetched:', {
+        total: applications.length,
+        statuses: applications.reduce((acc: any, app) => {
+          acc[app.status] = (acc[app.status] || 0) + 1;
+          return acc;
+        }, {}),
+        sample: applications.slice(0, 2).map(app => ({
+          id: app.id?.substring(0, 8),
+          status: app.status,
+          jobId: app.jobId?.substring(0, 8),
+          hasCvUrl: !!app.cvUrl,
+          cvId: (app as any).cvId,
+          cvSource: (app as any).cvSource,
+        })),
+      });
+      
+      // ✅ Filter out rejected/deleted applications to keep UI clean
+      // Employer can see rejected in applicationDetail if they navigate there directly
+      const activeApplications = applications.filter(app => 
+        app.status !== 'rejected' && app.status !== 'withdrawn'
+      );
       
       console.log(`📊 Total applications: ${applications.length}, Active: ${activeApplications.length}`);
       
@@ -141,6 +161,8 @@ export default function AppliedList() {
             applied_at: app.appliedAt,
             cvUrl: app.cvUrl,
             cv_url: app.cvUrl,
+            cvId: (app as any).cvId,
+            cvSource: (app as any).cvSource,
             coverLetter: app.coverLetter,
             job: {
               title: job.title || "Không rõ",
@@ -223,6 +245,13 @@ export default function AppliedList() {
           // Update status for accepted applications
           setApps((prev) => prev.map((x) => (x.$id === appId ? { ...x, status } : x)));
         }
+        
+        // ✅ FIX: Emit event to update homepage immediately
+        eventBus.emit(EVENTS.APPLICATION_STATUS_UPDATED, { 
+          applicationId: appId, 
+          status,
+          timestamp: Date.now() 
+        });
         
         Alert.alert("Thành công", msg);
       }

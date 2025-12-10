@@ -63,6 +63,8 @@ export default function MyJobPosts() {
         return;
       }
 
+      console.log('🔍 Loading my posts for user:', currentUser.uid);
+
       // Query quick-posts của user hiện tại (candidate_seeking jobs)
       const q = query(
         collection(db, 'jobs'),
@@ -71,10 +73,21 @@ export default function MyJobPosts() {
       );
       
       const snapshot = await getDocs(q);
-      const results: Job[] = snapshot.docs.map(doc => ({
-        $id: doc.id,
-        ...doc.data(),
-      } as Job));
+      console.log('📊 Found', snapshot.size, 'posts');
+      
+      const results: Job[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('📄 Post:', doc.id, {
+          title: data.title,
+          jobType: data.jobType,
+          posterId: data.posterId,
+          status: data.status,
+        });
+        return {
+          $id: doc.id,
+          ...data,
+        } as Job;
+      });
       
       // Sort by createdAt descending
       results.sort((a, b) => {
@@ -85,10 +98,11 @@ export default function MyJobPosts() {
         return bTime - aTime;
       });
       
+      console.log('✅ Loaded', results.length, 'posts after sorting');
       setPosts(results);
     } catch (error: any) {
-      console.error('Error loading my posts:', error);
-      Alert.alert('Lỗi', 'Không thể tải danh sách tin đã đăng');
+      console.error('❌ Error loading my posts:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh sách tin đã đăng: ' + error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -240,10 +254,26 @@ export default function MyJobPosts() {
       <View style={styles.emptyIconContainer}>
         <Ionicons name="document-text-outline" size={64} color="#cbd5e1" />
       </View>
-      <Text style={styles.emptyTitle}>Chưa có tin nào</Text>
+      <Text style={styles.emptyTitle}>Chưa có tin tìm việc</Text>
       <Text style={styles.emptySubtitle}>
         Bạn chưa đăng tin tìm việc nào. Hãy đăng tin để nhà tuyển dụng tìm thấy bạn!
       </Text>
+      
+      {/* Debug info */}
+      {__DEV__ && (
+        <View style={styles.debugBox}>
+          <Text style={styles.debugText}>
+            🔍 Debug: User ID = {auth.currentUser?.uid?.substring(0, 8)}...
+          </Text>
+          <Text style={styles.debugText}>
+            📊 Query: jobType=candidate_seeking, posterId={auth.currentUser?.uid?.substring(0, 8)}...
+          </Text>
+          <Text style={styles.debugText}>
+            💡 Tip: Kiểm tra console logs để xem query results
+          </Text>
+        </View>
+      )}
+      
       <TouchableOpacity
         style={styles.createButton}
         onPress={() => {
@@ -565,6 +595,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
+  },
+  debugBox: {
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    alignSelf: 'stretch',
+  },
+  debugText: {
+    fontSize: 11,
+    color: '#1e40af',
+    fontFamily: 'monospace',
+    marginBottom: 4,
   },
   createButton: {
     borderRadius: 12,

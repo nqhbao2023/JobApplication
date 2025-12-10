@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 import { useSafeBack } from "@/hooks/useSafeBack";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { jobMatchesCategory } from "@/utils/categoryMatching.utils";
 
 const { width } = Dimensions.get("window");
 const CARD_SIZE = width / 2 - 24;
@@ -24,6 +25,15 @@ type Category = {
   category_name: string;
   icon_name?: string;
   color?: string;
+  jobCount?: number;
+};
+
+type Job = {
+  id: string;
+  jobCategories?: any;
+  status?: string;
+  jobType?: string;
+  external_url?: string;
 };
 
 // 🎨 Mapping category name to beautiful icons
@@ -78,26 +88,57 @@ const getCategoryIcon = (categoryName?: string, iconName?: string): keyof typeof
 
 export default function CategoriesListScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "job_categories"));
-        const data = snapshot.docs.map((doc) => ({
+        // Fetch both categories and jobs in parallel
+        const [categoriesSnap, jobsSnap] = await Promise.all([
+          getDocs(collection(db, "job_categories")),
+          getDocs(collection(db, "jobs")),
+        ]);
+        
+        const categoriesData = categoriesSnap.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         })) as Category[];
-        setCategories(data);
+        
+        const jobsData = jobsSnap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Job[];
+        
+        // Filter active jobs
+        const activeJobs = jobsData.filter(job => {
+          const status = job.status?.toLowerCase();
+          if (status && status !== "active" && status !== "approved" && !job.external_url) {
+            return false;
+          }
+          if (job.jobType === "candidate_seeking") return false;
+          return true;
+        });
+        
+        setJobs(activeJobs);
+        setCategories(categoriesData);
       } catch (e) {
         console.error("❌ Lỗi tải danh mục:", e);
       } finally {
         setLoading(false);
       }
     };
-    fetchCategories();
+    fetchData();
   }, []);
+
+  // ✅ Calculate job counts for each category
+  const categoriesWithCounts = useMemo(() => {
+    return categories.map(cat => ({
+      ...cat,
+      jobCount: jobs.filter(job => jobMatchesCategory(job, cat.id, cat.category_name)).length,
+    }));
+  }, [categories, jobs]);
 
   const getContrastColor = (hexColor?: string) => {
     if (!hexColor || !hexColor.startsWith("#") || hexColor.length < 7)
@@ -136,6 +177,11 @@ export default function CategoriesListScreen() {
         >
           {item.category_name}
         </Text>
+        {/* ✅ Show job count */}
+        <View style={[styles.jobCountBadge, { backgroundColor: textColor === "#fff" ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)" }]}>
+          <Ionicons name="briefcase" size={12} color={textColor} />
+
+        </View>
       </TouchableOpacity>
     );
   };
@@ -172,7 +218,7 @@ export default function CategoriesListScreen() {
       ) : (
         <Animated.View entering={FadeIn.duration(400)} style={{ flex: 1 }}>
           <FlatList
-            data={categories}
+            data={categoriesWithCounts}
             numColumns={2}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
@@ -236,6 +282,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     textAlign: "center",
+  },
+  jobCountBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginTop: 8,
+    gap: 4,
+  },
+  jobCountText: {
+    fontSize: 11,
+    fontWeight: "500",
   },
   center: {
     flex: 1,

@@ -63,6 +63,15 @@ export interface Job {
   // ✅ NEW: Job direction & poster identification
   jobType?: 'employer_seeking' | 'candidate_seeking'; // employer_seeking: employer tìm candidate, candidate_seeking: candidate tìm employer
   posterId?: string; // UID của người đăng (employer hoặc candidate)
+  
+  // ✅ NEW: CV Data for Quick Post (candidate_seeking)
+  cvData?: {
+    type: 'template' | 'external' | 'none';
+    cvId?: string; // Reference to original CV in user_cvs collection
+    cvSnapshot?: any; // Full CV snapshot for template type
+    externalUrl?: string; // External link for external type
+    attachedAt?: string; // ISO timestamp
+  };
 }
 
 export interface Application {
@@ -72,6 +81,8 @@ export interface Application {
   employerId: string;
   status: 'draft' | 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'withdrawn';
   cvUrl?: string;
+  cvId?: string;
+  cvSource?: string;
   coverLetter?: string;
   appliedAt: any;
   updatedAt: any;

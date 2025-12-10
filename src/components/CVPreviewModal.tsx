@@ -261,7 +261,7 @@ export default function CVPreviewModal({
             onPress={onOpenBrowser}
           >
             <Ionicons name="globe-outline" size={22} color="white" />
-            <Text style={styles.actionButtonText}>Mở trong trình duyệt</Text>
+            <Text style={styles.actionButtonText}>Xem trong trình duyệt</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

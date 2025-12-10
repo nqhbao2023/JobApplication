@@ -17,6 +17,7 @@ import { calculateJobMatchScore, JobWithScore } from '@/services/jobMatching.ser
 import * as Location from 'expo-location';
 import { useCandidateHomeStore, CANDIDATE_HOME_CACHE_TTL } from '@/stores/candidateHomeStore';
 import { eventBus, EVENTS } from '@/utils/eventBus';
+import { jobMatchesCategory } from '@/utils/categoryMatching.utils';
 
 export type QuickFilter = 'all' | 'intern' | 'part-time' | 'remote' | 'nearby';
 
@@ -62,8 +63,22 @@ export const useCandidateHome = () => {
         const servicesEnabled = await Location.hasServicesEnabledAsync();
         if (!servicesEnabled || cancelled) return;
 
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted' || cancelled) return;
+        // ✅ FIX: Check permission status first to avoid continuous prompts
+        const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+        
+        let finalStatus = existingStatus;
+        
+        // Only request if undetermined (first time)
+        // If 'denied', we respect that and don't ask again automatically
+        if (existingStatus === 'undetermined') {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          finalStatus = status;
+        }
+
+        if (finalStatus !== 'granted' || cancelled) {
+          if (__DEV__) console.log('[Location] Permission not granted:', finalStatus);
+          return;
+        }
 
         const location = await Location.getCurrentPositionAsync({});
         if (cancelled) return;
@@ -362,21 +377,11 @@ export const useCandidateHome = () => {
   const categoryJobCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     dataCategories.forEach(cat => {
-      counts[cat.$id] = dataJob.filter(job => {
-        const jc = job.jobCategories;
-        if (!jc) return false;
-        if (typeof jc === 'string') return jc === cat.$id || jc === cat.category_name;
-        if (Array.isArray(jc) && typeof jc[0] === 'string') {
-          return (jc as string[]).some(x => x === cat.$id || x === cat.category_name);
-        }
-        if (Array.isArray(jc)) {
-          return jc.some((x: any) => x?.$id === cat.$id);
-        }
-        if (typeof jc === 'object' && jc.$id) {
-          return jc.$id === cat.$id;
-        }
-        return false;
-      }).length;
+      // ✅ Use centralized matching logic that handles both internal jobs (with IDs) 
+      // and crawled jobs (with slug strings like 'it-software', 'finance')
+      counts[cat.$id] = dataJob.filter(job => 
+        jobMatchesCategory(job, cat.$id, cat.category_name)
+      ).length;
     });
     return counts;
   }, [dataJob, dataCategories]);

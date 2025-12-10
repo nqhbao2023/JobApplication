@@ -177,7 +177,8 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
       return;
     }
 
-    if (cvUrl && !isValidUrl(cvUrl)) {
+    // ✅ FIXED: Only validate cvUrl for manual/external links, not template CV
+    if (cvSource === 'manual' && manualCvUrl && !isValidUrl(manualCvUrl)) {
       Alert.alert('Lỗi', 'Link CV không hợp lệ');
       return;
     }
@@ -193,19 +194,60 @@ const QuickPostForm = ({ mode = 'employer_seeking' }: QuickPostFormProps) => {
           }).join(', ')
         : formData.workSchedule;
 
+      // ✅ NEW: Build cvData structure based on selection
+      let cvData = undefined;
+      if (isCandidateSeeking) {
+        if (cvSource === 'library' && selectedCV) {
+          // Template CV - save full snapshot
+          cvData = {
+            type: 'template' as const,
+            cvId: selectedCV.id,
+            cvSnapshot: selectedCV, // Full copy of CV data
+            attachedAt: new Date().toISOString(),
+          };
+          console.log('📄 CV Template attached:', {
+            cvId: selectedCV.id,
+            fullName: selectedCV.personalInfo.fullName,
+            hasSnapshot: !!cvData.cvSnapshot
+          });
+        } else if (cvSource === 'manual' && manualCvUrl) {
+          // External link - just save URL
+          cvData = {
+            type: 'external' as const,
+            externalUrl: manualCvUrl.trim(),
+            attachedAt: new Date().toISOString(),
+          };
+          console.log('🔗 External CV link attached:', manualCvUrl);
+        } else {
+          // No CV
+          cvData = {
+            type: 'none' as const,
+            attachedAt: new Date().toISOString(),
+          };
+          console.log('❌ No CV attached');
+        }
+      }
+
       const finalFormData: QuickPostJobData = { 
         ...formData,
         image: imageUrl.trim() || undefined,
         jobType: mode,
         posterId: currentUser?.uid || undefined,
         workSchedule: scheduleText,
-        // ✅ NEW: Candidate specific fields
+        // ✅ NEW: Structured CV data
         ...(isCandidateSeeking && {
-          cvUrl: cvUrl.trim() || undefined,
+          cvData, // ✅ Use new cvData structure
+          cvUrl: cvUrl.trim() || undefined, // ✅ DEPRECATED: Keep for backward compat
           expectedSalary: expectedSalary || undefined,
           availableSchedule: selectedSchedules.length > 0 ? selectedSchedules : undefined,
         }),
       };
+
+      console.log('🚀 Submitting quick post with cvData:', {
+        mode,
+        hasCvData: !!cvData,
+        cvDataType: cvData?.type,
+      });
 
       await quickPostService.createQuickPost(finalFormData);
       

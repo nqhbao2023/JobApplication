@@ -168,7 +168,7 @@ export default function ChatList() {
             <View style={styles.searchBar}>
               <Ionicons name="search" size={18} color="#94a3b8" />
               <TextInput
-                placeholder="Tìm theo tên hoặc tin nhắn"
+                placeholder="Tìm theo tên"
                 placeholderTextColor="#94a3b8"
                 style={styles.searchInput}
                 value={searchTerm}

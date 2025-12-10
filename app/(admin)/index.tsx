@@ -121,12 +121,12 @@ const AdminDashboard = () => {
           // Lấy metrics nếu có collectionKey
           const metrics = card.collectionKey ? metricsMap[card.collectionKey] : null;
           
-          // Thêm subtitle cho Quick Posts
+          // Thêm subtitle cho Quick Posts (fix: match đúng tên card)
           let subtitle = undefined;
-          if (card.title === 'Quick Posts' && pendingCounts.pendingQuickPosts > 0) {
-            subtitle = `${pendingCounts.pendingQuickPosts} pending`;
+          if (card.title === 'Duyệt Quick Posts' && pendingCounts.pendingQuickPosts > 0) {
+            subtitle = `${pendingCounts.pendingQuickPosts} chờ duyệt`;
           } else if (metrics && metrics.current > 0) {
-            subtitle = `${metrics.current} new this week`;
+            subtitle = `+${metrics.current} tuần này`;
           }
 
           return (

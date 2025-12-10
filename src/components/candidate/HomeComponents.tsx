@@ -132,9 +132,7 @@ export const CompanyCard = memo(({ item }: { item: Company }) => (
         style={styles.companyImage}
         source={{ uri: item.image || PLACEHOLDER_COMPANY_IMG }}
         contentFit="cover"
-        transition={200}
         cachePolicy="memory-disk"
-        recyclingKey={item.$id}
       />
     </View>
     <Text style={styles.companyTitle} numberOfLines={1}>
@@ -218,9 +216,7 @@ export const JobCard = memo(({
       style={styles.jobImage}
       source={{ uri: imageUrl }}
       contentFit="contain"
-      transition={200}
       cachePolicy="memory-disk"
-      recyclingKey={item.$id}
     />
     {/* Match Score Badge - Show only when showMatchScore is true */}
     {showMatchScore && matchScore && matchScore.totalScore > 0 && (

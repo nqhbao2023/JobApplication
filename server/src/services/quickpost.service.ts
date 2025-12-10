@@ -19,6 +19,43 @@ class QuickPostService {
       throw new Error('At least phone or email is required');
     }
 
+    // ✅ NEW: Validate cvData structure if present
+    if (jobData.cvData) {
+      const cvData = jobData.cvData as any;
+      
+      if (!cvData.type || !['template', 'external', 'none'].includes(cvData.type)) {
+        throw new Error('Invalid cvData.type. Must be: template, external, or none');
+      }
+
+      if (cvData.type === 'template') {
+        if (!cvData.cvSnapshot) {
+          throw new Error('cvData.cvSnapshot is required when type is template');
+        }
+        if (!cvData.cvSnapshot.personalInfo) {
+          throw new Error('cvData.cvSnapshot must contain personalInfo');
+        }
+        console.log('✅ Valid template CV data:', {
+          type: cvData.type,
+          cvId: cvData.cvId,
+          fullName: cvData.cvSnapshot.personalInfo.fullName
+        });
+      }
+
+      if (cvData.type === 'external') {
+        if (!cvData.externalUrl) {
+          throw new Error('cvData.externalUrl is required when type is external');
+        }
+        if (!cvData.externalUrl.startsWith('http')) {
+          throw new Error('cvData.externalUrl must be a valid URL');
+        }
+        console.log('✅ Valid external CV link:', cvData.externalUrl);
+      }
+
+      if (cvData.type === 'none') {
+        console.log('ℹ️ No CV attached');
+      }
+    }
+
     const now = FieldValue.serverTimestamp();
     const newJob: Partial<Job> = {
       ...jobData,
@@ -34,6 +71,8 @@ class QuickPostService {
       createdAt: now,
       updatedAt: now,
       expiresAt: FieldValue.serverTimestamp(), // Expire sau 30 ngày
+      // ✅ NEW: Include cvData in saved job
+      cvData: jobData.cvData || undefined,
     };
 
     const docRef = await this.jobsCollection.add(newJob);

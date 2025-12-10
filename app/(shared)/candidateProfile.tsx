@@ -24,9 +24,12 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '@/config/firebase';
 import type { Job } from '@/types';
+import CVViewer from '@/components/CVViewer';
+import CVTemplateViewer from '@/components/CVTemplateViewer';
+import type { CVData } from '@/types/cv.types';
 
 const { width } = Dimensions.get('window');
 
@@ -34,6 +37,13 @@ export default function CandidateProfile() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const [loading, setLoading] = useState(true);
   const [candidate, setCandidate] = useState<Job | null>(null);
+  
+  // ✅ NEW: State for CVViewer (external PDF)
+  const [cvViewerVisible, setCvViewerVisible] = useState(false);
+  
+  // ✅ NEW: State for CVTemplateViewer (template CV)
+  const [cvTemplateViewerVisible, setCvTemplateViewerVisible] = useState(false);
+  const [cvToView, setCvToView] = useState<CVData | null>(null);
 
   useEffect(() => {
     const loadCandidate = async () => {
@@ -83,13 +93,103 @@ export default function CandidateProfile() {
   }, [candidate]);
 
   const handleViewCV = useCallback(() => {
-    if (candidate?.cvUrl) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      Linking.openURL(candidate.cvUrl);
-    } else {
+    const cvData = (candidate as any)?.cvData;
+    
+    console.log('🎯 handleViewCV CALLED in candidateProfile:', {
+      hasCvData: !!cvData,
+      cvDataType: cvData?.type,
+      hasSnapshot: !!cvData?.cvSnapshot,
+      hasExternalUrl: !!cvData?.externalUrl,
+      hasCvUrl: !!candidate?.cvUrl
+    });
+
+    if (!cvData && !candidate?.cvUrl) {
       Alert.alert('Không có CV', 'Ứng viên chưa đính kèm CV');
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (cvData?.type === 'template' && cvData.cvSnapshot) {
+      // Template CV - open CVTemplateViewer modal
+      console.log('🔍 Opening template CV viewer (MODAL):', {
+        fullName: cvData.cvSnapshot.personalInfo?.fullName
+      });
+      setCvToView(cvData.cvSnapshot);
+      setCvTemplateViewerVisible(true);
+    } else if (cvData?.type === 'external' && cvData.externalUrl) {
+      // External URL - open in browser
+      console.log('🔗 Opening external CV link:', cvData.externalUrl);
+      Linking.openURL(cvData.externalUrl).catch(() => {
+        Alert.alert('Lỗi', 'Không thể mở link CV');
+      });
+    } else if (candidate?.cvUrl) {
+      // Legacy: old cvUrl field - check for file:/// URLs
+      if (candidate.cvUrl.startsWith('file:///')) {
+        console.error('❌ BLOCKED: file:/// URL detected in candidateProfile');
+        Alert.alert(
+          'Không thể xem CV',
+          'CV này chứa đường dẫn file nội bộ không hợp lệ (dữ liệu cũ).\n\n' +
+          'Vui lòng yêu cầu ứng viên cập nhật CV.'
+        );
+        return;
+      }
+      console.log('📄 Opening legacy CV viewer:', candidate.cvUrl);
+      setCvViewerVisible(true);
+    } else {
+      Alert.alert('Không có CV', 'CV không khả dụng');
     }
   }, [candidate]);
+
+  // ✅ NEW: Handle message candidate (create chat)
+  const handleMessageCandidate = useCallback(async () => {
+    const myUid = auth.currentUser?.uid;
+    if (!myUid) {
+      Alert.alert('Lỗi', 'Vui lòng đăng nhập để nhắn tin');
+      return;
+    }
+
+    // Candidate's posterId from job (quick-post owner)
+    const candidateId = candidate?.posterId;
+    if (!candidateId) {
+      Alert.alert('Không thể nhắn tin', 'Không tìm thấy thông tin người đăng');
+      return;
+    }
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Create chatId from sorted user IDs
+      const chatId = [myUid, candidateId].sort().join('_');
+      
+      // Check/create chat document
+      const chatRef = doc(db, 'chats', chatId);
+      await setDoc(chatRef, {
+        participants: [myUid, candidateId],
+        participantsInfo: {
+          [myUid]: { displayName: 'Nhà tuyển dụng', role: 'employer' },
+          [candidateId]: { displayName: candidate?.title || 'Ứng viên', role: 'candidate' },
+        },
+        updatedAt: serverTimestamp(),
+        lastMessage: '',
+      }, { merge: true });
+      
+      // Navigate to chat
+      router.push({
+        pathname: '/(shared)/chat',
+        params: {
+          chatId,
+          partnerId: candidateId,
+          partnerName: candidate?.title || 'Ứng viên',
+          role: 'Recruiter',
+          from: '/(employer)/chat',
+        },
+      } as any);
+    } catch (error) {
+      console.error('Error creating chat:', error);
+      Alert.alert('Lỗi', 'Không thể bắt đầu cuộc trò chuyện');
+    }
+  }, [candidate, router]);
 
   // ✅ Format date
   const formatDate = (date: any) => {
@@ -205,7 +305,7 @@ export default function CandidateProfile() {
         </Animated.View>
 
         {/* CV Section */}
-        {candidate.cvUrl && (
+        {(((candidate as any).cvData && ((candidate as any).cvData.type === 'template' || (candidate as any).cvData.type === 'external')) || candidate.cvUrl) && (
           <Animated.View entering={FadeInDown.delay(100).duration(400)}>
             <TouchableOpacity style={styles.cvCard} onPress={handleViewCV}>
               <LinearGradient
@@ -294,33 +394,68 @@ export default function CandidateProfile() {
           </View>
         </Animated.View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 140 }} />
       </ScrollView>
 
-      {/* Bottom CTA */}
+      {/* Bottom CTA - Enhanced with Message button */}
       <Animated.View entering={FadeInUp.delay(300).duration(400)} style={styles.bottomCTA}>
-        <TouchableOpacity 
-          style={styles.primaryButton}
-          onPress={handleCall}
-        >
-          <LinearGradient
-            colors={['#10b981', '#059669']}
-            style={styles.primaryGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+        {/* Primary Actions Row */}
+        <View style={styles.primaryActionsRow}>
+          {/* Message Button (NEW) */}
+          {candidate.posterId && (
+            <TouchableOpacity 
+              style={styles.messageButton}
+              onPress={handleMessageCandidate}
+            >
+              <Ionicons name="chatbubble-ellipses" size={22} color="#2563eb" />
+              <Text style={styles.messageButtonText}>Nhắn tin</Text>
+            </TouchableOpacity>
+          )}
+          
+          {/* Call Button */}
+          <TouchableOpacity 
+            style={[styles.primaryButton, !candidate.posterId && { flex: 1 }]}
+            onPress={handleCall}
           >
-            <Ionicons name="call" size={22} color="#fff" />
-            <Text style={styles.primaryButtonText}>Liên hệ ngay</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#10b981', '#059669']}
+              style={styles.primaryGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="call" size={22} color="#fff" />
+              <Text style={styles.primaryButtonText}>Liên hệ ngay</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
-        {candidate.cvUrl && (
+        {/* View CV Button */}
+        {(((candidate as any).cvData && ((candidate as any).cvData.type === 'template' || (candidate as any).cvData.type === 'external')) || candidate.cvUrl) && (
           <TouchableOpacity style={styles.secondaryButton} onPress={handleViewCV}>
             <Ionicons name="document-text-outline" size={22} color="#3b82f6" />
-            <Text style={styles.secondaryButtonText}>Xem CV</Text>
+            <Text style={styles.secondaryButtonText}>Xem CV trong ứng dụng</Text>
           </TouchableOpacity>
         )}
       </Animated.View>
+
+      {/* ✅ CV Viewer Modal (for external PDF) */}
+      <CVViewer
+        visible={cvViewerVisible}
+        onClose={() => setCvViewerVisible(false)}
+        url={cvViewerVisible ? (candidate.cvUrl || null) : null}
+      />
+
+      {/* ✅ CV Template Viewer Modal (for template CV) */}
+      {cvToView && (
+        <CVTemplateViewer
+          cvData={cvToView}
+          visible={cvTemplateViewerVisible}
+          onClose={() => {
+            setCvTemplateViewerVisible(false);
+            setCvToView(null);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -570,13 +705,34 @@ const styles = StyleSheet.create({
   },
   // Bottom CTA
   bottomCTA: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     padding: 16,
     paddingBottom: 24,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
     gap: 12,
+  },
+  primaryActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  messageButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eff6ff',
+    paddingVertical: 16,
+    borderRadius: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  messageButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2563eb',
   },
   primaryButton: {
     flex: 1,
@@ -599,11 +755,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 14,
     gap: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   secondaryButtonText: {
     fontSize: 15,

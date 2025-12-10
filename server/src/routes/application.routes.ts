@@ -6,6 +6,7 @@ import {
   createApplication,
   getCandidateApplications,
   getEmployerApplications,
+  getApplicationById,
   getJobApplications,
   updateApplication,
   updateApplicationStatus,
@@ -19,6 +20,7 @@ const router = Router();
 router.post('/', authenticate, authorize('candidate'), validate(createApplicationSchema), apiLimiter, createApplication);
 router.get('/my-applications', authenticate, authorize('candidate'), getCandidateApplications);
 router.get('/employer-applications', authenticate, authorize('employer', 'admin'), getEmployerApplications);
+router.get('/:id', authenticate, authorize('employer', 'admin', 'candidate'), getApplicationById);
 router.get('/job/:jobId', authenticate, authorize('employer', 'admin'), getJobApplications);
 router.patch('/:id', authenticate, authorize('candidate'), updateApplication);
 router.patch('/:id/status', authenticate, authorize('employer', 'admin'), updateApplicationStatus);

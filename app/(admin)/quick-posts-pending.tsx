@@ -10,6 +10,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Modal,
+  TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -48,6 +51,12 @@ const QuickPostsPending = () => {
   const [posts, setPosts] = useState<QuickPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // ✅ FIX: State cho Reject Modal (hoạt động trên cả Android và iOS)
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectingPost, setRejectingPost] = useState<QuickPost | null>(null);
+  const [rejectReason, setRejectReason] = useState('Nội dung không phù hợp với chính sách của Job4S');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const fetchPendingPosts = async () => {
     try {
@@ -86,35 +95,37 @@ const QuickPostsPending = () => {
   };
 
   const handleReject = async (postId: string, jobTitle?: string) => {
-    // ✅ Enhanced: Allow admin to input rejection reason
-    Alert.prompt(
-      'Từ chối tin tuyển dụng',
-      'Nhập lý do từ chối (sẽ gửi email cho người đăng):',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Từ chối',
-          style: 'destructive',
-          onPress: async (reason?: string) => {
-            try {
-              const token = await auth.currentUser?.getIdToken();
-              await axios.patch(
-                `${API_URL}/api/quick-posts/${postId}/reject`,
-                { reason: reason || 'Nội dung không phù hợp với chính sách của Job4S' },
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              Alert.alert('Thành công', 'Tin đã bị từ chối và người đăng đã được thông báo');
-              fetchPendingPosts();
-            } catch (error) {
-              console.error('Error rejecting post:', error);
-              Alert.alert('Lỗi', 'Không thể từ chối tin');
-            }
-          },
-        },
-      ],
-      'plain-text',
-      'Nội dung không phù hợp' // Default reason
-    );
+    // ✅ FIX: Tìm post và mở modal thay vì dùng Alert.prompt (không hoạt động trên Android)
+    const post = posts.find(p => p.id === postId);
+    if (post) {
+      setRejectingPost(post);
+      setRejectReason('Nội dung không phù hợp với chính sách của Job4S');
+      setRejectModalVisible(true);
+    }
+  };
+
+  // ✅ FIX: Thực hiện reject qua modal
+  const executeReject = async () => {
+    if (!rejectingPost) return;
+    
+    setIsRejecting(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      await axios.patch(
+        `${API_URL}/api/quick-posts/${rejectingPost.id}/reject`,
+        { reason: rejectReason || 'Nội dung không phù hợp với chính sách của Job4S' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setRejectModalVisible(false);
+      setRejectingPost(null);
+      Alert.alert('Thành công', 'Tin đã bị từ chối và người đăng đã được thông báo');
+      fetchPendingPosts();
+    } catch (error) {
+      console.error('Error rejecting post:', error);
+      Alert.alert('Lỗi', 'Không thể từ chối tin');
+    } finally {
+      setIsRejecting(false);
+    }
   };
 
   const renderPost = ({ item }: { item: QuickPost }) => {
@@ -306,6 +317,71 @@ const QuickPostsPending = () => {
           </View>
         }
       />
+
+      {/* ✅ FIX: Reject Modal (hoạt động trên cả Android và iOS) */}
+      <Modal
+        visible={rejectModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isRejecting && setRejectModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconContainer}>
+                <Ionicons name="close-circle" size={32} color="#ef4444" />
+              </View>
+              <Text style={styles.modalTitle}>Từ chối tin tuyển dụng</Text>
+              {rejectingPost && (
+                <Text style={styles.modalSubtitle} numberOfLines={2}>
+                  "{rejectingPost.title}"
+                </Text>
+              )}
+            </View>
+
+            {/* Reason Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Lý do từ chối (sẽ gửi email cho người đăng):</Text>
+              <TextInput
+                style={styles.reasonInput}
+                value={rejectReason}
+                onChangeText={setRejectReason}
+                placeholder="Nhập lý do từ chối..."
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Actions */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelModalButton]}
+                onPress={() => setRejectModalVisible(false)}
+                disabled={isRejecting}
+              >
+                <Text style={styles.cancelModalButtonText}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmRejectButton, isRejecting && styles.buttonDisabled]}
+                onPress={executeReject}
+                disabled={isRejecting}
+              >
+                {isRejecting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="close-circle" size={18} color="#fff" />
+                    <Text style={styles.confirmRejectButtonText}>Từ chối</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -499,6 +575,96 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     marginTop: 8,
+  },
+  // ✅ FIX: Modal styles for reject functionality
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+    padding: 24,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  reasonInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#1F2937',
+    minHeight: 80,
+    backgroundColor: '#F9FAFB',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  cancelModalButton: {
+    backgroundColor: '#F3F4F6',
+  },
+  cancelModalButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  confirmRejectButton: {
+    backgroundColor: '#EF4444',
+  },
+  confirmRejectButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
 

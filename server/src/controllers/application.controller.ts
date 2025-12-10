@@ -10,11 +10,13 @@ export const updateApplication = async (
   try {
     const { id } = req.params;
     const candidateId = req.user!.uid;
-    const { cvUrl, coverLetter } = req.body;
+    const { cvUrl, coverLetter, cvId, cvSource } = req.body;
 
     const application = await applicationService.updateApplication(id, candidateId, {
       cvUrl,
       coverLetter,
+      cvId,
+      cvSource,
     });
 
     res.json(application);
@@ -86,6 +88,30 @@ export const getJobApplications = async (
     const { jobId } = req.params;
     const applications = await applicationService.getApplicationsByJob(jobId);
     res.json(applications);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getApplicationById = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.uid;
+    const role = req.user!.role;
+    
+    const application = await applicationService.getApplicationById(id);
+    
+    // Security check: only allow access if user is the candidate, the employer, or admin
+    if (role !== 'admin' && application.candidateId !== userId && application.employerId !== userId) {
+      res.status(403).json({ error: 'Forbidden', message: 'You do not have permission to view this application' });
+      return;
+    }
+    
+    res.json(application);
   } catch (error) {
     next(error);
   }

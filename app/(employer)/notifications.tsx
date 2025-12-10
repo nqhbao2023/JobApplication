@@ -236,7 +236,10 @@ const EmployerNotifications = () => {
       if (item.applicationId) {
         router.push({
           pathname: '/(employer)/applicationDetail',
-          params: { applicationId: item.applicationId },
+          params: { 
+            applicationId: item.applicationId,
+            from: '/(employer)/notifications' // ✅ FIX: Add from param for proper back navigation
+          },
         });
       } else if (item.jobId) {
         router.push({

@@ -13,6 +13,7 @@ import {
   FlatList,
   Linking,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -21,9 +22,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import { db } from '@/config/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db, auth } from '@/config/firebase';
+import { collection, query, where, getDocs, orderBy, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import type { Job } from '@/types';
+import CVTemplateViewer from '@/components/CVTemplateViewer';
+import type { CVData } from '@/types/cv.types';
 
 const { width } = Dimensions.get('window');
 const HORIZONTAL_PADDING = 20;
@@ -34,6 +37,14 @@ export default function FindCandidates() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [candidates, setCandidates] = useState<Job[]>([]);
+  
+  // ✅ NEW: State for contact modal
+  const [contactModalVisible, setContactModalVisible] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<Job | null>(null);
+  
+  // ✅ NEW: State for CV viewer modal
+  const [cvViewerVisible, setCvViewerVisible] = useState(false);
+  const [cvToView, setCvToView] = useState<CVData | null>(null);
 
   const loadCandidates = useCallback(async () => {
     try {
@@ -80,57 +91,279 @@ export default function FindCandidates() {
     await loadCandidates();
   }, [loadCandidates]);
 
+  // ✅ NEW: Open contact modal instead of Alert
   const handleContact = useCallback((candidate: Job) => {
     const contact = candidate.contactInfo;
-    if (!contact) {
+    if (!contact || (!contact.phone && !contact.zalo && !contact.email)) {
       Alert.alert('Không có thông tin liên hệ', 'Ứng viên chưa cung cấp thông tin liên hệ');
       return;
     }
-
-    const options: { text: string; onPress: () => void }[] = [];
-
-    if (contact.phone) {
-      options.push({
-        text: `📞 Gọi điện: ${contact.phone}`,
-        onPress: () => Linking.openURL(`tel:${contact.phone}`),
-      });
-    }
-
-    if (contact.zalo) {
-      options.push({
-        text: `💬 Zalo: ${contact.zalo}`,
-        onPress: () => Linking.openURL(`https://zalo.me/${contact.zalo}`),
-      });
-    }
-
-    if (contact.email) {
-      options.push({
-        text: `📧 Email: ${contact.email}`,
-        onPress: () => Linking.openURL(`mailto:${contact.email}`),
-      });
-    }
-
-    if (contact.facebook) {
-      options.push({
-        text: '📘 Facebook',
-        onPress: () => Linking.openURL(contact.facebook!),
-      });
-    }
-
-    if (options.length === 0) {
-      Alert.alert('Không có thông tin liên hệ', 'Ứng viên chưa cung cấp thông tin liên hệ');
-      return;
-    }
-
-    Alert.alert(
-      'Liên hệ ứng viên',
-      candidate.title || 'Ứng viên',
-      [
-        ...options,
-        { text: 'Hủy', style: 'cancel' },
-      ]
-    );
+    setSelectedCandidate(candidate);
+    setContactModalVisible(true);
   }, []);
+
+  // ✅ NEW: Handle message candidate (create chat)
+  const handleMessageCandidate = useCallback(async (candidate: Job) => {
+    const myUid = auth.currentUser?.uid;
+    if (!myUid) {
+      Alert.alert('Lỗi', 'Vui lòng đăng nhập để nhắn tin');
+      return;
+    }
+
+    // Candidate's posterId from job (quick-post owner)
+    const candidateId = candidate.posterId;
+    if (!candidateId) {
+      Alert.alert('Không thể nhắn tin', 'Không tìm thấy thông tin người đăng');
+      return;
+    }
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      // Create chatId from sorted user IDs
+      const chatId = [myUid, candidateId].sort().join('_');
+      
+      // Check/create chat document
+      const chatRef = doc(db, 'chats', chatId);
+      await setDoc(chatRef, {
+        participants: [myUid, candidateId],
+        participantsInfo: {
+          [myUid]: { displayName: 'Nhà tuyển dụng', role: 'employer' },
+          [candidateId]: { displayName: candidate.title || 'Ứng viên', role: 'candidate' },
+        },
+        updatedAt: serverTimestamp(),
+        lastMessage: '',
+      }, { merge: true });
+
+      setContactModalVisible(false);
+      
+      // Navigate to chat
+      router.push({
+        pathname: '/(shared)/chat',
+        params: {
+          chatId,
+          partnerId: candidateId,
+          partnerName: candidate.title || 'Ứng viên',
+          role: 'Recruiter',
+          from: '/(employer)/chat',
+        },
+      } as any);
+    } catch (error) {
+      console.error('Error creating chat:', error);
+      Alert.alert('Lỗi', 'Không thể bắt đầu cuộc trò chuyện');
+    }
+  }, [router]);
+
+  // ✅ NEW: Contact Modal Component
+  const ContactModal = () => {
+    if (!selectedCandidate) return null;
+    const contact = selectedCandidate.contactInfo;
+    const cvData = (selectedCandidate as any).cvData; // ✅ Get cvData from job
+
+    // ✅ Function to handle CV viewing
+    const handleViewCV = () => {
+      console.log('🎯 handleViewCV CALLED - START', {
+        hasCvData: !!cvData,
+        cvDataType: cvData?.type,
+        hasSnapshot: !!cvData?.cvSnapshot,
+        hasExternalUrl: !!cvData?.externalUrl
+      });
+
+      if (!cvData) {
+        console.log('❌ No cvData found');
+        Alert.alert('Thông báo', 'Ứng viên chưa đính kèm CV');
+        return;
+      }
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      if (cvData.type === 'template' && cvData.cvSnapshot) {
+        // ✅ FIXED: Open CV viewer modal directly instead of navigation
+        console.log('🔍 Opening template CV viewer (MODAL):', {
+          fullName: cvData.cvSnapshot.personalInfo?.fullName,
+          hasSnapshot: !!cvData.cvSnapshot
+        });
+        setCvToView(cvData.cvSnapshot);
+        setCvViewerVisible(true);
+        setContactModalVisible(false);
+      } else if (cvData.type === 'external' && cvData.externalUrl) {
+        // External link - open in browser
+        console.log('🔗 Opening external CV link:', cvData.externalUrl);
+        Linking.openURL(cvData.externalUrl).catch(() => {
+          Alert.alert('Lỗi', 'Không thể mở link CV');
+        });
+      } else if ((selectedCandidate as any).cvUrl) {
+        // Fallback: old cvUrl field (backward compatibility)
+        const cvUrl = (selectedCandidate as any).cvUrl;
+        
+        // ✅ CRITICAL: Block file:/// URLs for legacy cvUrl field
+        if (cvUrl.startsWith('file:///')) {
+          console.error('❌ BLOCKED: file:/// URL detected in findCandidates');
+          Alert.alert(
+            'Không thể xem CV',
+            'CV này chứa đường dẫn file nội bộ không hợp lệ (dữ liệu cũ).\n\n' +
+            'Vui lòng yêu cầu ứng viên cập nhật CV.'
+          );
+          return;
+        }
+        
+        console.log('🔗 Opening legacy CV URL:', cvUrl);
+        Linking.openURL(cvUrl).catch(() => {
+          Alert.alert('Lỗi', 'Không thể mở link CV');
+        });
+      } else {
+        Alert.alert('Thông báo', 'CV không khả dụng');
+      }
+    };
+
+    return (
+      <Modal
+        visible={contactModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setContactModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1}
+          onPress={() => setContactModalVisible(false)}
+        >
+          <TouchableOpacity 
+            activeOpacity={1} 
+            style={styles.modalContent}
+            onPress={() => {}} // Prevent closing when tapping content
+          >
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Liên hệ ứng viên</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={() => setContactModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Candidate Info */}
+            <Text style={styles.modalCandidateName} numberOfLines={2}>
+              {selectedCandidate.title || 'Ứng viên'}
+            </Text>
+
+            {/* ✅ NEW: CV Section (if available) */}
+            {(cvData || (selectedCandidate as any).cvUrl) && (
+              <TouchableOpacity
+                style={styles.cvSection}
+                onPress={handleViewCV}
+                activeOpacity={0.7}
+              >
+                <View style={styles.cvIconContainer}>
+                  <Ionicons 
+                    name={cvData?.type === 'template' ? 'document-text' : 'link'} 
+                    size={24} 
+                    color="#3b82f6" 
+                  />
+                </View>
+                <View style={styles.cvTextContainer}>
+                  <Text style={styles.cvLabel}>📄 CV của ứng viên</Text>
+                  <Text style={styles.cvDesc}>
+                    {cvData?.type === 'template' ? 'Xem CV trong ứng dụng' : 
+                     cvData?.type === 'external' ? 'Mở link CV' : 
+                     'Xem CV'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+
+            {/* Contact Options */}
+            <View style={styles.contactOptions}>
+              {/* ✅ Message Button (NEW) */}
+              {selectedCandidate.posterId && (
+                <TouchableOpacity
+                  style={[styles.contactOption, styles.messageOption]}
+                  onPress={() => handleMessageCandidate(selectedCandidate)}
+                >
+                  <View style={[styles.contactOptionIcon, { backgroundColor: '#dbeafe' }]}>
+                    <Ionicons name="chatbubble-ellipses" size={22} color="#2563eb" />
+                  </View>
+                  <View style={styles.contactOptionText}>
+                    <Text style={styles.contactOptionLabel}>NHẮN TIN</Text>
+                    <Text style={styles.contactOptionValue}>Trò chuyện qua ứng dụng</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+
+              {contact?.email && (
+                <TouchableOpacity
+                  style={styles.contactOption}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Linking.openURL(`mailto:${contact.email}`);
+                  }}
+                >
+                  <View style={[styles.contactOptionIcon, { backgroundColor: '#fef3c7' }]}>
+                    <Ionicons name="mail" size={22} color="#d97706" />
+                  </View>
+                  <View style={styles.contactOptionText}>
+                    <Text style={styles.contactOptionLabel}>EMAIL</Text>
+                    <Text style={styles.contactOptionValue}>{contact.email}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+
+              {contact?.zalo && (
+                <TouchableOpacity
+                  style={styles.contactOption}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Linking.openURL(`https://zalo.me/${contact.zalo}`);
+                  }}
+                >
+                  <View style={[styles.contactOptionIcon, { backgroundColor: '#dbeafe' }]}>
+                    <Ionicons name="chatbubbles" size={22} color="#0068ff" />
+                  </View>
+                  <View style={styles.contactOptionText}>
+                    <Text style={styles.contactOptionLabel}>ZALO</Text>
+                    <Text style={styles.contactOptionValue}>{contact.zalo}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+
+              {contact?.phone && (
+                <TouchableOpacity
+                  style={styles.contactOption}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Linking.openURL(`tel:${contact.phone}`);
+                  }}
+                >
+                  <View style={[styles.contactOptionIcon, { backgroundColor: '#dcfce7' }]}>
+                    <Ionicons name="call" size={22} color="#16a34a" />
+                  </View>
+                  <View style={styles.contactOptionText}>
+                    <Text style={styles.contactOptionLabel}>GỌI ĐIỆN</Text>
+                    <Text style={styles.contactOptionValue}>{contact.phone}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={() => setContactModalVisible(false)}
+            >
+              <Text style={styles.modalCloseBtnText}>Đóng</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
 
   const CandidateCard = ({ item, index }: { item: Job; index: number }) => {
     const createdAt = (item.createdAt as any)?.toDate?.() || 
@@ -328,6 +561,21 @@ export default function FindCandidates() {
         }
         ListEmptyComponent={EmptyState}
       />
+
+      {/* ✅ Contact Modal */}
+      <ContactModal />
+
+      {/* ✅ CV Template Viewer Modal */}
+      {cvToView && (
+        <CVTemplateViewer
+          cvData={cvToView}
+          visible={cvViewerVisible}
+          onClose={() => {
+            setCvViewerVisible(false);
+            setCvToView(null);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -546,5 +794,135 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#64748b',
     fontWeight: '500',
+  },
+  // ✅ NEW: Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCandidateName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 20,
+    lineHeight: 24,
+  },
+  // ✅ NEW: CV Section styles
+  cvSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    marginBottom: 16,
+  },
+  cvIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  cvTextContainer: {
+    flex: 1,
+  },
+  cvLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e40af',
+    marginBottom: 2,
+  },
+  cvDesc: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  contactOptions: {
+    gap: 12,
+  },
+  contactOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  messageOption: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
+  contactOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  contactOptionText: {
+    flex: 1,
+  },
+  contactOptionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  contactOptionValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  modalCloseBtn: {
+    marginTop: 20,
+    paddingVertical: 14,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748b',
   },
 });

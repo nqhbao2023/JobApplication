@@ -20,14 +20,22 @@ import * as Haptics from "expo-haptics";
 import { applicationApiService } from "@/services/applicationApi.service";
 import { jobApiService } from "@/services/jobApi.service";
 import { userApiService } from "@/services/userApi.service";
-import { smartBack } from "@/utils/navigation";
+import { useSafeBack } from "@/hooks/useSafeBack";
 import CVViewer from "@/components/CVViewer";
+import CVTemplateViewer from "@/components/CVTemplateViewer";
+import { cvService } from "@/services/cv.service";
+import { CVData } from "@/types/cv.types";
+import { db } from "@/config/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { eventBus, EVENTS } from "@/utils/eventBus";
 
 type ApplicationDetail = {
   id: string;
   status: string;
   appliedAt: string;
   cvUrl?: string;
+  cvId?: string; // ✅ NEW: CV ID for template CVs
+  cvSource?: 'library' | 'upload' | 'none'; // ✅ NEW: CV source type
   coverLetter?: string;
   candidate: {
     id: string;
@@ -46,27 +54,99 @@ type ApplicationDetail = {
 
 export default function ApplicationDetail() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ applicationId?: string }>();
+  const params = useLocalSearchParams<{ applicationId?: string; from?: string }>();
   const applicationId = params.applicationId as string;
+  const fromParam = params.from as string | undefined;
+  
+  // ✅ Use useSafeBack for proper navigation
+  const { goBack } = useSafeBack({ from: fromParam, fallback: '/(employer)/appliedList' });
 
   const [application, setApplication] = useState<ApplicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [showCVViewer, setShowCVViewer] = useState(false);
+  const [showCVTemplateViewer, setShowCVTemplateViewer] = useState(false); // ✅ NEW
+  const [cvData, setCvData] = useState<CVData | null>(null); // ✅ NEW: Store CV template data
+  const [loadingCV, setLoadingCV] = useState(false); // ✅ NEW: Loading state for CV fetch
 
   const fetchApplicationDetail = useCallback(async () => {
+    if (!applicationId) {
+      console.warn('⚠️ No applicationId provided to ApplicationDetail');
+      Alert.alert("Lỗi", "Không tìm thấy ID ứng tuyển.");
+      goBack();
+      return;
+    }
+
     try {
       setLoading(true);
+      console.log(`🔍 Fetching application detail for ID: ${applicationId}`);
 
-      // Fetch application data
-      const apps = await applicationApiService.getEmployerApplications();
-      const app = apps.find((a) => a.id === applicationId);
+      // Fetch application data directly by ID (more reliable than filtering list)
+      let app: any;
+      try {
+        app = await applicationApiService.getApplicationById(applicationId);
+      } catch (error) {
+        console.warn('⚠️ Failed to fetch application by ID, falling back to list:', error);
+        // Fallback to list if direct fetch fails (e.g. endpoint not deployed yet)
+        try {
+          const apps = await applicationApiService.getEmployerApplications();
+          app = apps.find((a) => a.id === applicationId);
+          if (app) {
+            console.log('✅ Found application in fallback list');
+          } else {
+            console.warn('❌ Application not found in fallback list either');
+          }
+        } catch (listError) {
+          console.error('❌ Failed to fetch employer applications list:', listError);
+        }
+      }
 
       if (!app) {
         Alert.alert("Lỗi", "Không tìm thấy ứng tuyển này.");
-        smartBack();
+        goBack();
         return;
+      }
+
+      // ✅ NEW: Fetch cv_id and cv_source
+      // Priority 1: From API response (applications collection)
+      let cvId = (app as any).cvId;
+      let cvSource = (app as any).cvSource;
+      
+      // Priority 2: From Firestore applied_jobs collection (fallback)
+      if (!cvId) {
+        try {
+          const appliedJobsSnapshot = await getDoc(doc(db, 'applied_jobs', applicationId));
+          if (appliedJobsSnapshot.exists()) {
+            const appliedJobData = appliedJobsSnapshot.data();
+            cvId = appliedJobData?.cv_id;
+            cvSource = appliedJobData?.cv_source;
+            console.log('📄 CV Info from applied_jobs:', { cvId, cvSource });
+          } else {
+            console.log('📄 No applied_jobs document, trying candidate profile...');
+          }
+        } catch (err) {
+          console.warn('⚠️ Error fetching applied_jobs:', err);
+        }
+      } else {
+        console.log('📄 CV Info from API:', { cvId, cvSource });
+      }
+      
+      // ✅ If no cvId from applied_jobs, try to get from candidate profile
+      if (!cvId && app.candidateId) {
+        try {
+          const candidateDoc = await getDoc(doc(db, 'users', app.candidateId));
+          if (candidateDoc.exists()) {
+            const candidateData = candidateDoc.data();
+            cvId = candidateData?.cvId || candidateData?.defaultCvId;
+            if (cvId) {
+              cvSource = 'library'; // Assume library if from candidate profile
+              console.log('📄 Found CV in candidate profile:', cvId);
+            }
+          }
+        } catch (candidateError) {
+          console.warn('⚠️ Could not fetch candidate profile:', candidateError);
+        }
       }
 
       // Fetch related data
@@ -88,6 +168,8 @@ export default function ApplicationDetail() {
           return new Date().toISOString();
         })(),
         cvUrl: app.cvUrl,
+        cvId, // ✅ NEW
+        cvSource, // ✅ NEW
         coverLetter: app.coverLetter,
         candidate: candidate
           ? {
@@ -130,6 +212,15 @@ export default function ApplicationDetail() {
 
   const handleStatusChange = async (status: "accepted" | "rejected") => {
     if (!application) return;
+    
+    // ✅ FIX: Prevent duplicate updates - check current status
+    if (application.status !== 'pending') {
+      Alert.alert(
+        "Thông báo",
+        `Ứng viên này đã được ${application.status === 'accepted' ? 'chấp nhận' : 'từ chối'} rồi.`
+      );
+      return;
+    }
 
     const actionText = status === "accepted" ? "chấp nhận" : "từ chối";
     Alert.alert(
@@ -144,11 +235,21 @@ export default function ApplicationDetail() {
               setActionLoading(true);
               await applicationApiService.updateApplicationStatus(application.id, status);
               
+              // ✅ Update local state immediately
+              setApplication(prev => prev ? { ...prev, status } : prev);
+              
+              // ✅ FIX: Emit event to update homepage immediately
+              eventBus.emit(EVENTS.APPLICATION_STATUS_UPDATED, { 
+                applicationId: application.id, 
+                status,
+                timestamp: Date.now() 
+              });
+              
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert(
                 "Thành công",
                 `Đã ${actionText} ứng viên thành công!`,
-                [{ text: "OK", onPress: () => smartBack() }]
+                [{ text: "OK", onPress: () => goBack() }]
               );
             } catch (error) {
               console.error("❌ Update status error:", error);
@@ -164,10 +265,16 @@ export default function ApplicationDetail() {
 
   const handleDelete = async () => {
     if (!application) return;
+    
+    // ✅ Check if already rejected to prevent duplicate
+    if (application.status === 'rejected') {
+      Alert.alert("Thông báo", "Ứng tuyển này đã bị từ chối rồi.");
+      return;
+    }
 
     Alert.alert(
-      "Xác nhận xóa",
-      "Bạn có chắc muốn xóa ứng tuyển này?",
+      "Xác nhẫn xóa",
+      "Xóa ứng tuyển này khỏi danh sách? (Có thể xem lại trong lịch sử)",
       [
         { text: "Hủy", style: "cancel" },
         {
@@ -176,11 +283,22 @@ export default function ApplicationDetail() {
           onPress: async () => {
             try {
               setActionLoading(true);
+              // ✅ Mark as rejected instead of permanent delete (for audit trail)
               await applicationApiService.updateApplicationStatus(application.id, "rejected");
               
+              // ✅ Update local state immediately
+              setApplication(prev => prev ? { ...prev, status: 'rejected' } : prev);
+              
+              // ✅ Emit event to update homepage immediately
+              eventBus.emit(EVENTS.APPLICATION_STATUS_UPDATED, { 
+                applicationId: application.id, 
+                status: 'rejected',
+                timestamp: Date.now() 
+              });
+              
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert("Thành công", "Đã xóa ứng tuyển!", [
-                { text: "OK", onPress: () => smartBack() },
+              Alert.alert("Đã xóa", "Ứng tuyển đã được xóa khỏi danh sách!", [
+                { text: "OK", onPress: () => goBack() },
               ]);
             } catch (error) {
               console.error("❌ Delete application error:", error);
@@ -250,6 +368,95 @@ export default function ApplicationDetail() {
     Linking.openURL(`mailto:${application.candidate.email}`);
   };
 
+  /**
+   * ✅ Handle CV viewing - supports both PDF and template CVs
+   */
+  const handleViewCV = async () => {
+    if (!application) return;
+
+    console.log('👁️ handleViewCV called - Application CV info:', {
+      hasCvId: !!application.cvId,
+      cvSource: application.cvSource,
+      hasCvUrl: !!application.cvUrl,
+      cvUrlPrefix: application.cvUrl?.substring(0, 20)
+    });
+
+    setLoadingCV(true);
+
+    try {
+      // Case 1: CV is from library - always use template viewer
+      // Also handle case where cvSource is undefined but cvId exists (legacy/fallback)
+      if (application.cvId && (application.cvSource === 'library' || !application.cvSource)) {
+        console.log('📄 Fetching CV data for cvId:', application.cvId);
+        
+        try {
+          // Fetch CV data from Firestore
+          const cvSnapshot = await getDoc(doc(db, 'cvs', application.cvId));
+          
+          if (cvSnapshot.exists()) {
+            const fetchedCvData = cvSnapshot.data() as CVData;
+            console.log('✅ Fetched CV data:', fetchedCvData.personalInfo?.fullName);
+            
+            // ✅ Show template viewer for library CVs
+            setCvData(fetchedCvData);
+            setShowCVTemplateViewer(true);
+            setLoadingCV(false);
+            return;
+          } else {
+            console.warn('⚠️ CV document does not exist');
+            Alert.alert(
+              'CV không tìm thấy',
+              'CV của ứng viên không còn tồn tại hoặc đã bị xóa.'
+            );
+            setLoadingCV(false);
+            return;
+          }
+        } catch (firestoreError: any) {
+          console.error('❌ Error fetching CV from Firestore:', firestoreError);
+          Alert.alert(
+            'Lỗi truy cập CV',
+            `Không thể tải CV từ thư viện: ${firestoreError.message || 'Lỗi không xác định'}. Vui lòng kiểm tra quyền truy cập.`
+          );
+          setLoadingCV(false);
+          return;
+        }
+      }
+
+      // Case 2: CV has a PDF URL (uploaded file) - use PDF viewer
+      if (application.cvUrl) {
+        // ✅ CRITICAL: Block file:/// URLs ONLY for uploaded CVs (when no cvId)
+        if (application.cvUrl.startsWith('file:///')) {
+          console.error('❌ BLOCKED: file:/// URL detected for uploaded CV');
+          Alert.alert(
+            'Không thể xem CV',
+            'CV này chứa đường dẫn file nội bộ không hợp lệ (dữ liệu cũ).\n\n' +
+            'Vui lòng yêu cầu ứng viên nộp lại CV hoặc liên hệ qua chat/email.'
+          );
+          setLoadingCV(false);
+          return;
+        }
+        
+        console.log('✅ Opening CV PDF from URL:', application.cvUrl.substring(0, 50) + '...');
+        setShowCVViewer(true);
+        setLoadingCV(false);
+        return;
+      }
+
+      // Case 3: No CV available
+      console.log('❌ No CV available for this application');
+      Alert.alert(
+        'Chưa có CV',
+        'Ứng viên chưa nộp CV cho vị trí này.'
+      );
+    } catch (error: any) {
+      console.error('❌ Unexpected error in handleViewCV:', error);
+      Alert.alert('Lỗi', `Không thể xem CV: ${error.message || 'Vui lòng thử lại'}`);
+    } finally {
+      setLoadingCV(false);
+    }
+  };
+
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "accepted":
@@ -280,7 +487,7 @@ export default function ApplicationDetail() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => smartBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1f2937" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chi tiết ứng tuyển</Text>
@@ -298,7 +505,7 @@ export default function ApplicationDetail() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => smartBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#1f2937" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chi tiết ứng tuyển</Text>
@@ -315,7 +522,7 @@ export default function ApplicationDetail() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => smartBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#1f2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chi tiết ứng tuyển</Text>
@@ -336,7 +543,10 @@ export default function ApplicationDetail() {
             onPress={() =>
               router.push({
                 pathname: "/(shared)/jobDescription",
-                params: { jobId: application.job.id, from: '/(employer)/applicationDetail' },
+                params: { 
+                  jobId: application.job.id, 
+                  from: `/(employer)/applicationDetail?applicationId=${applicationId}` 
+                },
               })
             }
           >
@@ -436,17 +646,34 @@ export default function ApplicationDetail() {
         )}
 
         {/* CV */}
-        {application.cvUrl && (
+        {(application.cvUrl || application.cvId) && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Hồ sơ CV</Text>
             <TouchableOpacity
               style={styles.cvButton}
-              onPress={() => setShowCVViewer(true)}
+              onPress={handleViewCV}
+              disabled={loadingCV}
             >
-              <Ionicons name="document-text-outline" size={24} color="#4A80F0" />
-              <Text style={styles.cvButtonText}>Xem CV</Text>
-              <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+              {loadingCV ? (
+                <ActivityIndicator size="small" color="#4A80F0" />
+              ) : (
+                <Ionicons name="document-text-outline" size={24} color="#4A80F0" />
+              )}
+              <Text style={styles.cvButtonText}>
+                {loadingCV ? 'Đang tải CV...' : 'Xem CV'}
+              </Text>
+              {!loadingCV && <Ionicons name="chevron-forward" size={20} color="#94a3b8" />}
             </TouchableOpacity>
+            {/* ✅ NEW: Show CV type indicator */}
+            {application.cvSource && (
+              <Text style={styles.cvTypeHint}>
+                {application.cvSource === 'library' 
+                  ? '📚 CV từ thư viện' 
+                  : application.cvSource === 'upload'
+                  ? '📎 CV đã tải lên'
+                  : 'CV'}
+              </Text>
+            )}
           </View>
         )}
       </ScrollView>
@@ -488,6 +715,18 @@ export default function ApplicationDetail() {
       {/* CV Viewer Modal */}
       {showCVViewer && application.cvUrl && (
         <CVViewer visible={showCVViewer} url={application.cvUrl} onClose={() => setShowCVViewer(false)} />
+      )}
+
+      {/* ✅ NEW: CV Template Viewer Modal */}
+      {showCVTemplateViewer && cvData && (
+        <CVTemplateViewer 
+          visible={showCVTemplateViewer} 
+          cvData={cvData} 
+          onClose={() => {
+            setShowCVTemplateViewer(false);
+            setCvData(null);
+          }} 
+        />
       )}
     </SafeAreaView>
   );
@@ -664,6 +903,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#4A80F0",
     marginLeft: 12,
+  },
+  cvTypeHint: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 8,
+    fontStyle: "italic",
   },
   actionBar: {
     flexDirection: "row",

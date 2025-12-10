@@ -8,6 +8,8 @@ import {
   StyleSheet,
   SafeAreaView,
   Platform,
+  Linking,
+  Alert,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,9 +23,28 @@ interface Props {
 export default function CVViewer({ visible, onClose, url }: Props) {
   if (!url) return null;
 
+  // ✅ CRITICAL: Prevent file:/// URLs from being opened (defensive check)
+  if (url.startsWith('file:///')) {
+    console.error('❌ CVViewer received file:/// URL - This should NEVER happen!', url.substring(0, 50));
+    return null; // Don't render anything
+  }
+
   const encodedUrl = encodeURIComponent(url);
   // ✅ Dùng "gview" thay vì "viewerng" giúp tránh đen thui và co mép sai
   const viewerUrl = `https://docs.google.com/gview?embedded=1&url=${encodedUrl}`;
+
+  const handleOpenBrowser = async () => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert("Lỗi", "Không thể mở liên kết này.");
+      }
+    } catch (error) {
+      Alert.alert("Lỗi", "Đã xảy ra lỗi khi mở trình duyệt.");
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -36,7 +57,9 @@ export default function CVViewer({ visible, onClose, url }: Props) {
             <Text style={styles.closeText}>Đóng</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Xem CV</Text>
-          <View style={{ width: 64 }} />
+          <TouchableOpacity style={styles.browserButton} onPress={handleOpenBrowser}>
+            <Ionicons name="globe-outline" size={22} color="#fff" />
+          </TouchableOpacity>
         </View>
 
         {/* 📄 WebView chiếm toàn bộ phần còn lại */}
@@ -50,6 +73,17 @@ export default function CVViewer({ visible, onClose, url }: Props) {
               <Text style={styles.loadingText}>Đang tải CV...</Text>
             </View>
           )}
+          onError={() => {
+             // Fallback if WebView fails
+             Alert.alert(
+               "Không thể tải bản xem trước", 
+               "Vui lòng mở bằng trình duyệt để xem chi tiết.",
+               [
+                 { text: "Hủy", style: "cancel" },
+                 { text: "Mở trình duyệt", onPress: handleOpenBrowser }
+               ]
+             );
+          }}
         />
       </SafeAreaView>
     </Modal>
@@ -76,6 +110,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: 10,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 8,
+  },
+  browserButton: {
+    padding: 8,
     backgroundColor: "rgba(255,255,255,0.15)",
     borderRadius: 8,
   },

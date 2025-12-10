@@ -20,6 +20,7 @@ import {
   Dimensions,
   ActivityIndicator,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -114,6 +115,19 @@ export default function EmployerHome() {
 
     return () => unsubscribe();
   }, []);
+
+  // ✅ FIX: Listen for APPLICATION_STATUS_UPDATED event to refresh recent apps
+  useEffect(() => {
+    const unsubscribe = eventBus.on(EVENTS.APPLICATION_STATUS_UPDATED, (data) => {
+      if (__DEV__) {
+        console.log('[EmployerHome] Application status updated, refreshing recent apps:', data);
+      }
+      // Reload stats to get fresh data
+      loadStats();
+    });
+
+    return () => unsubscribe();
+  }, [loadStats]);
 
   useEffect(() => {
     return () => {
@@ -433,7 +447,10 @@ export default function EmployerHome() {
           if (item.id) {
             router.push({
               pathname: "/(employer)/applicationDetail",
-              params: { applicationId: item.id },
+              params: { 
+                applicationId: item.id,
+                from: "/(employer)" // ✅ FIX: Add from param for proper back navigation
+              },
             });
           } else {
             // Fallback: Navigate to applications list
@@ -559,6 +576,15 @@ export default function EmployerHome() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#4A80F0"
+            colors={['#4A80F0']}
+            progressViewOffset={HEADER_MIN_HEIGHT}
+          />
+        }
       >
         <View style={styles.contentWrapper}>
           <View style={styles.statsGrid}>

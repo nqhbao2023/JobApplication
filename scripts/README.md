@@ -49,6 +49,31 @@ node fix-missing-employerId.js
 
 ---
 
+### 3. `clean-file-urls.js` - Clean up invalid file:/// URLs
+
+Dọn dẹp các URL `file:///` không hợp lệ trong database (dữ liệu cũ).
+
+**Khi nào cần dùng:**
+- Khi gặp lỗi "BLOCKED: Attempt to open file:/// URL" khi xem CV
+- Sau khi migrate từ phiên bản cũ có lưu local file paths
+- Để clean up dữ liệu không hợp lệ
+
+**Cách chạy:**
+```bash
+cd scripts
+node clean-file-urls.js
+```
+
+**Script sẽ:**
+1. Scan collection `applied_jobs` và xóa `cv_url` chứa `file:///`
+2. Scan collection `applications` và xóa `cvUrl` chứa `file:///`
+3. Scan collection `cvs` và xóa `pdfUrl`/`fileUrl` chứa `file:///`
+4. Báo cáo tổng số records đã clean up
+
+**Lưu ý:** Script chỉ XÓA các URL không hợp lệ. Người dùng sẽ cần nộp lại CV sau khi clean up.
+
+---
+
 ## Employer Account
 
 ### Test Employer Account

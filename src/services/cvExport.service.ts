@@ -8,7 +8,8 @@ import { Paths, File } from 'expo-file-system';
 import { shareAsync } from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { CVData } from '@/types/cv.types';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
+import { cvService } from './cv.service';
 
 class CVExportService {
   /**
@@ -188,6 +189,7 @@ class CVExportService {
 
   /**
    * Open CV in external browser (Chrome/Safari)
+   * ✅ FIX: Use share API instead of direct file:// URI to avoid FileUriExposedException on Android
    */
   async openInBrowser(cvData: CVData): Promise<void> {
     try {
@@ -203,15 +205,20 @@ class CVExportService {
       await writer.write(encoder.encode(html));
       await writer.close();
 
-      // Open in external browser
-      await WebBrowser.openBrowserAsync(file.uri, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-        controlsColor: '#4A80F0',
-        toolbarColor: '#ffffff',
+      // ✅ FIX: Use share API instead of openBrowserAsync to avoid FileUriExposedException
+      // This allows user to choose which browser to open the file in
+      await shareAsync(file.uri, {
+        mimeType: 'text/html',
+        dialogTitle: 'Mở CV trong trình duyệt',
+        UTI: 'public.html',
       });
+      
+      // shareAsync chỉ mở dialog, không trả về kết quả
+      // Người dùng tự chọn app để mở file
+      console.log('✅ Share dialog opened for browser');
     } catch (error) {
       console.error('Open browser error:', error);
-      Alert.alert('Lỗi', 'Không thể mở trình duyệt. Vui lòng thử lại.');
+      Alert.alert('Lỗi', 'Không thể mở CV. Vui lòng thử lại.');
     }
   }
 
@@ -238,6 +245,10 @@ class CVExportService {
         dialogTitle: 'Lưu hoặc Chia sẻ CV',
         UTI: 'public.html',
       });
+      
+      // shareAsync chỉ mở dialog, không trả về kết quả
+      // Người dùng tự chọn cách chia sẻ/lưu file
+      console.log('✅ Share dialog opened');
     } catch (error) {
       console.error('Share error:', error);
       Alert.alert('Lỗi', 'Không thể chia sẻ CV. Vui lòng thử lại.');
@@ -245,44 +256,73 @@ class CVExportService {
   }
 
   /**
-   * Export CV to PDF (legacy method - kept for backward compatibility)
+   * Export CV to PDF
+   * ✅ FIXED: Create HTML file and provide instructions to save as PDF
    */
   async exportToPDF(cvData: CVData): Promise<void> {
     try {
+      console.log('🎯 Exporting CV to HTML for:', cvData.personalInfo.fullName);
+      
+      // Add print instructions to HTML
       const html = this.generateHTML(cvData);
+      const htmlWithPrintButton = html.replace('</body>', `
+        <div style="text-align: center; margin-top: 40px; padding: 20px; background: #f0f9ff; border-radius: 8px;">
+          <h3 style="color: #2563eb; margin-bottom: 10px;">📄 Hướng dẫn lưu CV dạng PDF</h3>
+          <p style="margin-bottom: 15px;">Để lưu CV này thành file PDF:</p>
+          <ol style="text-align: left; max-width: 400px; margin: 0 auto 15px; line-height: 1.8;">
+            <li><strong>Android:</strong> Nhấn menu (⋮) → Print → Save as PDF</li>
+            <li><strong>iPhone:</strong> Nhấn Share → Print → Zoom ảnh xem trước → Share → Save PDF</li>
+          </ol>
+          <button onclick="window.print()" style="
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+          ">
+            🖨️ In / Lưu PDF
+          </button>
+        </div>
+      </body>`);
+      
       const fileName = `CV_${cvData.personalInfo.fullName.replace(/\s/g, '_')}_${Date.now()}.html`;
       
       // Create file in document directory
       const file = new File(Paths.document, fileName);
       
-      // Write HTML content using writable stream
+      // Write HTML content
       const writer = file.writableStream().getWriter();
       const encoder = new TextEncoder();
-      await writer.write(encoder.encode(html));
+      await writer.write(encoder.encode(htmlWithPrintButton));
       await writer.close();
 
-      // Share file
+      console.log('✅ HTML file created at:', file.uri);
+      
+      // ✅ FIXED: Use updateCVPdfUrl instead of updateCV
+      if (cvData.id) {
+        await cvService.updateCVPdfUrl(cvData.id, file.uri);
+        console.log('✅ HTML URL saved to CV');
+      }
+
+      // Share the HTML file
       await shareAsync(file.uri, {
         mimeType: 'text/html',
-        dialogTitle: 'Lưu hoặc Chia sẻ CV',
+        dialogTitle: 'Mở CV để lưu PDF',
         UTI: 'public.html',
       });
 
-      // expo-sharing doesn't return result on success, only throws on error
-      // If we get here, sharing dialog was shown (user may or may not have shared)
-      // Show instruction instead of success message
+      // Show success message
       Alert.alert(
-        'Xuất CV',
-        'File HTML đã được tạo.\n\n' +
-        '📱 Cách chuyển sang PDF:\n' +
-        '1. Lưu file HTML vào Files\n' +
-        '2. Mở bằng Chrome/Safari\n' +
-        '3. Chọn Print → Save as PDF\n\n' +
-        '💡 Hoặc gửi email ngay để xử lý trên máy tính.'
+        '✅ Đã tạo file CV', 
+        'File CV đã được tạo! Các bước tiếp theo:\n\n1️⃣ Mở file CV bằng trình duyệt\n2️⃣ Nhấn nút "In / Lưu PDF"\n3️⃣ Chọn "Save as PDF"\n4️⃣ Lưu file\n\n💡 Sau khi lưu PDF, bạn có thể dùng CV này để nộp đơn!',
+        [{ text: 'Đã hiểu' }]
       );
-      // If dismissed, do nothing (no error, no success alert)
     } catch (error) {
-      console.error('Export PDF error:', error);
+      console.error('❌ Export error:', error);
       Alert.alert('Lỗi', 'Không thể xuất CV. Vui lòng thử lại.');
     }
   }

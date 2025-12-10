@@ -36,16 +36,31 @@ export const useJobNotifications = ({
 
   const getLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      // ✅ FIX: Check permission status first to avoid continuous prompts
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      
+      let finalStatus = existingStatus;
+      
+      // Only request if undetermined
+      if (existingStatus === 'undetermined') {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') return;
 
       const location = await Location.getCurrentPositionAsync({});
       currentLocation.current = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       };
-    } catch (error) {
-      console.log('Error getting location:', error);
+    } catch (error: any) {
+      // Suppress common location errors to avoid log spam
+      if (error?.message?.includes('Location is unavailable') || error?.message?.includes('location services are enabled')) {
+         // console.log('[Location] Unavailable (skipping)');
+      } else {
+         console.log('Error getting location:', error);
+      }
     }
   };
 

@@ -216,8 +216,18 @@ export const useJobDescription = (jobId: string) => {
         if (!mountedRef.current) return;
 
         if (app) {
-          const submitted = !!app.cvUrl;
-          const status = app.status || null;
+          // ✅ FIX: Check submitted based on status, not just cvUrl
+          // Template CVs không có cvUrl nhưng vẫn được coi là đã submit nếu status !== 'draft'
+          const status = app.status || 'draft';
+          const submitted = status !== 'draft'; // ✅ Chỉ cần không phải draft là đã submit
+          
+          console.log('🔍 checkApplyStatus result:', {
+            jobId,
+            appId: app.id,
+            status,
+            cvUrl: app.cvUrl?.substring(0, 30) + '...',
+            submitted,
+          });
           
           // ✅ FIXED: Nếu đã withdrawn hoặc rejected, coi như chưa apply (cho phép reapply)
           const canReapply = status === 'withdrawn' || status === 'rejected';

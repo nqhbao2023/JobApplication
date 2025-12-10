@@ -42,6 +42,8 @@ const JobDescription = () => {
     applicationStatus?: string;
     applicationId?: string;
     from?: string; // ✅ Track where user came from
+    success?: string; // ✅ Track successful CV submission
+    _timestamp?: string; // ✅ Force refresh trigger
   }>();
   const jobId = (params.jobId || params.id || "") as string;
   const paramsApplicationStatus = params.applicationStatus as string | undefined;
@@ -64,6 +66,18 @@ const JobDescription = () => {
     hasDraft,
     applicationStatus: apiApplicationStatus, // ✅ Lấy từ API
   } = useJobDescription(jobId);
+
+  // ✅ Refresh when coming back after successful CV submission
+  React.useEffect(() => {
+    if (params.success === "true" || params._timestamp) {
+      console.log('🔄 Refreshing apply status after CV submission');
+      // Small delay to ensure backend has processed
+      const timer = setTimeout(() => {
+        refresh();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [params.success, params._timestamp]);
 
   // ✅ Only refresh on focus if coming back (not initial load)
   useFocusEffect(

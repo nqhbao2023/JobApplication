@@ -1,6 +1,28 @@
 import apiClient from './apiClient';
+import { CVData } from '@/types/cv.types';
 
 export type JobTypeMode = 'candidate_seeking' | 'employer_seeking';
+
+/**
+ * CV Data structure for Quick Post
+ * Supports 3 types:
+ * 1. 'template' - CV created from CV builder (with full snapshot)
+ * 2. 'external' - External link (Google Drive, Dropbox, etc.)
+ * 3. 'none' - No CV attached
+ */
+export interface QuickPostCVData {
+  type: 'template' | 'external' | 'none';
+  
+  // For type = 'template': Full CV snapshot (so employer can view even if candidate edits/deletes CV later)
+  cvId?: string; // Reference to original CV in user_cvs collection
+  cvSnapshot?: CVData; // Complete copy of CV data at submission time
+  
+  // For type = 'external': Just the URL
+  externalUrl?: string; // Google Drive, Dropbox, etc.
+  
+  // Metadata
+  attachedAt?: string; // ISO timestamp when CV was attached
+}
 
 export interface QuickPostJobData {
   title: string;
@@ -15,8 +37,14 @@ export interface QuickPostJobData {
   image?: string; // ✅ Optional image URL for quick post
   jobType?: JobTypeMode; // ✅ 'candidate_seeking' or 'employer_seeking'
   posterId?: string; // ✅ UID of poster if logged in
-  // ✅ NEW: Candidate seeking specific fields
-  cvUrl?: string; // Link CV (Google Drive, Dropbox, etc.)
+  
+  // ✅ NEW: Structured CV data (replaces simple cvUrl)
+  cvData?: QuickPostCVData;
+  
+  // ✅ DEPRECATED: Keep for backward compatibility with old quick posts
+  cvUrl?: string; // Old field - will be migrated to cvData.externalUrl
+  
+  // ✅ Candidate seeking specific fields
   expectedSalary?: string; // Mức lương mong muốn
   availableSchedule?: string[]; // Thời gian có thể làm việc
   contactInfo: {
@@ -32,6 +60,7 @@ export interface QuickPostJob extends QuickPostJobData {
   jobSource: 'quick-post';
   isVerified: boolean;
   status: 'active' | 'inactive'; // ✅ Fixed: Changed 'pending' to 'inactive' to match backend
+  cvData?: QuickPostCVData; // ✅ Ensure cvData is included in response type
   metadata?: {
     ip: string;
     userAgent: string;

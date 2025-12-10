@@ -8,6 +8,8 @@ export interface Application {
   employerId: string;
   status: 'draft' | 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'withdrawn';
   cvUrl?: string;
+  cvId?: string;
+  cvSource?: string;
   coverLetter?: string;
   appliedAt: Date | string | number;
   updatedAt: Date | string | number;
@@ -42,9 +44,14 @@ export const applicationApiService = {
     // ✅ Ensure we always return an array
     return Array.isArray(result) ? result : [];
   },
+
+  async getApplicationById(id: string): Promise<Application> {
+    return apiClient.get<Application>(`${API_ENDPOINTS.applications.base}/${id}`);
+  },
+
   async updateApplication(
     id: string,
-    data: Partial<Pick<Application, 'cvUrl' | 'coverLetter'>>
+    data: Partial<Pick<Application, 'cvUrl' | 'coverLetter' | 'cvId' | 'cvSource'>>
   ): Promise<Application> {
     return apiClient.patch<Application>(API_ENDPOINTS.applications.update(id), data);
   },

@@ -119,7 +119,7 @@ const CVEditorScreen = () => {
       await cvExportService.openInBrowser(cvData);
     } catch (error) {
       console.error('Error opening in browser:', error);
-      Alert.alert('Lỗi', 'Không thể mở trình duyệt');
+      // Alert moved to service
     }
   };
 

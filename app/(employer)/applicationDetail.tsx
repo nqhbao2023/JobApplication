@@ -114,16 +114,44 @@ export default function ApplicationDetail() {
       let cvSource = (app as any).cvSource;
       
       // Priority 2: From Firestore applied_jobs collection (fallback)
-      if (!cvId) {
+      if (!cvId || !app.cvUrl) {
         try {
+          let appliedJobData = null;
+          
+          // Try direct ID first (legacy support)
           const appliedJobsSnapshot = await getDoc(doc(db, 'applied_jobs', applicationId));
           if (appliedJobsSnapshot.exists()) {
-            const appliedJobData = appliedJobsSnapshot.data();
-            cvId = appliedJobData?.cv_id;
-            cvSource = appliedJobData?.cv_source;
-            console.log('📄 CV Info from applied_jobs:', { cvId, cvSource });
+            appliedJobData = appliedJobsSnapshot.data();
+          } else if (app.candidateId && app.job.id) {
+            // ✅ Query by candidateId and jobId (more reliable)
+            const { collection, query, where, getDocs } = require('firebase/firestore');
+            const q = query(
+              collection(db, 'applied_jobs'),
+              where('userId', '==', app.candidateId),
+              where('jobId', '==', app.job.id)
+            );
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+              appliedJobData = querySnapshot.docs[0].data();
+              console.log('📄 Found applied_jobs via query');
+            }
+          }
+
+          if (appliedJobData) {
+            if (!cvId) {
+              cvId = appliedJobData?.cv_id;
+              cvSource = appliedJobData?.cv_source;
+            }
+            
+            // ✅ NEW: Fallback for cvUrl if missing in API response
+            if (!app.cvUrl && appliedJobData?.cv_url) {
+              app.cvUrl = appliedJobData.cv_url;
+              console.log('📄 Found CV URL in applied_jobs fallback:', app.cvUrl);
+            }
+            
+            console.log('📄 CV Info from applied_jobs:', { cvId, cvSource, hasCvUrl: !!app.cvUrl });
           } else {
-            console.log('📄 No applied_jobs document, trying candidate profile...');
+            console.log('📄 No applied_jobs document found');
           }
         } catch (err) {
           console.warn('⚠️ Error fetching applied_jobs:', err);
@@ -149,11 +177,42 @@ export default function ApplicationDetail() {
         }
       }
 
+      // ✅ Helper to fetch candidate with Firestore fallback
+      const fetchCandidateProfile = async (uid: string) => {
+        if (!uid) return null;
+        try {
+          // Try API first
+          try {
+            const user = await userApiService.getUserById(uid);
+            if (user) return user;
+          } catch (apiErr) {
+            console.warn('⚠️ User API fetch failed, trying Firestore:', apiErr);
+          }
+
+          // Fallback to Firestore
+          const userDoc = await getDoc(doc(db, 'users', uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            return {
+              uid: userDoc.id,
+              ...userData,
+              // Ensure fields match User interface
+              displayName: userData.displayName || userData.fullName || userData.name,
+              photoURL: userData.photoURL || userData.avatar,
+              phone: userData.phone || userData.phoneNumber,
+            } as any;
+          }
+        } catch (err) {
+          console.warn('❌ All candidate fetch attempts failed:', err);
+        }
+        return null;
+      };
+
       // Fetch related data
       const [job, candidate] = await Promise.all([
         jobApiService.getJobById(app.jobId),
         app.candidateId
-          ? userApiService.getUserById(app.candidateId)
+          ? fetchCandidateProfile(app.candidateId)
           : Promise.resolve(null),
       ]);
 
@@ -182,7 +241,7 @@ export default function ApplicationDetail() {
             }
           : {
               id: app.candidateId || "", // ✅ Fallback to candidateId from application
-              name: "Ứng viên ẩn danh",
+              name: "Ứng viên", // ✅ Changed from "Ứng viên ẩn danh" to be less confusing
               email: "",
             },
         job: {
@@ -397,7 +456,19 @@ export default function ApplicationDetail() {
             const fetchedCvData = cvSnapshot.data() as CVData;
             console.log('✅ Fetched CV data:', fetchedCvData.personalInfo?.fullName);
             
-            // ✅ Show template viewer for library CVs
+            // ✅ NEW: Check if this is an uploaded CV (PDF) stored in library
+            if (fetchedCvData.type === 'uploaded' && (fetchedCvData.pdfUrl || fetchedCvData.fileUrl)) {
+              console.log('📎 CV is uploaded type, switching to PDF viewer');
+              // Use the URL from the CV data
+              const pdfUrl = fetchedCvData.pdfUrl || fetchedCvData.fileUrl;
+              // Update application state temporarily to use this URL
+              setApplication(prev => prev ? { ...prev, cvUrl: pdfUrl } : prev);
+              setShowCVViewer(true);
+              setLoadingCV(false);
+              return;
+            }
+
+            // ✅ Show template viewer for library CVs (template type)
             setCvData(fetchedCvData);
             setShowCVTemplateViewer(true);
             setLoadingCV(false);

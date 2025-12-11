@@ -9,6 +9,10 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,6 +33,8 @@ export default function AppliedList() {
   const [apps, setApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "accepted" | "rejected">("all");
 
   /**
    * Fetch applications từ API
@@ -269,19 +275,86 @@ export default function AppliedList() {
   };
 
   /* --------------------------------- UI ---------------------------------- */
+  
+  // ✅ Filter applications based on search and status
+  const filteredApps = apps.filter(app => {
+    // Filter by status
+    if (filterStatus !== 'all' && app.status !== filterStatus) return false;
+    
+    // Filter by search query (Candidate Name or Job Title)
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const candidateName = app.user?.name?.toLowerCase() || "";
+      const jobTitle = app.job?.title?.toLowerCase() || "";
+      return candidateName.includes(query) || jobTitle.includes(query);
+    }
+    
+    return true;
+  });
+
   if (loading)
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#4A80F0" />
       </View>
     );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Text style={styles.title}>Danh sách ứng viên</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Danh sách ứng viên</Text>
+        <Text style={styles.subtitle}>{apps.length} hồ sơ ứng tuyển</Text>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search-outline" size={20} color="#94a3b8" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm theo tên hoặc công việc..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor="#94a3b8"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery("")}>
+            <Ionicons name="close-circle" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Filter Tabs */}
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+          {[
+            { id: 'all', label: 'Tất cả' },
+            { id: 'pending', label: 'Chờ duyệt' },
+            { id: 'accepted', label: 'Đã nhận' },
+            { id: 'rejected', label: 'Đã từ chối' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={[
+                styles.filterTab,
+                filterStatus === tab.id && styles.filterTabActive,
+              ]}
+              onPress={() => setFilterStatus(tab.id as any)}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filterStatus === tab.id && styles.filterTabTextActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       <FlatList
-        data={apps}
+        data={filteredApps}
         keyExtractor={(it) => it.$id}
         renderItem={({ item }) => (
           <Application
@@ -291,19 +364,35 @@ export default function AppliedList() {
           />
         )}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchData} />
+          <RefreshControl refreshing={refreshing} onRefresh={fetchData} tintColor="#4A80F0" />
         }
         contentContainerStyle={[
           styles.list,
           { paddingBottom: SCROLL_BOTTOM_PADDING },
-          apps.length === 0 && { flex: 1 },
+          filteredApps.length === 0 && { flex: 1 },
         ]}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Ionicons name="people-outline" size={64} color="#ccc" />
-            <Text style={{ color: "#888", marginTop: 8 }}>
-              Chưa có ứng viên nào
+            <Image 
+              source={{ uri: "https://cdn-icons-png.flaticon.com/512/7486/7486744.png" }} 
+              style={{ width: 120, height: 120, opacity: 0.5, marginBottom: 16 }}
+            />
+            <Text style={styles.emptyText}>
+              {searchQuery || filterStatus !== 'all' 
+                ? "Không tìm thấy ứng viên phù hợp" 
+                : "Chưa có ứng viên nào ứng tuyển"}
             </Text>
+            {(searchQuery || filterStatus !== 'all') && (
+              <TouchableOpacity 
+                style={styles.clearFilterButton}
+                onPress={() => {
+                  setSearchQuery("");
+                  setFilterStatus("all");
+                }}
+              >
+                <Text style={styles.clearFilterText}>Xóa bộ lọc</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -315,8 +404,69 @@ export default function AppliedList() {
 /*                                   STYLE                                    */
 /* -------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F8FAFC", paddingHorizontal: 16 },
-  title: { fontSize: 20, fontWeight: "700", marginVertical: 12 },
-  list: { paddingBottom: 12 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+  },
+  title: { fontSize: 24, fontWeight: "700", color: "#1e293b" },
+  subtitle: { fontSize: 14, color: "#64748b", marginTop: 4 },
+  
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 15, color: "#1e293b" },
+  
+  filterContainer: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  filterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginRight: 8,
+  },
+  filterTabActive: {
+    backgroundColor: "#4A80F0",
+    borderColor: "#4A80F0",
+  },
+  filterTabText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+  },
+  filterTabTextActive: {
+    color: "#fff",
+  },
+
+  list: { paddingHorizontal: 16, paddingTop: 8 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 100 },
+  emptyText: { fontSize: 16, color: "#94a3b8", textAlign: "center" },
+  clearFilterButton: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#e2e8f0",
+    borderRadius: 20,
+  },
+  clearFilterText: { fontSize: 14, color: "#475569", fontWeight: "600" },
 });

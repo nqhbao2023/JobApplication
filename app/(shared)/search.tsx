@@ -280,6 +280,15 @@ export default function SearchInputPage() {
     });
   };
 
+  const handleClearAllSearches = async () => {
+    try {
+      await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
+      setRecentSearches([]);
+    } catch (error) {
+      console.error('Error clearing search history:', error);
+    }
+  };
+
   const { goBack } = useSafeBack();
 
   return (
@@ -566,7 +575,7 @@ export default function SearchInputPage() {
           <View style={styles.recentSection}>
             <View style={styles.recentHeader}>
               <Text style={styles.recentTitle}>Tìm kiếm gần đây</Text>
-              <TouchableOpacity onPress={() => setRecentSearches([])}>
+              <TouchableOpacity onPress={handleClearAllSearches}>
                 <Text style={styles.clearAllText}>Xóa tất cả</Text>
               </TouchableOpacity>
             </View>

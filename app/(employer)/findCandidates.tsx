@@ -383,7 +383,10 @@ export default function FindCandidates() {
             // Navigate to candidate profile (not jobDescription)
             router.push({
               pathname: '/(shared)/candidateProfile',
-              params: { jobId: item.$id },
+              params: { 
+                jobId: item.$id,
+                from: '/(employer)/findCandidates' // ✅ Pass from param for safe back navigation
+              },
             } as any);
           }}
         >

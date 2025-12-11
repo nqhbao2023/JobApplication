@@ -34,7 +34,7 @@ import type { CVData } from '@/types/cv.types';
 const { width } = Dimensions.get('window');
 
 export default function CandidateProfile() {
-  const { jobId } = useLocalSearchParams<{ jobId: string }>();
+  const { jobId, from } = useLocalSearchParams<{ jobId: string; from?: string }>();
   const [loading, setLoading] = useState(true);
   const [candidate, setCandidate] = useState<Job | null>(null);
   
@@ -211,7 +211,7 @@ export default function CandidateProfile() {
     return `${num.toLocaleString('vi-VN')}đ/giờ`;
   };
 
-  const { goBack } = useSafeBack();
+  const { goBack } = useSafeBack({ from });
 
   if (loading) {
     return (

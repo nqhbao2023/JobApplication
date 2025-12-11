@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { auth } from '@/config/firebase';
@@ -18,13 +18,26 @@ type AdminCard = {
 
 const AdminDashboard = () => {
   // Load metrics cho các collections
-  const { metricsMap, loading: metricsLoading } = useMultipleMetrics(
+  const { metricsMap, loading: metricsLoading, reload: reloadMetrics } = useMultipleMetrics(
     ['users', 'jobs', 'companies', 'job_categories'],
     7 // So sánh với 7 ngày trước
   );
 
   // Load pending counts
-  const { counts: pendingCounts, loading: countsLoading } = usePendingCounts();
+  const { counts: pendingCounts, loading: countsLoading, reload: reloadCounts } = usePendingCounts();
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([reloadMetrics(), reloadCounts()]);
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reloadMetrics, reloadCounts]);
 
   const adminCards: AdminCard[] = [
     { 
@@ -101,7 +114,13 @@ const AdminDashboard = () => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <View style={styles.header}>
         <View>
           <View style={styles.welcomeRow}>

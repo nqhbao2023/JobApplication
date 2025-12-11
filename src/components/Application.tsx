@@ -4,6 +4,7 @@ import { getStorage, ref, getDownloadURL } from "firebase/storage";
 import { auth, db } from "@/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { applicationApiService } from "@/services/applicationApi.service";
 import CVViewer from "@/components/CVViewer";
 import CVTemplateViewer from "@/components/CVTemplateViewer";
@@ -41,143 +42,40 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
     setLoadingCV(true);
     try {
       // ✅ Priority 1: Check if CV is from library (has cvId in app object)
-      // This comes directly from the API response (applications collection)
-      // Also handle case where cvSource is undefined but cvId exists (legacy/fallback)
       if (app.cvId && (app.cvSource === 'library' || !app.cvSource)) {
-        console.log('📄 CV Info from app object:', { cvId: app.cvId, cvSource: app.cvSource });
-        
         try {
           const cvSnapshot = await getDoc(doc(db, 'cvs', app.cvId));
           
           if (cvSnapshot.exists()) {
             const fetchedCvData = cvSnapshot.data() as CVData;
-            console.log('✅ Fetched CV template:', fetchedCvData.personalInfo?.fullName);
             
+            // ✅ NEW: Check if this is an uploaded CV (PDF) stored in library
+            if (fetchedCvData.type === 'uploaded' && (fetchedCvData.pdfUrl || fetchedCvData.fileUrl)) {
+              const pdfUrl = fetchedCvData.pdfUrl || fetchedCvData.fileUrl;
+              setCvLink(pdfUrl || null);
+              setShowCV(true);
+              setLoadingCV(false);
+              return;
+            }
+
             // Show template viewer
             setCvData(fetchedCvData);
             setShowCVTemplateViewer(true);
             setLoadingCV(false);
             return;
-          } else {
-            console.warn('⚠️ CV document does not exist in cvs collection');
-            Alert.alert('Lỗi', 'CV không tồn tại hoặc đã bị xóa.');
-            setLoadingCV(false);
-            return;
           }
         } catch (cvError) {
           console.warn('⚠️ Could not fetch CV from cvs collection:', cvError);
-          // Continue to try cv_url fallback
         }
       }
 
-      // ✅ Priority 2: Check if CV is from library (has cvId in applied_jobs collection)
-      // Fallback for older applications or if API didn't return cvId
-      // NOTE: $id is the application ID (from applications collection), NOT applied_jobs ID.
-      // But we try anyway in case they match or for legacy reasons.
-      if ($id) {
-        try {
-          // Try to find applied_jobs document by ID (unlikely to match but possible)
-          let appliedJobDoc = await getDoc(doc(db, 'applied_jobs', $id));
-          
-          // If not found by ID, try to query by userId + jobId (more reliable)
-          if (!appliedJobDoc.exists() && userId && job?.$id) {
-             console.log('📄 applied_jobs not found by ID, querying by userId + jobId...');
-             // Import query, collection, where, getDocs if not already imported
-             // Assuming they are imported or available via db
-             // We need to use the modular SDK
-             // Since we can't easily add imports here without reading the whole file, 
-             // we'll skip the query fallback for now and rely on Priority 3 (Candidate Profile)
-             // which is safer and already implemented below.
-          }
-
-          if (appliedJobDoc.exists()) {
-            const appliedJobData = appliedJobDoc.data();
-            const cvId = appliedJobData?.cv_id;
-            const cvSource = appliedJobData?.cv_source;
-            
-            console.log('📄 CV Info from applied_jobs:', { cvId, cvSource });
-            
-            // If CV is from library, fetch template data
-            if (cvId && (cvSource === 'library' || !cvSource)) {
-              try {
-                const cvSnapshot = await getDoc(doc(db, 'cvs', cvId));
-                
-                if (cvSnapshot.exists()) {
-                  const fetchedCvData = cvSnapshot.data() as CVData;
-                  console.log('✅ Fetched CV template:', fetchedCvData.personalInfo?.fullName);
-                  
-                  // Show template viewer
-                  setCvData(fetchedCvData);
-                  setShowCVTemplateViewer(true);
-                  setLoadingCV(false);
-                  return;
-                } else {
-                  console.warn('⚠️ CV document does not exist in cvs collection');
-                }
-              } catch (cvError) {
-                console.warn('⚠️ Could not fetch CV from cvs collection:', cvError);
-                // Continue to try cv_url fallback
-              }
-            }
-          } else {
-            console.log('📄 No applied_jobs document found, using cv_url fallback');
-          }
-        } catch (firestoreError: any) {
-          // ✅ FIX: Handle Firestore permission errors gracefully
-          console.warn('⚠️ Could not access applied_jobs collection (permissions?):', firestoreError.message);
-          console.log('📄 Falling back to cv_url from API response');
-          // Continue to cv_url fallback below
-        }
-      }
-      
-      // ✅ Priority 3: Try to fetch CV from candidate's profile directly
-      // This handles cases where applied_jobs document is not accessible
-      const candidateId = userId || app.candidateId || user?.uid;
-      if (candidateId) {
-        try {
-          console.log('🔍 Fetching candidate profile to get CV data:', candidateId);
-          const candidateDoc = await getDoc(doc(db, 'users', candidateId));
-          
-          if (candidateDoc.exists()) {
-            const candidateData = candidateDoc.data();
-            const candidateCvId = candidateData?.cvId || candidateData?.defaultCvId;
-            
-            if (candidateCvId) {
-              console.log('📄 Found CV ID in candidate profile:', candidateCvId);
-              
-              try {
-                const cvSnapshot = await getDoc(doc(db, 'cvs', candidateCvId));
-                
-                if (cvSnapshot.exists()) {
-                  const fetchedCvData = cvSnapshot.data() as CVData;
-                  console.log('✅ Fetched CV template from candidate profile:', fetchedCvData.personalInfo?.fullName);
-                  
-                  // Show template viewer
-                  setCvData(fetchedCvData);
-                  setShowCVTemplateViewer(true);
-                  setLoadingCV(false);
-                  return;
-                }
-              } catch (cvError) {
-                console.warn('⚠️ Could not fetch CV from cvs collection:', cvError);
-              }
-            }
-          }
-        } catch (candidateError) {
-          console.warn('⚠️ Could not fetch candidate profile:', candidateError);
-        }
-      }
-      
-      // ✅ Priority 4: Try to get CV URL from cv_url or cv_path (last resort)
+      // ✅ Priority 2: Try to get CV URL from cv_url or cv_path
       let finalUrl = cv_url;
       
-      // ✅ CRITICAL: Block file:/// URLs ONLY if we don't have cvId (not a template CV)
       if (finalUrl && finalUrl.startsWith('file:///')) {
-        console.error('❌ BLOCKED: file:/// URL detected for uploaded CV');
         Alert.alert(
           'Không thể xem CV',
-          'CV này chứa đường dẫn file nội bộ không hợp lệ (dữ liệu cũ).\n\n' +
-          'Vui lòng yêu cầu ứng viên nộp lại CV hoặc liên hệ qua chat/email.'
+          'CV này chứa đường dẫn file nội bộ không hợp lệ (dữ liệu cũ).'
         );
         setLoadingCV(false);
         return;
@@ -193,66 +91,46 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
       }
       
       if (finalUrl) {
-        console.log('✅ Opening CV PDF from URL:', finalUrl.substring(0, 50) + '...');
         setCvLink(finalUrl);
         setShowCV(true);
       } else {
-        console.log('❌ No CV available (no cvId, no cvUrl, no cv_path)');
         Alert.alert('Không có CV', 'Ứng viên chưa nộp CV cho vị trí này.');
       }
     } catch (error: any) {
-      console.error("❌ Lỗi khi mở CV:", error);
       Alert.alert('Lỗi', `Không thể mở CV: ${error.message || 'Vui lòng thử lại'}`);
     } finally {
       setLoadingCV(false);
     }
   };
 
-  // 🗣️ Hàm mở chat (ví dụ: chuyển sang trang chat với user đó)
+  // 🗣️ Hàm mở chat
   const handleContact = () => {
     const candidateId = userId || app.candidateId || user?.uid;
     
-    console.log('🔍 Attempting to contact candidate:', {
-      userId,
-      candidateId: app.candidateId,
-      userUid: user?.uid,
-      finalId: candidateId
-    });
-    
     if (!candidateId || candidateId === '') {
-      Alert.alert("Lỗi", "Không tìm thấy thông tin ứng viên. Ứng viên có thể đã xóa hồ sơ.");
+      Alert.alert("Lỗi", "Không tìm thấy thông tin ứng viên.");
       return;
     }
 
-    // 🔹 UID người đang đăng nhập
     const myUid = auth.currentUser?.uid;
-    
     if (!myUid) {
       Alert.alert("Lỗi", "Bạn cần đăng nhập để chat");
       return;
     }
 
-    // 🔹 Tạo chatId cố định giữa employer và candidate
     const chatId = [myUid, candidateId].sort().join("_");
-
-    console.log('💬 Opening chat with:', {
-      chatId,
-      partnerId: candidateId,
-      partnerName: user?.name || "Ứng viên"
-    });
 
     router.push({
       pathname: "/(shared)/chat",
       params: {
-        chatId,                          // ID phòng chat
-        partnerId: candidateId,          // UID ứng viên
+        chatId,
+        partnerId: candidateId,
         partnerName: user?.name || "Ứng viên",
-        role: "Recruiter",               // vai trò employer
-        from: "/(employer)/appliedList", // ✅ FIX: Correct from path
+        role: "Recruiter",
+        from: "/(employer)/appliedList",
       },
     });
   };
-
 
   // 🗑️ Hàm xoá ứng viên khỏi danh sách
   const handleDelete = async () => {
@@ -264,23 +142,10 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
         onPress: async () => {
           try {
             setLoading(true);
-            console.log('🗑️ Marking application as rejected:', $id);
-            
-            // ✅ Mark as rejected (keeps audit trail)
             await applicationApiService.updateApplicationStatus($id, 'rejected');
-            
-            console.log('✅ Application status updated to rejected');
-            
-            // ✅ Call parent callback to refresh list FIRST
-            if (onDelete) {
-              console.log('📞 Calling onDelete callback to refresh list');
-              onDelete();
-            }
-            
-            // ✅ Then show success message
+            if (onDelete) onDelete();
             Alert.alert("✅ Đã xóa", "Ứng viên đã được xóa khỏi danh sách");
           } catch (error: any) {
-            console.error("❌ Lỗi khi xóa:", error);
             Alert.alert("Lỗi", error.message || "Không thể xóa ứng viên này.");
           } finally {
             setLoading(false);
@@ -292,14 +157,19 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":
-        return "#F5A623";
-      case "accepted":
-        return "#4CAF50";
-      case "rejected":
-        return "#F44336";
-      default:
-        return "#999";
+      case "pending": return "#f59e0b";
+      case "accepted": return "#10b981";
+      case "rejected": return "#ef4444";
+      default: return "#64748b";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "pending": return "Chờ duyệt";
+      case "accepted": return "Đã nhận";
+      case "rejected": return "Đã từ chối";
+      default: return "Không rõ";
     }
   };
 
@@ -308,12 +178,11 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
       style={styles.card}
       activeOpacity={0.9}
       onPress={() => {
-        // ✅ Navigate to application detail when card is pressed
         router.push({
           pathname: "/(employer)/applicationDetail",
           params: { 
             applicationId: $id,
-            from: "/(employer)/appliedList", // ✅ FIX: Add from param for proper back navigation
+            from: "/(employer)/appliedList",
           },
         });
       }}
@@ -332,109 +201,108 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
           }}
           style={styles.avatar}
         />
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={styles.name} numberOfLines={1}>
-            {user?.name || user?.displayName || user?.fullName || user?.email || "Ứng viên"}
-          </Text>
-          <Text style={styles.jobTitle} numberOfLines={1}>
-            Ứng tuyển: {job?.title || "Không rõ công việc"}
-          </Text>
-          {user?.email && user.email !== user?.name && (
-            <Text style={styles.emailText} numberOfLines={1}>
-              {user.email}
+        <View style={styles.headerContent}>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {user?.name || user?.displayName || user?.fullName || user?.email || "Ứng viên"}
             </Text>
-          )}
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(currentStatus) + '20' }]}>
+              <Text style={[styles.statusText, { color: getStatusColor(currentStatus) }]}>
+                {getStatusLabel(currentStatus)}
+              </Text>
+            </View>
+          </View>
+          
+          <Text style={styles.jobTitle} numberOfLines={1}>
+            {job?.title || "Không rõ công việc"}
+          </Text>
+          
+          <View style={styles.metaRow}>
+            <Ionicons name="time-outline" size={12} color="#94a3b8" />
+            <Text style={styles.metaText}>
+              {app.applied_at ? new Date(app.applied_at).toLocaleDateString('vi-VN') : 'Vừa xong'}
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* Trạng thái */}
-      <Text style={[styles.status, { color: getStatusColor(currentStatus) }]}>
-        Trạng thái: {currentStatus || "pending"}
-      </Text>
+      {/* Actions Divider */}
+      <View style={styles.divider} />
 
-      {/* Nút hành động */}
+      {/* Action Buttons */}
       <View style={styles.actions} onStartShouldSetResponder={() => true}>
-        {currentStatus === "pending" && (
-          <>
+        {/* Primary Actions based on Status */}
+        {currentStatus === "pending" ? (
+          <View style={styles.pendingActions}>
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: "#4CAF50" }]}
+              style={[styles.actionButton, styles.rejectButton]}
               onPress={(e) => {
                 e.stopPropagation();
-                if (currentStatus !== "pending") {
-                  Alert.alert("Thông báo", "Ứng viên này đã được xử lý rồi.");
-                  return;
-                }
                 setLoading(true);
-                setCurrentStatus("accepted"); // ✅ Update local status immediately
-                onStatusChange("accepted");
-                setTimeout(() => setLoading(false), 1000);
-              }}
-              disabled={loading || currentStatus !== "pending"}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Chấp nhận</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, { backgroundColor: "#F44336" }]}
-              onPress={(e) => {
-                e.stopPropagation();
-                if (currentStatus !== "pending") {
-                  Alert.alert("Thông báo", "Ứng viên này đã được xử lý rồi.");
-                  return;
-                }
-                setLoading(true);
-                setCurrentStatus("rejected"); // ✅ Update local status immediately
+                setCurrentStatus("rejected");
                 onStatusChange("rejected");
                 setTimeout(() => setLoading(false), 1000);
               }}
-              disabled={loading || currentStatus !== "pending"}
+              disabled={loading}
             >
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Từ chối</Text>
+              {loading ? <ActivityIndicator size="small" color="#ef4444" /> : (
+                <>
+                  <Ionicons name="close-circle-outline" size={18} color="#ef4444" />
+                  <Text style={[styles.actionText, { color: "#ef4444" }]}>Từ chối</Text>
+                </>
               )}
             </TouchableOpacity>
-          </>
-        )}
 
-        {currentStatus === "accepted" && (
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: "#2E8BFD" }]}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleContact();
-            }}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>💬 Liên hệ ứng viên</Text>
-          </TouchableOpacity>
-        )}
-
-        {currentStatus === "rejected" && (
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: "#9E9E9E" }]}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleDelete();
-            }}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>🗑️ Xóa ứng viên</Text>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.acceptButton]}
+              onPress={(e) => {
+                e.stopPropagation();
+                setLoading(true);
+                setCurrentStatus("accepted");
+                onStatusChange("accepted");
+                setTimeout(() => setLoading(false), 1000);
+              }}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator size="small" color="#10b981" /> : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#10b981" />
+                  <Text style={[styles.actionText, { color: "#10b981" }]}>Chấp nhận</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.pendingActions}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.chatButton]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleContact();
+              }}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#4A80F0" />
+              <Text style={[styles.actionText, { color: "#4A80F0" }]}>Chat</Text>
+            </TouchableOpacity>
+            
+            {currentStatus === 'rejected' && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.deleteButton]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleDelete();
+                }}
+              >
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                <Text style={[styles.actionText, { color: "#ef4444" }]}>Xóa</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
         )}
 
-        {/* ✅ Nút xem CV luôn hiển thị */}
+        {/* CV Button - Always visible */}
         <TouchableOpacity
-          style={[styles.button, { backgroundColor: "#2196F3" }]}
+          style={[styles.cvButton]}
           onPress={(e) => {
             e.stopPropagation();
             handleViewCV();
@@ -444,15 +312,13 @@ const Application: React.FC<ApplicationProps> = ({ app, onStatusChange, onDelete
           {loadingCV ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>📄 Xem CV</Text>
+            <Text style={styles.cvButtonText}>CV</Text>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* ✅ Modal WebView hiển thị CV trực tiếp trong app */}
+      {/* Modals */}
       <CVViewer visible={showCV} onClose={() => setShowCV(false)} url={cvLink} />
-      
-      {/* ✅ Modal CVTemplateViewer for library CVs */}
       {showCVTemplateViewer && cvData && (
         <CVTemplateViewer 
           visible={showCVTemplateViewer} 
@@ -471,57 +337,127 @@ export default Application;
 
 const styles = StyleSheet.create({
   card: {
-    padding: 15,
     backgroundColor: "#fff",
-    borderRadius: 10,
+    borderRadius: 16,
     marginBottom: 12,
+    padding: 16,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
   },
   header: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#eee",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  headerContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  nameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
   },
   name: {
     fontSize: 16,
+    fontWeight: "700",
+    color: "#1e293b",
+    flex: 1,
+    marginRight: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 11,
     fontWeight: "600",
   },
   jobTitle: {
     fontSize: 14,
-    color: "#555",
+    color: "#64748b",
+    marginBottom: 6,
   },
-  emailText: {
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  metaText: {
     fontSize: 12,
-    color: "#888",
-    marginTop: 2,
+    color: "#94a3b8",
+    marginLeft: 4,
   },
-  status: {
-    marginTop: 10,
-    fontWeight: "600",
+  divider: {
+    height: 1,
+    backgroundColor: "#f1f5f9",
+    marginVertical: 12,
   },
   actions: {
-    marginTop: 12,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  button: {
-    flexGrow: 1,
-    padding: 10,
-    borderRadius: 6,
     alignItems: "center",
-    minWidth: 100,
+    justifyContent: "space-between",
+    gap: 12,
   },
-  buttonText: {
-    color: "#fff",
+  pendingActions: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  rejectButton: {
+    borderColor: "#fee2e2",
+    backgroundColor: "#fef2f2",
+  },
+  acceptButton: {
+    borderColor: "#d1fae5",
+    backgroundColor: "#ecfdf5",
+  },
+  chatButton: {
+    borderColor: "#dbeafe",
+    backgroundColor: "#eff6ff",
+  },
+  deleteButton: {
+    borderColor: "#fee2e2",
+    backgroundColor: "#fef2f2",
+  },
+  actionText: {
+    fontSize: 13,
     fontWeight: "600",
+    marginLeft: 6,
+  },
+  cvButton: {
+    width: 40,
+    height: 36,
+    backgroundColor: "#4A80F0",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cvButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
   },
 });

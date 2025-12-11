@@ -1,7 +1,47 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform } from "react-native";
+import { Platform, Text, View } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+
+// Custom Animated Tab Item (Icon + Label)
+const TabBarItem = ({ name, color, focused, label }: { name: any, color: string, focused: boolean, label: string }) => {
+  const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (focused) {
+      scale.value = withSpring(1.1, { damping: 10, stiffness: 100 });
+      translateY.value = withSpring(-2, { damping: 10, stiffness: 100 });
+    } else {
+      scale.value = withSpring(1, { damping: 10, stiffness: 100 });
+      translateY.value = withSpring(0, { damping: 10, stiffness: 100 });
+    }
+  }, [focused]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: scale.value },
+        { translateY: translateY.value }
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={[animatedStyle, { alignItems: 'center', justifyContent: 'center', width: 80 }]}>
+      <Ionicons name={name} size={24} color={color} style={{ marginBottom: 4 }} />
+      <Text style={{ 
+        color: color, 
+        fontSize: 10, 
+        fontWeight: focused ? '700' : '500' 
+      }}>
+        {label}
+      </Text>
+    </Animated.View>
+  );
+};
 
 export default function EmployerLayout() {
   return (
@@ -12,7 +52,6 @@ export default function EmployerLayout() {
         tabBarInactiveTintColor: "#64748B",
         tabBarStyle: {
           backgroundColor: "#ffffff",
-          borderTopWidth: 0,
           height: Platform.OS === 'ios' ? 88 : 70,
           paddingBottom: Platform.OS === 'ios' ? 28 : 12,
           paddingTop: 10,
@@ -24,36 +63,26 @@ export default function EmployerLayout() {
           },
           shadowOpacity: 0.08,
           shadowRadius: 12,
-          // Loại bỏ borderRadius để tránh lỗi màu đen ở góc trên thiết bị thật
           borderTopWidth: 1,
           borderTopColor: '#f0f0f0',
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "500",
-          textAlign: "center",
-          flexWrap: "nowrap",
-          minWidth: 60,
-        },
-        tabBarActiveBackgroundColor: "#E8F1FF",
-        tabBarItemStyle: {
-          borderRadius: 16,
-          marginHorizontal: 2,
-          paddingHorizontal: 2,
-          minWidth: 70,
-        },
+        tabBarShowLabel: false, // Hide default label to use custom animated one
       }}
     >
       {/* 🏠 Trang chủ */}
       <Tabs.Screen
         name="index"
+        listeners={{
+          tabPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        }}
         options={{
           title: "Trang chủ",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarItem
               name={focused ? "home" : "home-outline"}
               color={color}
-              size={size}
+              focused={focused}
+              label="Trang chủ"
             />
           ),
         }}
@@ -62,13 +91,17 @@ export default function EmployerLayout() {
       {/* 💼 Việc làm */}
       <Tabs.Screen
         name="myJobs"
+        listeners={{
+          tabPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        }}
         options={{
           title: "Việc làm",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarItem
               name={focused ? "briefcase" : "briefcase-outline"}
               color={color}
-              size={size}
+              focused={focused}
+              label="Việc làm"
             />
           ),
         }}
@@ -77,13 +110,17 @@ export default function EmployerLayout() {
       {/* 👥 Ứng viên */}
       <Tabs.Screen
         name="appliedList"
+        listeners={{
+          tabPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        }}
         options={{
           title: "Ứng viên",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarItem
               name={focused ? "people" : "people-outline"}
               color={color}
-              size={size}
+              focused={focused}
+              label="Ứng viên"
             />
           ),
         }}
@@ -95,35 +132,12 @@ export default function EmployerLayout() {
         options={{
           href: null, // Ẩn vì có thể truy cập từ Trang chủ
           title: "Thông báo",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={
-                focused
-                  ? "notifications"
-                  : "notifications-outline"
-              }
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarItem
+              name={focused ? "notifications" : "notifications-outline"}
               color={color}
-              size={size}
-            />
-          ),
-        }}
-      />
-
-      {/* 💬 Chat */}
-      <Tabs.Screen
-        name="chat"
-        options={{
-          href: null, // Ẩn vì có thể truy cập từ Thông báo
-          title: "Chat",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={
-                focused
-                  ? "chatbubble-ellipses"
-                  : "chatbubble-ellipses-outline"
-              }
-              color={color}
-              size={size}
+              focused={focused}
+              label="Thông báo"
             />
           ),
         }}
@@ -132,19 +146,23 @@ export default function EmployerLayout() {
       {/* 👤 Hồ sơ */}
       <Tabs.Screen
         name="profile"
+        listeners={{
+          tabPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        }}
         options={{
           title: "Hồ sơ",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={
-                focused ? "person-circle" : "person-circle-outline"
-              }
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarItem
+              name={focused ? "person" : "person-outline"}
               color={color}
-              size={size}
+              focused={focused}
+              label="Hồ sơ"
             />
           ),
         }}
       />
+      {/* 💬 Chat - Hidden */}
+      <Tabs.Screen name="chat" options={{ href: null }} />
 
       {/* 🔒 Ẩn màn phụ */}
       <Tabs.Screen name="addJob" options={{ href: null }} />

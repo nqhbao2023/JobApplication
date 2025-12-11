@@ -469,8 +469,8 @@ export const useJobDescription = (jobId: string) => {
   /**
    * Refresh all data
    */
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       await Promise.all([loadJobData(), checkApplyStatus(true)]);
     } finally {

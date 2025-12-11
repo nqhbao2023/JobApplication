@@ -30,8 +30,14 @@ export default function CVViewer({ visible, onClose, url }: Props) {
   }
 
   const encodedUrl = encodeURIComponent(url);
-  // ✅ Dùng "gview" thay vì "viewerng" giúp tránh đen thui và co mép sai
-  const viewerUrl = `https://docs.google.com/gview?embedded=1&url=${encodedUrl}`;
+  
+  // ✅ FIX: Handle platform-specific viewing
+  // iOS: WebView supports PDF/Docs natively -> Use direct URL
+  // Android: WebView does NOT support PDF/Docs -> Use Google Docs Viewer
+  // Note: 'viewer' endpoint is sometimes more reliable than 'gview' for embedded
+  const viewerUrl = Platform.OS === 'ios' 
+    ? url 
+    : `https://docs.google.com/viewer?url=${encodedUrl}&embedded=true`;
 
   const handleOpenBrowser = async () => {
     try {
@@ -85,6 +91,15 @@ export default function CVViewer({ visible, onClose, url }: Props) {
              );
           }}
         />
+        
+        {/* ✅ Fallback footer for Android/Issues */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Không xem được?</Text>
+          <TouchableOpacity style={styles.openButton} onPress={handleOpenBrowser}>
+            <Text style={styles.openButtonText}>Mở bằng trình duyệt</Text>
+            <Ionicons name="open-outline" size={16} color="#007AFF" style={{ marginLeft: 4 }} />
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -94,6 +109,33 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: '#f8f9fa',
+    gap: 8,
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  openButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#e0f2fe',
+    borderRadius: 16,
+  },
+  openButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   header: {
     height: 56,

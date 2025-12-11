@@ -87,7 +87,7 @@ const JobDescription = () => {
       
       // Only refresh if we've already focused once (coming back from another screen)
       if (hasFocused) {
-        refresh();
+        refresh(true); // Silent refresh to prevent loading screen hang
       } else {
         setHasFocused(true);
       }
@@ -170,7 +170,6 @@ const JobDescription = () => {
         partnerName: employerName,
         role: "Candidate",
         jobId: jobId, // Optional: để context về job nào
-        from: "/(shared)/jobDescription",
       },
     });
   }, [jobData, companyData, jobId]);

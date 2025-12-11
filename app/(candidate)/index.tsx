@@ -10,7 +10,7 @@ import Animated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import React, { useEffect, useMemo } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, Button } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, Button, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -48,6 +48,7 @@ const CandidateHome = () => {
   const { 
     data,
     loading,
+    refreshing, // Destructure refreshing
     error,
     selectedFilter,
     forYouJobs,
@@ -234,6 +235,14 @@ const CandidateHome = () => {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing} // Use refreshing state
+            onRefresh={onRefresh}
+            tintColor="#fff" // White spinner for blue background
+            colors={['#4A80F0']} // Blue spinner for Android
+          />
+        }
       >
         <View style={styles.contentWrapper}>
           <QuickFilters selectedFilter={selectedFilter} onFilterChange={handleFilterChange} />

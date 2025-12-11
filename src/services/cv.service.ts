@@ -26,6 +26,7 @@ import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebas
 import { auth } from '@/config/firebase';
 import { CVData, EducationEntry, SkillCategory, SkillItem } from '@/types/cv.types';
 import { StudentProfile } from '@/types';
+import { sanitizeData } from '@/utils/firestore.utils';
 
 class CVService {
   private readonly COLLECTION = 'cvs';
@@ -284,7 +285,10 @@ class CVService {
         updatedAt: new Date().toISOString(),
       };
 
-      await setDoc(doc(db, this.COLLECTION, cvId), cvDoc);
+      // Sanitize data before saving to remove undefined values
+      const sanitizedCvDoc = sanitizeData(cvDoc);
+
+      await setDoc(doc(db, this.COLLECTION, cvId), sanitizedCvDoc);
       
       return cvId;
     } catch (error) {

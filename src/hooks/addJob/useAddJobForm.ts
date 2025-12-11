@@ -521,9 +521,10 @@ export const useAddJobForm = () => {
       console.log('✅ Final company:', companyName);
       console.log('✅ Final location:', location);
 
-      // ✅ Parse salary
-      const min = parseFloat(formData.salaryMin);
-      const max = formData.salaryMax.trim() ? parseFloat(formData.salaryMax) : min; // Nếu không có max, dùng min
+      // ✅ Parse salary (remove commas and spaces first)
+      const cleanSalary = (val: string) => val.replace(/[,.\s]/g, '');
+      const min = parseFloat(cleanSalary(formData.salaryMin));
+      const max = formData.salaryMax.trim() ? parseFloat(cleanSalary(formData.salaryMax)) : min; // Nếu không có max, dùng min
 
       // ✅ Validation salary
       if (isNaN(min) || min < 0) {

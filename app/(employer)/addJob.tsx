@@ -24,6 +24,14 @@ import { SCROLL_BOTTOM_PADDING } from '@/utils/layout.utils';
 import { filterJobPositions } from '@/constants/jobPositions';
 import { VIETNAM_CITIES } from '@/constants/locations';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
+const formatSalary = (value: string) => {
+  // Remove existing non-numeric chars
+  const number = value.replace(/\D/g, '');
+  // Format with commas
+  return number.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+};
 
 const AddJob = () => {
   const scrollRef = useRef<ScrollView>(null);
@@ -33,8 +41,8 @@ const AddJob = () => {
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
   
-  // ✨ Date picker modal
-  const [showDeadlineModal, setShowDeadlineModal] = useState(false);
+  // ✨ Date picker
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   // ✨ City autocomplete for new company
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -228,7 +236,7 @@ const AddJob = () => {
                 style={[styles.input, styles.halfInput]}
                 placeholder="Lương tối thiểu *"
                 value={formData.salaryMin}
-                onChangeText={(text) => updateFormField('salaryMin', text)}
+                onChangeText={(text) => updateFormField('salaryMin', formatSalary(text))}
                 keyboardType="numeric"
                 placeholderTextColor="#999"
               />
@@ -236,7 +244,7 @@ const AddJob = () => {
                 style={[styles.input, styles.halfInput]}
                 placeholder="Lương tối đa"
                 value={formData.salaryMax}
-                onChangeText={(text) => updateFormField('salaryMax', text)}
+                onChangeText={(text) => updateFormField('salaryMax', formatSalary(text))}
                 keyboardType="numeric"
                 placeholderTextColor="#999"
               />
@@ -307,10 +315,7 @@ const AddJob = () => {
               />
               <TouchableOpacity
                 style={[styles.input, styles.halfInput, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-                onPress={() => {
-                  // Simple date input - let user type in YYYY-MM-DD format
-                  setShowDeadlineModal(true);
-                }}
+                onPress={() => setShowDatePicker(true)}
               >
                 <Text style={formData.deadline ? { fontSize: 15, color: '#1a1a1a' } : { fontSize: 15, color: '#999' }}>
                   {formData.deadline || 'Hạn nộp (tùy chọn)'}
@@ -614,46 +619,23 @@ const AddJob = () => {
         onSelectTemplate={applyAITemplate}
       />
 
-      {/* Deadline Input Modal */}
-      <Modal
-        visible={showDeadlineModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDeadlineModal(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowDeadlineModal(false)}
-        >
-          <View style={styles.deadlineModalContent}>
-            <Text style={styles.deadlineModalTitle}>Chọn hạn nộp</Text>
-            <Text style={styles.deadlineModalHint}>Định dạng: YYYY-MM-DD (vd: 2025-12-31)</Text>
-            <TextInput
-              style={styles.deadlineInput}
-              placeholder="2025-12-31"
-              value={formData.deadline}
-              onChangeText={(text) => updateFormField('deadline', text)}
-              placeholderTextColor="#999"
-              autoFocus
-            />
-            <View style={styles.deadlineModalButtons}>
-              <TouchableOpacity
-                style={[styles.deadlineModalBtn, styles.deadlineCancelBtn]}
-                onPress={() => setShowDeadlineModal(false)}
-              >
-                <Text style={styles.deadlineCancelText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.deadlineModalBtn, styles.deadlineConfirmBtn]}
-                onPress={() => setShowDeadlineModal(false)}
-              >
-                <Text style={styles.deadlineConfirmText}>Xong</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {showDatePicker && (
+        <DateTimePicker
+          value={formData.deadline ? new Date(formData.deadline) : new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            setShowDatePicker(false);
+            if (selectedDate) {
+              const year = selectedDate.getFullYear();
+              const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+              const day = selectedDate.getDate().toString().padStart(2, '0');
+              updateFormField('deadline', `${year}-${month}-${day}`);
+            }
+          }}
+          minimumDate={new Date()}
+        />
+      )}
     </SafeAreaView>
   );
 };

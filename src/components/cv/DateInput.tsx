@@ -3,16 +3,17 @@
  * Format: MM/YYYY or "Hiện tại"
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
-  TextInput,
   TouchableOpacity,
   Text,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface DateInputProps {
   value: string;
@@ -27,44 +28,81 @@ const DateInput: React.FC<DateInputProps> = ({
   placeholder = 'MM/YYYY',
   allowCurrent = false,
 }) => {
+  const [showPicker, setShowPicker] = useState(false);
+
   const handleSetCurrent = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onChangeText('Hiện tại');
   };
 
-  const formatDate = (text: string) => {
-    // Auto-format to MM/YYYY
-    const numbers = text.replace(/\D/g, '');
-    if (numbers.length <= 2) {
-      return numbers;
+  const getDateFromValue = () => {
+    if (!value || value === 'Hiện tại') return new Date();
+    const parts = value.split('/');
+    if (parts.length === 2) {
+      // MM/YYYY
+      const month = parseInt(parts[0]);
+      const year = parseInt(parts[1]);
+      if (!isNaN(month) && !isNaN(year)) {
+        return new Date(year, month - 1, 1);
+      }
     }
-    return `${numbers.slice(0, 2)}/${numbers.slice(2, 6)}`;
+    return new Date();
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowPicker(false);
+    
+    // On Android, event.type can be 'set' or 'dismissed'
+    if (event.type === 'dismissed') {
+      return;
+    }
+
+    if (selectedDate) {
+      const month = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+      const year = selectedDate.getFullYear();
+      onChangeText(`${month}/${year}`);
+    }
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.inputWrapper}>
+      <TouchableOpacity 
+        style={styles.inputWrapper} 
+        onPress={() => setShowPicker(true)}
+        activeOpacity={0.7}
+      >
         <Ionicons name="calendar-outline" size={18} color="#64748b" />
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          value={value}
-          onChangeText={(text) => {
-            if (text === '' || text === 'Hiện tại') {
-              onChangeText(text);
-            } else {
-              onChangeText(formatDate(text));
-            }
-          }}
-          keyboardType="numeric"
-          maxLength={7}
-        />
-        {allowCurrent && value !== 'Hiện tại' && (
-          <TouchableOpacity onPress={handleSetCurrent}>
-            <Text style={styles.currentButton}>Hiện tại</Text>
+        <Text style={[styles.inputText, !value && styles.placeholder]}>
+          {value || placeholder}
+        </Text>
+        
+        {allowCurrent && (
+          <TouchableOpacity 
+            onPress={(e) => {
+              e.stopPropagation();
+              handleSetCurrent();
+            }}
+            style={styles.currentBtnWrapper}
+          >
+            <Text style={[
+              styles.currentButton, 
+              value === 'Hiện tại' && styles.currentButtonActive
+            ]}>
+              Hiện tại
+            </Text>
           </TouchableOpacity>
         )}
-      </View>
+      </TouchableOpacity>
+
+      {showPicker && (
+        <DateTimePicker
+          value={getDateFromValue()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleDateChange}
+          maximumDate={new Date()}
+        />
+      )}
     </View>
   );
 };
@@ -82,15 +120,25 @@ const styles = StyleSheet.create({
     height: 48,
     gap: 8,
   },
-  input: {
+  inputText: {
     flex: 1,
     fontSize: 15,
     color: '#1e293b',
   },
+  placeholder: {
+    color: '#94a3b8',
+  },
+  currentBtnWrapper: {
+    padding: 4,
+  },
   currentButton: {
     fontSize: 13,
-    color: '#4A80F0',
+    color: '#64748b',
     fontWeight: '500',
+  },
+  currentButtonActive: {
+    color: '#4A80F0',
+    fontWeight: '700',
   },
 });
 

@@ -128,16 +128,25 @@ interface AddressInputProps {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
+  onDropdownStateChange?: (isOpen: boolean) => void;
 }
 
 export const AddressInput: React.FC<AddressInputProps> = ({
   value,
   onChangeText,
   placeholder = 'Nhập địa chỉ...',
+  onDropdownStateChange,
 }) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+
+  // Notify parent when dropdown state changes
+  useEffect(() => {
+    if (onDropdownStateChange) {
+      onDropdownStateChange(showSuggestions);
+    }
+  }, [showSuggestions]);
 
   useEffect(() => {
     if (value.length >= 2) {
@@ -248,16 +257,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    maxHeight: 200,
+    maxHeight: 250,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-    zIndex: 1001,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
+    zIndex: 9999,
   },
   suggestionsList: {
-    maxHeight: 200,
+    maxHeight: 250,
   },
   suggestionItem: {
     flexDirection: 'row',

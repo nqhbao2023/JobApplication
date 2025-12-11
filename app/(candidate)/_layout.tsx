@@ -1,8 +1,48 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Platform } from "react-native";
+import React, { useEffect } from "react";
+import { Platform, Text, View } from "react-native";
 import { DrawerMenuButton } from "@/components/candidate/DrawerMenu";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+
+// Custom Animated Tab Item (Icon + Label)
+const TabBarItem = ({ name, color, focused, label }: { name: any, color: string, focused: boolean, label: string }) => {
+  const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (focused) {
+      scale.value = withSpring(1.1, { damping: 10, stiffness: 100 });
+      translateY.value = withSpring(-2, { damping: 10, stiffness: 100 });
+    } else {
+      scale.value = withSpring(1, { damping: 10, stiffness: 100 });
+      translateY.value = withSpring(0, { damping: 10, stiffness: 100 });
+    }
+  }, [focused]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: scale.value },
+        { translateY: translateY.value }
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={[animatedStyle, { alignItems: 'center', justifyContent: 'center', width: 80 }]}>
+      <Ionicons name={name} size={24} color={color} style={{ marginBottom: 4 }} />
+      <Text style={{ 
+        color: color, 
+        fontSize: 10, 
+        fontWeight: focused ? '700' : '500' 
+      }}>
+        {label}
+      </Text>
+    </Animated.View>
+  );
+};
 
 export default function CandidateLayout() {
   return (
@@ -27,7 +67,6 @@ export default function CandidateLayout() {
         tabBarInactiveTintColor: "#64748B",
         tabBarStyle: {
           backgroundColor: "#ffffff",
-          borderTopWidth: 0,
           height: Platform.OS === 'ios' ? 88 : 70,
           paddingBottom: Platform.OS === 'ios' ? 28 : 12,
           paddingTop: 10,
@@ -39,31 +78,27 @@ export default function CandidateLayout() {
           },
           shadowOpacity: 0.08,
           shadowRadius: 12,
-          // Loại bỏ borderRadius để tránh lỗi màu đen ở góc trên thiết bị thật
           borderTopWidth: 1,
           borderTopColor: '#f0f0f0',
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "600",
-          marginTop: 4,
-        },
-        tabBarIconStyle: {
-          marginBottom: 0,
-        },
+        tabBarShowLabel: false, // Hide default label to use custom animated one
       }}
     >
       {/* 🏠 Khám phá */}
       <Tabs.Screen
         name="index"
+        listeners={{
+          tabPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        }}
         options={{
           title: "Khám phá",
-          headerShown: false, // Tắt header vì có custom animated header
+          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
+            <TabBarItem
               name={focused ? "compass" : "compass-outline"}
               color={color}
-              size={26}
+              focused={focused}
+              label="Khám phá"
             />
           ),
         }}
@@ -72,14 +107,18 @@ export default function CandidateLayout() {
       {/* 📋 Việc của tôi */}
       <Tabs.Screen
         name="savedJobs"
+        listeners={{
+          tabPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        }}
         options={{
           title: "Việc của tôi",
-          headerShown: false, // Tắt header vì có custom header
+          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
+            <TabBarItem
               name={focused ? "briefcase" : "briefcase-outline"}
               color={color}
-              size={26}
+              focused={focused}
+              label="Việc của tôi"
             />
           ),
         }}
@@ -88,14 +127,18 @@ export default function CandidateLayout() {
       {/* 👤 Cá nhân */}
       <Tabs.Screen
         name="profile"
+        listeners={{
+          tabPress: () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        }}
         options={{
           title: "Cá nhân",
           headerTitle: "Thông tin cá nhân",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
+            <TabBarItem
               name={focused ? "person" : "person-outline"}
               color={color}
-              size={26}
+              focused={focused}
+              label="Cá nhân"
             />
           ),
         }}

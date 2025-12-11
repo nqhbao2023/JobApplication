@@ -120,20 +120,10 @@ export const EducationSection: React.FC<EducationSectionProps> = ({
           {/* GPA (optional) */}
           <View style={styles.field}>
             <Text style={styles.label}>GPA (tùy chọn)</Text>
-            <View style={styles.gpaInput}>
-              <Ionicons name="star-outline" size={20} color="#64748b" />
-              <TextInput
-                style={styles.gpaField}
-                placeholder="3.5"
-                value={edu.gpa?.toString() || ''}
-                onChangeText={(text: string) => {
-                  const val = parseFloat(text);
-                  onUpdate(edu.id, 'gpa', isNaN(val) ? undefined : val);
-                }}
-                keyboardType="decimal-pad"
-              />
-              <Text style={styles.gpaScale}>/ 4.0</Text>
-            </View>
+            <GPAInput 
+              value={edu.gpa} 
+              onUpdate={(val) => onUpdate(edu.id, 'gpa', val)} 
+            />
           </View>
         </View>
       ))}
@@ -149,6 +139,56 @@ export const EducationSection: React.FC<EducationSectionProps> = ({
         <Ionicons name="add-circle-outline" size={24} color="#4A80F0" />
         <Text style={styles.addButtonText}>Thêm học vấn</Text>
       </TouchableOpacity>
+    </View>
+  );
+};
+
+const GPAInput = ({ value, onUpdate }: { value?: number, onUpdate: (val?: number) => void }) => {
+  const [localValue, setLocalValue] = React.useState(value?.toString() || '');
+
+  React.useEffect(() => {
+    if (value === undefined) {
+      if (localValue !== '') setLocalValue('');
+    } else {
+      // Only update local value if the parsed local value is different from the prop value
+      // This prevents overwriting "3." with "3" while typing
+      const parsedLocal = parseFloat(localValue);
+      if (isNaN(parsedLocal) || parsedLocal !== value) {
+        setLocalValue(value.toString());
+      }
+    }
+  }, [value]);
+
+  const handleChange = (text: string) => {
+    setLocalValue(text);
+    if (text === '') {
+      onUpdate(undefined);
+      return;
+    }
+    
+    // Replace comma with dot for consistency
+    const normalizedText = text.replace(',', '.');
+    if (normalizedText !== text) {
+        setLocalValue(normalizedText);
+    }
+
+    const val = parseFloat(normalizedText);
+    if (!isNaN(val)) {
+      onUpdate(val);
+    }
+  };
+
+  return (
+    <View style={styles.gpaInput}>
+      <Ionicons name="star-outline" size={20} color="#64748b" />
+      <TextInput
+        style={styles.gpaField}
+        placeholder="3.5"
+        value={localValue}
+        onChangeText={handleChange}
+        keyboardType="decimal-pad"
+      />
+      <Text style={styles.gpaScale}>/ 4.0</Text>
     </View>
   );
 };

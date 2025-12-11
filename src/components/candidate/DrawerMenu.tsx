@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
-  Animated,
   Dimensions,
   Pressable,
 } from 'react-native';
@@ -13,6 +12,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  withTiming, 
+  runOnJS,
+} from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.75;
@@ -27,7 +33,8 @@ interface MenuItem {
 
 export function DrawerMenuButton() {
   const [visible, setVisible] = useState(false);
-  const [slideAnim] = useState(new Animated.Value(-DRAWER_WIDTH));
+  const translateX = useSharedValue(-DRAWER_WIDTH);
+  const backdropOpacity = useSharedValue(0);
   const router = useRouter();
 
   const menuItems: MenuItem[] = [
@@ -44,28 +51,41 @@ export function DrawerMenuButton() {
 
   const openDrawer = () => {
     setVisible(true);
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 11,
-    }).start();
+    translateX.value = withSpring(0, {
+      damping: 20,
+      stiffness: 90,
+      mass: 1,
+    });
+    backdropOpacity.value = withTiming(1, { duration: 300 });
   };
 
   const closeDrawer = () => {
-    Animated.timing(slideAnim, {
-      toValue: -DRAWER_WIDTH,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => setVisible(false));
+    translateX.value = withTiming(-DRAWER_WIDTH, { duration: 300 }, (finished) => {
+      if (finished) {
+        runOnJS(setVisible)(false);
+      }
+    });
+    backdropOpacity.value = withTiming(0, { duration: 300 });
   };
 
   const handleMenuPress = (route: string) => {
     closeDrawer();
     setTimeout(() => {
       router.push(route as any);
-    }, 300);
+    }, 150);
   };
+
+  const drawerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: translateX.value }],
+    };
+  });
+
+  const backdropStyle = useAnimatedStyle(() => {
+    return {
+      opacity: backdropOpacity.value,
+    };
+  });
 
   return (
     <>
@@ -78,14 +98,17 @@ export function DrawerMenuButton() {
         transparent
         animationType="none"
         onRequestClose={closeDrawer}
+        statusBarTranslucent
       >
         <View style={styles.modalContainer}>
-          <Pressable style={styles.overlay} onPress={closeDrawer} />
+          <Animated.View style={[styles.overlay, backdropStyle]}>
+             <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer} />
+          </Animated.View>
           
           <Animated.View
             style={[
               styles.drawer,
-              { transform: [{ translateX: slideAnim }] },
+              drawerStyle,
             ]}
           >
             <SafeAreaView style={styles.drawerContent} edges={['top', 'bottom']}>

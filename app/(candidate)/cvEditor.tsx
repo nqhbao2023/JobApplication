@@ -46,6 +46,7 @@ const CVEditorScreen = () => {
   const [saving, setSaving] = useState(false);
   const [cvData, setCvData] = useState<CVData | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     personal: true,
     objective: true,
@@ -267,7 +268,10 @@ const CVEditorScreen = () => {
           showsVerticalScrollIndicator={false}
         >
           {/* Personal Information */}
-          <View style={styles.section}>
+          <View style={[
+            styles.section, 
+            isAddressDropdownOpen ? { zIndex: 1000, elevation: 1000 } : { zIndex: 1, elevation: 1 }
+          ]}>
             <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => toggleSection('personal')}
@@ -325,6 +329,7 @@ const CVEditorScreen = () => {
                     value={cvData.personalInfo.address || ''}
                     onChangeText={(text) => updatePersonalInfo('address', text)}
                     placeholder="Thành phố Thủ Dầu Một, Bình Dương"
+                    onDropdownStateChange={setIsAddressDropdownOpen}
                   />
                   <Text style={styles.hint}>63 tỉnh thành VN</Text>
                 </View>
@@ -587,7 +592,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     marginBottom: 16,
-    overflow: 'hidden',
+    overflow: 'visible',
+    zIndex: 1,
   },
   sectionHeader: {
     flexDirection: 'row',

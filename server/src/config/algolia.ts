@@ -66,7 +66,7 @@ export { algoliaClient };
 
 // Debug log khi module được load
 if (isAlgoliaEnabled()) {
-  console.log('✅ Algolia initialized successfully');
+  console.log(' Algolia initialized successfully');
   console.log('   - App ID:', ALGOLIA_APP_ID);
   console.log('   - Available indices:', Object.values(INDEX_NAMES).join(', '));
 } else {

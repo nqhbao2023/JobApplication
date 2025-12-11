@@ -14,7 +14,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.hoangbao.job4s",
-      "softwareKeyboardLayoutMode": "pan",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",

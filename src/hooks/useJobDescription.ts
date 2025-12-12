@@ -9,6 +9,7 @@ import { applicationApiService, Application } from '@/services/applicationApi.se
 import { Job, Company } from '@/types';
 import { handleApiError, isPermissionError, isAuthError } from '@/utils/errorHandler';
 import { isOfflineError, withOfflineHandling } from '@/utils/firestore.utils';
+import { useRole } from '@/contexts/RoleContext';
 
 interface PosterInfo {
   name?: string;
@@ -47,6 +48,7 @@ const getCompanyEmail = (company: CompanyField): string | undefined => {
 };
 
 export const useJobDescription = (jobId: string) => {
+  const { role } = useRole();
   const [userId, setUserId] = useState<string>('');
   const [jobData, setJobData] = useState<Job | null>(null);
   const [companyData, setCompanyData] = useState<Company | null>(null);
@@ -180,7 +182,8 @@ export const useJobDescription = (jobId: string) => {
   const checkApplyStatus = useCallback(
     async (silent = false) => {
       // ✅ Guard: chỉ check nếu có userId và jobId, và không đang check
-      if (!userId || !jobId || checkingRef.current) {
+      // ✅ Guard: Skip if user is not a candidate (employers don't apply)
+      if (!userId || !jobId || checkingRef.current || (role && role !== 'candidate')) {
         // Reset state nếu không có userId
         if (!userId && mountedRef.current) {
           setApplyDocId(null);
@@ -487,10 +490,10 @@ export const useJobDescription = (jobId: string) => {
     }
   }, [jobId, loadJobData]);
 
-  // ✅ Only check apply status if user is logged in
+  // ✅ Only check apply status if user is logged in AND is a candidate
   // Note: checkApplyStatus sẽ tự handle permission errors silently
   useEffect(() => {
-    if (userId && jobId) {
+    if (userId && jobId && role === 'candidate') {
       // Delay một chút để đảm bảo role context đã load
       const timer = setTimeout(() => {
         checkApplyStatus(false);
@@ -498,7 +501,7 @@ export const useJobDescription = (jobId: string) => {
       
       return () => clearTimeout(timer);
     }
-  }, [userId, jobId, checkApplyStatus]);
+  }, [userId, jobId, checkApplyStatus, role]);
 
   // Prefetch submit screen
   useEffect(() => {

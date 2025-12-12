@@ -21,6 +21,9 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
+// ✅ Trust Proxy (Required for Rate Limiting behind Nginx/Load Balancer)
+app.set('trust proxy', 1);
+
 // Security & Performance
 app.use(helmet());
 app.use(compression());

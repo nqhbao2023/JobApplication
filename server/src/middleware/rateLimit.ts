@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
  */
 export const quickPostLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // max 5 requests per windowMs
+  max: 100, // max 100 requests per windowMs (increased for demo/testing)
   message: {
     error: 'Too many quick posts from this IP. Please try again later.',
   },

@@ -294,7 +294,7 @@ Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, không
     `.trim();
 
     try {
-      const result = await this.askAI(prompt);
+      const result = await this.askAI(prompt, false);
       
       // Try to parse JSON from response
       let jsonText = result.trim();

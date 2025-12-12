@@ -12,7 +12,7 @@ declare module 'axios' {
 
 const client = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 20000,
+  timeout: 60000, // Increased to 60s for AI operations
   headers: {
     'Content-Type': 'application/json',
   },

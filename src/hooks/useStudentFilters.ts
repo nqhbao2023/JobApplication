@@ -309,9 +309,9 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
       // Normalize score to 0-1
       const normalizedScore = maxScore > 0 ? score / maxScore : 0;
 
-      if (__DEV__ && normalizedScore > 0) {
-        console.log(`[Filter] ${job.title}: score=${normalizedScore.toFixed(2)} (${matchDetails.join(', ')})`);
-      }
+      // if (__DEV__ && normalizedScore > 0) {
+      //   console.log(`[Filter] ${job.title}: score=${normalizedScore.toFixed(2)} (${matchDetails.join(', ')})`);
+      // }
 
       return {
         ...job,
@@ -344,10 +344,10 @@ export const useStudentFilters = (jobs: Job[], studentProfile?: StudentProfile) 
 
     // If no jobs match at all, return top 10 by score anyway (as suggestions)
     if (result.length === 0) {
-      console.log('[Filter] No jobs above threshold, returning top suggestions');
+      // console.log('[Filter] No jobs above threshold, returning top suggestions');
       setFilteredJobs(sortedJobs.slice(0, 10));
     } else {
-      console.log(`[Filter] Found ${result.length} matching jobs`);
+      // console.log(`[Filter] Found ${result.length} matching jobs`);
       setFilteredJobs(result);
     }
   }, [jobs, filters, studentProfile]);

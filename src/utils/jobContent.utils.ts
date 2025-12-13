@@ -161,12 +161,17 @@ export const getJobSections = (job: any): ParsedJobSections => {
     };
   }
 
-  // Nếu là job từ viecoi, parse description
-  if (isViecoiJob(job)) {
+  // ✅ Check if job has structured data (arrays)
+  // New crawler provides requirements/benefits as arrays
+  const hasStructuredData = (Array.isArray(job.requirements) && job.requirements.length > 0) || 
+                            (Array.isArray(job.benefits) && job.benefits.length > 0);
+
+  // Nếu là job từ viecoi VÀ KHÔNG CÓ structured data (legacy crawled jobs), mới dùng parseViecoiDescription
+  if (isViecoiJob(job) && !hasStructuredData) {
     return parseViecoiDescription(job.description || '');
   }
 
-  // Job internal - construct từ các field riêng
+  // Job internal OR Viecoi with structured data
   const requirementsList = Array.isArray(job.requirements) 
     ? job.requirements.map((r: string) => `• ${r}`)
     : (job.requirements ? [job.requirements] : []);
@@ -178,8 +183,19 @@ export const getJobSections = (job: any): ParsedJobSections => {
     requirementsList.unshift(`**Kỹ năng yêu cầu:**\n${job.skills_required}`);
   }
 
+  // For structured viecoi jobs, description might contain everything. 
+  // We try to clean it up or just use it as overview.
+  let overview = job.description || '';
+  
+  // Optional: If it's a viecoi job with structured data, we might want to clean the overview 
+  // to remove the parts that are already in requirements/benefits, but that's complex.
+  // For now, just format it nicely.
+  if (isViecoiJob(job) && hasStructuredData) {
+    overview = formatSectionContent(overview);
+  }
+
   return {
-    overview: job.description || '',
+    overview: overview,
     responsibilities: job.responsibilities || '',
     requirements: requirementsList.join('\n\n'),
     benefits: Array.isArray(job.benefits) 

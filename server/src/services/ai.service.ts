@@ -48,7 +48,7 @@ export class AIService {
   }
 
   // 2. HỎI AI (Google Gemini) - Dùng cho chatbot hoặc hỏi đáp chung
-  async askAI(prompt: string, isChat: boolean = true): Promise<string> {
+  async askAI(prompt: string, isChat: boolean = true, jsonMode: boolean = false): Promise<string> {
     try {
       if (!this.apiKey || !this.apiUrl) {
         console.warn('AI API not configured');
@@ -78,6 +78,17 @@ Câu hỏi của user: ` : '';
 
       const fullPrompt = systemInstruction + prompt;
 
+      const generationConfig: any = {
+        temperature: 0.7,
+        maxOutputTokens: isChat ? 4000 : (jsonMode ? 2000 : 8000),
+        topP: 0.9,
+        topK: 40,
+      };
+
+      if (jsonMode) {
+        generationConfig.responseMimeType = "application/json";
+      }
+
       const response = await axios.post(
         `${this.apiUrl}?key=${this.apiKey}`,
         {
@@ -86,12 +97,7 @@ Câu hỏi của user: ` : '';
               text: fullPrompt
             }]
           }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: isChat ? 4000 : 8000, // Tăng token vì model 2.5 pro cần suy nghĩ (CoT)
-            topP: 0.9,
-            topK: 40,
-          },
+          generationConfig,
           safetySettings: [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -294,7 +300,7 @@ Hãy trả về JSON với format CHÍNH XÁC sau (không thêm markdown, không
     `.trim();
 
     try {
-      const result = await this.askAI(prompt, false);
+      const result = await this.askAI(prompt, false, true);
       
       // Try to parse JSON from response
       let jsonText = result.trim();

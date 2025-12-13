@@ -96,6 +96,7 @@ async function syncToAlgolia(jobs: any[]): Promise<void> {
       // Core fields
       title: job.title,
       company_name: job.company_name,
+      company_logo: job.company_logo, // ✅ Added company_logo
       location: job.location,
       salary_text: job.salary_text,
       salary_min: job.salary_min,

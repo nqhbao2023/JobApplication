@@ -100,13 +100,16 @@ const CVManagementScreen = () => {
         userProfile.studentProfile
       );
 
-      // Save to Firestore
-      const cvId = await cvService.saveCV(autoFilledCV);
-
-      // ✅ FIX: Navigate to editor with 'from' param for proper back navigation
+      // ✅ FIX: Don't save to Firestore yet. Pass data to editor.
+      // The CV will be saved only when user clicks "Save" in editor.
+      
       router.push({
         pathname: '/(candidate)/cvEditor',
-        params: { cvId, from: '/(candidate)/cvManagement' },
+        params: { 
+          initialData: JSON.stringify(autoFilledCV),
+          isNew: 'true',
+          from: '/(candidate)/cvManagement' 
+        },
       });
     } catch (error) {
       console.error('Error creating CV:', error);

@@ -34,7 +34,7 @@ export const normalizeJob = (job: any): Job => {
     $id: jobId,
     image: imageUrl, // ✅ Can be undefined - UI will fallback to company_logo
     created_at: job.created_at || job.createdAt || new Date().toISOString(),
-    salary: normalizeSalary(job.salary),
+    salary: normalizeSalary(job.salary) || job.salary_text,
     employerId, // ✅ Always provide employerId
     // ✅ NEW PLAN fields (preserve if exist)
     jobSource: job.jobSource || 'featured', // Default to featured for legacy jobs

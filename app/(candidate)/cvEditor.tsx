@@ -58,11 +58,32 @@ const CVEditorScreen = () => {
 
   useEffect(() => {
     loadCV();
-  }, [cvId]);
+  }, [cvId, params.isNew]); // ✅ Add params.isNew dependency
 
   const loadCV = async () => {
     try {
       setLoading(true);
+
+      // ✅ Handle new CV creation from template
+      if (params.isNew === 'true' && params.initialData) {
+        try {
+          const initialData = JSON.parse(params.initialData as string);
+          setCvData(initialData);
+        } catch (e) {
+          console.error('Error parsing initial CV data:', e);
+          Alert.alert('Lỗi', 'Dữ liệu khởi tạo không hợp lệ');
+          goBack();
+        }
+        return;
+      }
+
+      // Load existing CV
+      if (!cvId) {
+        Alert.alert('Lỗi', 'Không tìm thấy ID CV');
+        goBack();
+        return;
+      }
+
       const cv = await cvService.loadCV(cvId);
       if (!cv) {
         Alert.alert('Lỗi', 'Không tìm thấy CV');
@@ -86,7 +107,13 @@ const CVEditorScreen = () => {
       setSaving(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      await cvService.saveCV(cvData);
+      // Save and get ID (new or existing)
+      const savedId = await cvService.saveCV(cvData);
+      
+      // Update state with new ID if it was a new CV
+      if (!cvData.id) {
+        setCvData(prev => prev ? ({ ...prev, id: savedId }) : null);
+      }
       
       Alert.alert('Thành công', 'Đã lưu CV', [
         { text: 'OK', onPress: () => goBack() },
